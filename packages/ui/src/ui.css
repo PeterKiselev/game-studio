@@ -1,0 +1,197 @@
+/* Общие компоненты студии: экраны, кнопки, диалог, тост. */
+
+* {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overscroll-behavior: none;
+}
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 16px;
+  line-height: 1.5;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+#app {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+/* --- экраны: ровно один виден --- */
+
+.screen {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.screen[hidden] {
+  display: none;
+}
+
+/* --- шапка --- */
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-2);
+  padding: var(--gap-2) var(--gap-3);
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+  min-height: 52px;
+}
+
+.topbar .title {
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.topbar .spacer {
+  flex: 1;
+}
+
+/* --- кнопки --- */
+
+.btn {
+  appearance: none;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 600;
+  min-height: var(--tap);
+  padding: 0 18px;
+  border-radius: var(--r-md);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--gap-2);
+  transition: transform 0.12s var(--ease), background 0.15s var(--ease);
+}
+
+.btn:active {
+  transform: translateY(1px);
+}
+
+.btn:focus-visible {
+  outline: 2px solid var(--felt);
+  outline-offset: 2px;
+}
+
+.btn.primary {
+  background: var(--felt);
+  border-color: var(--felt);
+  color: #fff;
+}
+
+:root[data-theme="dark"] .btn.primary,
+:root:not([data-theme="light"]) .btn.primary {
+  color: #08110c;
+}
+
+.btn.ghost {
+  border-color: transparent;
+  background: transparent;
+  color: var(--ink-2);
+  padding: 0 10px;
+}
+
+.btn.reward {
+  border-color: var(--gold);
+  color: var(--gold);
+  background: transparent;
+}
+
+.btn[disabled] {
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+/* --- диалог --- */
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgb(10 16 13 / 0.55);
+  display: grid;
+  place-items: center;
+  padding: var(--gap-4);
+  z-index: 40;
+  animation: fade 0.18s var(--ease);
+}
+
+.overlay[hidden] {
+  display: none;
+}
+
+.dialog {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow);
+  padding: var(--gap-4);
+  width: min(420px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-3);
+  animation: pop 0.22s var(--ease);
+}
+
+.dialog h2 {
+  margin: 0;
+  font-size: 22px;
+  letter-spacing: -0.01em;
+}
+
+.dialog p {
+  margin: 0;
+  color: var(--ink-2);
+}
+
+.dialog .actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-2);
+}
+
+/* --- тост --- */
+
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  background: var(--ink);
+  color: var(--paper);
+  padding: 10px 16px;
+  border-radius: var(--r-md);
+  font-size: 14px;
+  z-index: 50;
+  animation: fade 0.18s var(--ease);
+}
+
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes pop {
+  from {
+    opacity: 0;
+    transform: scale(0.94);
+  }
+}

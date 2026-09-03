@@ -1,0 +1,171 @@
+/* Только то, что специфично для этой игры. Всё общее — в @studio/ui. */
+
+.boot {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  color: var(--ink-3, #79887f);
+  font-family: system-ui, sans-serif;
+}
+
+.menu {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--gap-3);
+  padding: var(--gap-4);
+  max-width: 420px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.menu h1 {
+  margin: 0 0 var(--gap-2);
+  font-size: 30px;
+  letter-spacing: -0.02em;
+}
+
+.menu .stats {
+  display: flex;
+  gap: var(--gap-4);
+  padding: var(--gap-3) 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  margin-bottom: var(--gap-2);
+}
+
+.menu .stats div {
+  display: flex;
+  flex-direction: column;
+}
+
+.menu .stats b {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  font-size: 22px;
+  font-weight: 500;
+}
+
+.menu .stats span {
+  font-size: 13px;
+  color: var(--ink-3);
+}
+
+/* --- игровой экран --- */
+
+.play {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.status {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-2);
+  padding: var(--gap-2) var(--gap-3);
+  font-weight: 600;
+  min-height: 40px;
+}
+
+.status .dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  flex: none;
+}
+
+.status .dot.s1 {
+  background: var(--side-1);
+}
+
+.status .dot.s2 {
+  background: var(--side-2);
+}
+
+.board-wrap {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  min-height: 0;
+  padding: var(--gap-2);
+  overflow: auto;
+}
+
+.board {
+  display: grid;
+  gap: 2px;
+  background: var(--line);
+  border: 2px solid var(--line);
+  border-radius: var(--r-sm);
+  touch-action: manipulation;
+}
+
+.board .cell {
+  appearance: none;
+  border: 0;
+  margin: 0;
+  padding: 0;
+  background: var(--surface);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  position: relative;
+  transition: background 0.12s var(--ease);
+}
+
+.board .cell:hover:not([disabled]) {
+  background: var(--felt-soft);
+}
+
+.board .cell:focus-visible {
+  outline: 2px solid var(--felt);
+  outline-offset: -2px;
+  z-index: 1;
+}
+
+.board .cell.win {
+  background: var(--felt-soft);
+}
+
+/*
+ * Фигуры различаются формой, а не только цветом: игрок с дальтонизмом
+ * должен отличать свои камни от чужих без подсказок.
+ */
+.board .mark {
+  width: 62%;
+  height: 62%;
+  animation: drop 0.16s var(--ease);
+}
+
+.board .mark.s1 {
+  border-radius: 50%;
+  background: var(--side-1);
+}
+
+.board .mark.s2 {
+  background: var(--side-2);
+  clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);
+}
+
+@keyframes drop {
+  from {
+    transform: scale(0.3);
+    opacity: 0;
+  }
+}
+
+.controls {
+  display: flex;
+  gap: var(--gap-2);
+  padding: var(--gap-3);
+  padding-bottom: max(var(--gap-3), env(safe-area-inset-bottom));
+  border-top: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.controls .btn {
+  flex: 1;
+}

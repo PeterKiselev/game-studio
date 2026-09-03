@@ -1,0 +1,86 @@
+/*
+ * Дизайн-токены студии. Это единственное место, где живут цвета и шрифты.
+ * Игра не имеет права объявлять свой цвет — только брать токен.
+ * Именно отсюда берётся ощущение, что двадцать игр — одна серия.
+ */
+
+:root {
+  /* Светлая тема — базовая. Нейтрали уведены в зелень, под сукно игрового стола. */
+  --paper: #eff1ee;
+  --surface: #ffffff;
+  --surface-2: #e6ebe7;
+  --ink: #16201b;
+  --ink-2: #4a5750;
+  --ink-3: #79887f;
+  --line: #d2d9d3;
+  --felt: #1f6e4e;
+  --felt-soft: #dcebe2;
+  --suit: #b3332b;
+  --gold: #8c6f1e;
+
+  --side-1: #1f6e4e;
+  --side-2: #b3332b;
+
+  --font-ui: "Segoe UI", system-ui, -apple-system, sans-serif;
+  --font-num: ui-monospace, "Cascadia Mono", Consolas, monospace;
+
+  --r-sm: 6px;
+  --r-md: 10px;
+  --r-lg: 16px;
+
+  --gap-1: 4px;
+  --gap-2: 8px;
+  --gap-3: 14px;
+  --gap-4: 22px;
+  --gap-5: 34px;
+
+  --tap: 44px;
+
+  --shadow: 0 1px 2px rgb(22 32 27 / 0.06), 0 6px 20px rgb(22 32 27 / 0.08);
+  --ease: cubic-bezier(0.2, 0.7, 0.3, 1);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #0f1412;
+    --surface: #161d19;
+    --surface-2: #1d2621;
+    --ink: #e6ece7;
+    --ink-2: #a7b4ac;
+    --ink-3: #7b8a82;
+    --line: #2a3531;
+    --felt: #4fc08d;
+    --felt-soft: #153024;
+    --suit: #e8756a;
+    --gold: #d2b061;
+    --side-1: #4fc08d;
+    --side-2: #e8756a;
+    --shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 8px 24px rgb(0 0 0 / 0.35);
+  }
+}
+
+:root[data-theme="dark"] {
+  --paper: #0f1412;
+  --surface: #161d19;
+  --surface-2: #1d2621;
+  --ink: #e6ece7;
+  --ink-2: #a7b4ac;
+  --ink-3: #7b8a82;
+  --line: #2a3531;
+  --felt: #4fc08d;
+  --felt-soft: #153024;
+  --suit: #e8756a;
+  --gold: #d2b061;
+  --side-1: #4fc08d;
+  --side-2: #e8756a;
+  --shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 8px 24px rgb(0 0 0 / 0.35);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
