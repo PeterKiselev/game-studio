@@ -15,16 +15,10 @@
     "build:all": "npm run build:web && npm run build:yandex && npm run build:vk",
     "pack:yandex": "cd games/gomoku/dist/yandex && zip -r ../../../../release/gomoku-yandex.zip .",
     "pack:vk": "cd games/gomoku/dist/vk && zip -r ../../../../release/gomoku-vk.zip .",
-    "deploy:vk": "npm run build:vk && cd games/gomoku && npx @vkontakte/vk-miniapps-deploy",
-    "tunnel": "cloudflared tunnel --protocol http2 --url http://127.0.0.1:5173",
-    "tunnel:vk": "vk-tunnel --insecure=1 --http-protocol=http --ws-protocol=wss --host=localhost --port=5173",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
-    "@vkontakte/vk-miniapps-deploy": "^1.0.2",
-    "@vkontakte/vk-tunnel": "^0.2.10",
-    "cloudflared": "^0.7.3",
     "typescript": "^5.6.3",
     "vite": "^5.4.11",
     "vitest": "^2.1.5"
