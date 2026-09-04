@@ -19,6 +19,7 @@ const OUT = join(__dirname, '..', 'static', 'promo');
 const SIZES = [
   { name: 'snippet-1120x630', width: 1120, height: 630 }, // большой сниппет VK
   { name: 'promo-1590x400', width: 1590, height: 400 }, // широкая шапка про запас
+  { name: 'cover-800x470', width: 800, height: 470 }, // обложка Яндекс Игр
 ];
 
 (async () => {
