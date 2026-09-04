@@ -3,7 +3,8 @@
  * сглаживаем суперсэмплингом и кодируем PNG через встроенный zlib.
  *
  * Запуск: node tools/make-icon.mjs
- * Результат: static/icons/icon-{512,278,128,64}.png
+ * Результат: static/icons/icon-{576,512,278,200,150,128,64}.png
+ * Размеры под VK: 576 — универсальная, 278 — каталог, 150 — маленькая
  *
  * Композиция: поле три на три, диагональ из трёх кругов (выигрышная линия)
  * и один ромб соперника. Круг и ромб — те же формы, что и в самой игре,
@@ -168,7 +169,7 @@ function encodePng(size, rgba) {
 
 mkdirSync(OUT_DIR, { recursive: true });
 
-for (const size of [512, 278, 200, 128, 64]) {
+for (const size of [576, 512, 278, 200, 150, 128, 64]) {
   const png = encodePng(size, render(size));
   const file = join(OUT_DIR, `icon-${size}.png`);
   writeFileSync(file, png);
