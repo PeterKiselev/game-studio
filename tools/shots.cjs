@@ -25,6 +25,12 @@ const PHONE = { width: 380, height: 760, deviceScaleFactor: 3 };
 const DESKTOP = { width: 1000, height: 620, deviceScaleFactor: 2 };
 // Точный размер, который просит витрина VK под скриншоты.
 const VK_STORE = { width: 1200, height: 600, deviceScaleFactor: 1 };
+// Яндекс Игры: десктопные скриншоты строго 16:9.
+const YANDEX_DESKTOP = { width: 1920, height: 1080, deviceScaleFactor: 1 };
+// Мобильные — на случай, если форма всё же требует альбомную 16:9...
+const YANDEX_MOBILE_LANDSCAPE = { width: 1600, height: 900, deviceScaleFactor: 1 };
+// ...и на случай портретной 9:16, которая куда честнее для вертикальной игры.
+const YANDEX_MOBILE_PORTRAIT = { width: 900, height: 1600, deviceScaleFactor: 1 };
 
 const pause = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -122,6 +128,34 @@ async function shot(page, name) {
     await page.waitForSelector('.board');
     await playMoves(page, [112, 113, 127, 98, 129]);
     await shot(page, 'vk-store-five-dark');
+    await context.close();
+  }
+
+  // 9. Яндекс Игры: десктоп, строго 16:9
+  {
+    const { context, page } = await openGame(browser, YANDEX_DESKTOP, 'light');
+    await page.getByRole('button', { name: 'Крестики-нолики' }).click();
+    await page.waitForSelector('.board');
+    await playMoves(page, [4, 0, 8]);
+    await shot(page, 'yandex-desktop-16x9');
+    await context.close();
+  }
+
+  // 10-11. Яндекс Игры: мобильный тип, оба варианта ориентации про запас
+  {
+    const { context, page } = await openGame(browser, YANDEX_MOBILE_LANDSCAPE, 'light');
+    await page.getByRole('button', { name: 'Пять в ряд' }).click();
+    await page.waitForSelector('.board');
+    await playMoves(page, [112, 113, 127, 98]);
+    await shot(page, 'yandex-mobile-landscape-16x9');
+    await context.close();
+  }
+  {
+    const { context, page } = await openGame(browser, YANDEX_MOBILE_PORTRAIT, 'light');
+    await page.getByRole('button', { name: 'Пять в ряд' }).click();
+    await page.waitForSelector('.board');
+    await playMoves(page, [112, 113, 127, 98]);
+    await shot(page, 'yandex-mobile-portrait-9x16');
     await context.close();
   }
 

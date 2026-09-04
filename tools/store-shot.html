@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Витринный кадр</title>
+<style>
+  /*
+   * Обёртка только для маркетинговых скриншотов. Сама игра остаётся узкой
+   * колонкой — это правильно для геймплея (управление одной рукой), но
+   * голый простой фон вокруг неё на широком холсте выглядит как пустота,
+   * а не как продукт. Здесь та же игра в iframe на фирменном фоне студии,
+   * той же палитре, что промо-баннер.
+   */
+  * { box-sizing: border-box; margin: 0; }
+  html, body { width: 100%; height: 100%; overflow: hidden; }
+
+  body {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(160deg, #247856 0%, #164c36 100%);
+  }
+
+  .frame {
+    background: #fff;
+    border-radius: 12px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+    overflow: hidden;
+  }
+
+  iframe {
+    display: block;
+    width: 100%;
+    height: 100%;
+    border: 0;
+  }
+</style>
+</head>
+<body>
+  <div class="frame" id="frame">
+    <iframe id="game" title="Игра"></iframe>
+  </div>
+  <script>
+    const params = new URLSearchParams(location.search);
+    const frame = document.getElementById('frame');
+    frame.style.width = (params.get('w') || 420) + 'px';
+    frame.style.height = (params.get('h') || 760) + 'px';
+    document.getElementById('game').src = params.get('src') || '';
+  </script>
+</body>
+</html>
