@@ -22,10 +22,26 @@ body {
   -webkit-user-select: none;
 }
 
+/*
+ * Игра живёт в колонке фиксированной ширины. На телефоне она занимает
+ * весь экран, на десктопе и в iframe ВКонтакте — центрируется, вместо того
+ * чтобы растягивать шапку и кнопки по всей ширине монитора.
+ */
 #app {
   height: 100%;
+  width: 100%;
+  max-width: 620px;
+  margin: 0 auto;
   display: flex;
   flex-direction: column;
+  background: var(--paper);
+  border-inline: 1px solid var(--line);
+}
+
+@media (max-width: 640px) {
+  #app {
+    border-inline: 0;
+  }
 }
 
 /* --- экраны: ровно один виден --- */

@@ -23,6 +23,8 @@ const OUT = join(__dirname, '..', 'static', 'shots');
 const PHONE = { width: 380, height: 760, deviceScaleFactor: 3 };
 // Десктоп: так игру видят во ВКонтакте в браузере.
 const DESKTOP = { width: 1000, height: 620, deviceScaleFactor: 2 };
+// Точный размер, который просит витрина VK под скриншоты.
+const VK_STORE = { width: 1200, height: 600, deviceScaleFactor: 1 };
 
 const pause = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -101,6 +103,25 @@ async function shot(page, name) {
     await page.waitForSelector('.board');
     await playMoves(page, [4, 0]);
     await shot(page, 'desktop-tic-light');
+    await context.close();
+  }
+
+  // 6-8. Ровно 1200x600 — размер, который просит витрина VK
+  {
+    const { context, page } = await openGame(browser, VK_STORE, 'light');
+    await shot(page, 'vk-store-menu');
+    await page.getByRole('button', { name: 'Крестики-нолики' }).click();
+    await page.waitForSelector('.board');
+    await playMoves(page, [4, 0, 8]);
+    await shot(page, 'vk-store-tic');
+    await context.close();
+  }
+  {
+    const { context, page } = await openGame(browser, VK_STORE, 'dark');
+    await page.getByRole('button', { name: 'Пять в ряд' }).click();
+    await page.waitForSelector('.board');
+    await playMoves(page, [112, 113, 127, 98, 129]);
+    await shot(page, 'vk-store-five-dark');
     await context.close();
   }
 

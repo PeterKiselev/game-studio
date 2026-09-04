@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Промо-баннер</title>
+<style>
+  /*
+   * Макет большого сниппета. Рендерится Playwright в PNG нужного размера.
+   * Всё в тех же токенах, что игра и иконка, — сниппет должен читаться
+   * как часть одной серии, а не как отдельная реклама.
+   */
+  * { box-sizing: border-box; margin: 0; }
+
+  html, body {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+  }
+
+  body {
+    display: flex;
+    align-items: center;
+    gap: 6%;
+    padding: 0 7%;
+    background: linear-gradient(160deg, #247856 0%, #164c36 100%);
+    color: #eaf4ee;
+    font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+  }
+
+  .text {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  h1 {
+    font-size: clamp(28px, 5.2vw, 78px);
+    line-height: 1.04;
+    letter-spacing: -0.02em;
+    font-weight: 700;
+    text-wrap: balance;
+  }
+
+  .slogan {
+    margin-top: 3%;
+    font-size: clamp(14px, 1.9vw, 34px);
+    color: #b9d8c8;
+    font-weight: 400;
+  }
+
+  .features {
+    margin-top: 5%;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6em 1.4em;
+    font-size: clamp(11px, 1.7vw, 24px);
+    color: #8fc0a7;
+  }
+
+  .features span::before {
+    content: "";
+    display: inline-block;
+    width: 0.42em;
+    height: 0.42em;
+    border-radius: 50%;
+    background: #e8756a;
+    margin-right: 0.55em;
+    vertical-align: 0.1em;
+  }
+
+  /* --- поле справа: та же композиция, что на иконке --- */
+
+  .board {
+    flex: 0 0 auto;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    aspect-ratio: 1;
+    height: 78%;
+    gap: 2px;
+    background: rgba(255, 255, 255, 0.16);
+    padding: 2px;
+    border-radius: 4px;
+  }
+
+  /* только прямые потомки — иначе правило перебивает цвет самих фигур */
+  .board > div {
+    background: rgba(9, 32, 22, 0.28);
+    display: grid;
+    place-items: center;
+  }
+
+  .mark {
+    width: 58%;
+    height: 58%;
+  }
+
+  .o {
+    border-radius: 50%;
+    border: 0.42vw solid #eaf4ee;
+    box-sizing: border-box;
+    width: 56%;
+    height: 56%;
+  }
+
+  .x {
+    background: #e8756a;
+    clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);
+  }
+</style>
+</head>
+<body>
+  <div class="text">
+    <h1>Крестики-нолики и пять в ряд</h1>
+    <div class="slogan">Классика на двоих или против бота</div>
+    <div class="features">
+      <span>Три уровня сложности</span>
+      <span>Игра вдвоём на одном телефоне</span>
+      <span>Без регистрации</span>
+    </div>
+  </div>
+
+  <div class="board">
+    <div><div class="mark o"></div></div>
+    <div></div>
+    <div><div class="mark x"></div></div>
+    <div></div>
+    <div><div class="mark o"></div></div>
+    <div></div>
+    <div><div class="mark x"></div></div>
+    <div></div>
+    <div><div class="mark o"></div></div>
+  </div>
+</body>
+</html>
