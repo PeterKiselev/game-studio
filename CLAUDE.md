@@ -151,8 +151,32 @@ VPN решает доступ к интерфейсу, но не выплаты:
 Словесные (балда, филворды), Аркады (змейка, блоки, шарики). «Дурак» идёт в
 Настольные, не в Азартные — там другая модерация, а у нас игра без ставок.
 
-Деплой на хостинг VK: `npm run deploy:vk` (конфиг в
-`games/gomoku/vk-hosting-config.json`).
+### Хостинг и деплой
+
+Репозиторий: https://github.com/PeterKiselev/game-studio (публичный)
+
+Адрес игры для всех площадок — GitHub Pages, обновляется автоматически
+на каждый пуш в `master` (workflow `.github/workflows/pages.yml`):
+
+| Назначение | Адрес |
+|---|---|
+| Веб-версия | `https://peterkiselev.github.io/game-studio/` |
+| Для VK | `https://peterkiselev.github.io/game-studio/vk/` |
+| Для Яндекс Игр | `https://peterkiselev.github.io/game-studio/yandex/` |
+
+**Чего не делать (проверено на своей шкуре):**
+
+- `@vkontakte/vk-tunnel` и `@vkontakte/vk-miniapps-deploy` не проходят
+  авторизацию нового VK ID: сначала `invalid device_id or client_id`,
+  затем бесконечное `auth for this device_id has not been approved yet`.
+  Ни VPN, ни смена браузера не помогают — сломаны сами инструменты.
+  Файл `games/gomoku/vk-hosting-config.json` оставлен на случай, если
+  VK починит деплой.
+- Cloudflare-туннель на этой машине не поднимается: соединение с edge
+  рвётся через полминуты. Плюс пакет `cloudflared` тянет 40 МБ бинарник
+  в postinstall и вешает `npm ci` в CI — в зависимостях ему не место.
+- Сеть до GitHub медленная, `git push` может идти минутами. Это нормально,
+  не признак ошибки.
 
 ### Внешние документы
 

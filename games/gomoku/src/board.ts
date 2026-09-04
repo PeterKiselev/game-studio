@@ -70,14 +70,19 @@ export class BoardView {
     }
   }
 
-  /** Клетка должна быть крупной на маленьком поле и мелкой на большом. */
+  /**
+   * Поле должно занимать экран, а не висеть пятном посреди пустоты.
+   * Считаем отдельно по ширине и высоте и берём меньшее — так поле 3x3
+   * растягивается почти на всю ширину телефона, а 15x15 остаётся читаемым.
+   */
   private fit(): void {
     if (!this.size) return;
     const box = this.root.getBoundingClientRect();
-    const available = Math.min(box.width, box.height) - 12;
-    const raw = Math.floor((available - (this.size + 1) * 2) / this.size);
-    const max = this.size <= 5 ? 92 : 40;
-    const cell = Math.max(18, Math.min(max, raw));
+    const gaps = (this.size + 1) * 2;
+    const byWidth = (box.width - 12 - gaps) / this.size;
+    const byHeight = (box.height - 12 - gaps) / this.size;
+    const max = this.size <= 5 ? 150 : 44;
+    const cell = Math.max(18, Math.min(max, Math.floor(Math.min(byWidth, byHeight))));
     this.grid.style.setProperty('--cell', `${cell}px`);
   }
 }

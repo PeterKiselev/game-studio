@@ -46,6 +46,9 @@ jobs:
           cp -r games/gomoku/dist/web/. site/
           cp -r games/gomoku/dist/vk/. site/vk/
           cp -r games/gomoku/dist/yandex/. site/yandex/
+          # Правовые документы, иконки и скриншоты — площадки требуют
+          # постоянные адреса на них, поэтому едут вместе с игрой
+          cp -r static/. site/
 
       - uses: actions/configure-pages@v5
 
