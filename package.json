@@ -13,8 +13,8 @@
     "build:yandex": "npm run build -w @studio/gomoku -- --mode yandex",
     "build:vk": "npm run build -w @studio/gomoku -- --mode vk",
     "build:all": "npm run build:web && npm run build:yandex && npm run build:vk",
-    "pack:yandex": "cd games/gomoku/dist/yandex && zip -r ../../../../release/gomoku-yandex.zip .",
-    "pack:vk": "cd games/gomoku/dist/vk && zip -r ../../../../release/gomoku-vk.zip .",
+    "pack:yandex": "node tools/pack.mjs gomoku yandex",
+    "pack:vk": "node tools/pack.mjs gomoku vk",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },
