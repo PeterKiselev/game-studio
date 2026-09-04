@@ -19,65 +19,74 @@ const OUT = join(__dirname, '..', 'static', 'shots');
 
 const pause = (ms) => new Promise((r) => setTimeout(r, ms));
 
-/** name — файл на выходе; canvas — размер всего кадра; frame — размер карточки с игрой внутри. */
-const SHOTS = [
-  {
-    name: 'yandex-desktop-16x9',
-    canvas: { width: 1920, height: 1080 },
-    frame: { w: 720, h: 900 },
-  },
-  {
-    name: 'yandex-mobile-landscape-16x9',
-    canvas: { width: 1600, height: 900 },
-    frame: { w: 460, h: 820 },
-  },
-  {
-    name: 'yandex-mobile-portrait-9x16',
-    canvas: { width: 900, height: 1600 },
-    frame: { w: 620, h: 1160 },
-  },
+/**
+ * Три кадра на тип холста — как в VK: меню, партия в крестики-нолики,
+ * большое поле в тёмной теме. Витрина показывает игру с разных сторон,
+ * а не один случайный кадр.
+ */
+const CANVASES = [
+  { key: 'desktop-16x9', canvas: { width: 1920, height: 1080 }, frame: { w: 720, h: 900 } },
+  { key: 'mobile-9x16', canvas: { width: 900, height: 1600 }, frame: { w: 620, h: 1160 } },
 ];
 
-async function playAndShoot(page, screen) {
+const SCENES = [
+  { key: 'menu', scheme: 'light', play: null },
+  { key: 'tic', scheme: 'light', play: 'Крестики-нолики' },
+  { key: 'five-dark', scheme: 'dark', play: 'Пять в ряд' },
+];
+
+async function setupScene(page, scene) {
   const inner = page.frameLocator('#game');
   await inner.locator('.menu').waitFor({ timeout: 15000 });
-  await inner.getByRole('button', { name: 'Пять в ряд' }).click();
+  if (!scene.play) return;
+
+  await inner.getByRole('button', { name: scene.play }).click();
   await inner.locator('.board').waitFor();
   await pause(200);
 
-  const size = 15;
+  const isFive = scene.play === 'Пять в ряд';
+  const size = isFive ? 15 : 3;
   const centre = Math.floor((size * size) / 2);
-  for (const index of [centre, centre - size, centre + 1, centre - size + 1]) {
+  const moves = isFive
+    ? [centre, centre - size, centre + 1, centre - size + 1]
+    : [centre, 0, size - 1];
+
+  for (const index of moves) {
     const cell = inner.locator('.cell').nth(index);
     if (await cell.isEnabled()) {
       await cell.click();
       await pause(300);
     }
   }
-
-  const file = join(OUT, `${screen.name}.png`);
-  await page.screenshot({ path: file });
-  console.log(file);
 }
 
 (async () => {
   mkdirSync(OUT, { recursive: true });
   const browser = await chromium.launch();
 
-  for (const screen of SHOTS) {
-    const context = await browser.newContext({
-      viewport: screen.canvas,
-      deviceScaleFactor: 1,
-      colorScheme: 'light',
-      locale: 'ru-RU',
-    });
-    const page = await context.newPage();
+  for (const canvasDef of CANVASES) {
+    for (const scene of SCENES) {
+      const context = await browser.newContext({
+        viewport: canvasDef.canvas,
+        deviceScaleFactor: 1,
+        colorScheme: scene.scheme,
+        locale: 'ru-RU',
+      });
+      const page = await context.newPage();
 
-    const url = `${TEMPLATE}?src=${encodeURIComponent(GAME_URL)}&w=${screen.frame.w}&h=${screen.frame.h}`;
-    await page.goto(url, { waitUntil: 'load' });
+      const url =
+        `${TEMPLATE}?src=${encodeURIComponent(GAME_URL)}` +
+        `&w=${canvasDef.frame.w}&h=${canvasDef.frame.h}`;
+      await page.goto(url, { waitUntil: 'load' });
 
-    await playAndShoot(page, screen);
-    await context.close();
+      await setupScene(page, scene);
+
+      const file = join(OUT, `yandex-${canvasDef.key}-${scene.key}.png`);
+      await page.screenshot({ path: file });
+      console.log(file);
+
+      await context.close();
+    }
   }
 
   await browser.close();
