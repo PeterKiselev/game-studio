@@ -404,28 +404,70 @@ describe('регрессии: противоречивое дело не дол�
     expect(deduction.solved).toBe(false);
   });
 
-  it('сущность не может быть раньше самой себя', () => {
-    const selfBefore: Case = {
-      id: 'self-before',
-      title: 'Раньше самого себя',
+  it.each(['before', 'after', 'adjacent'] as const)(
+    'сущность не может быть %s самой себе',
+    (kind) => {
+      /*
+       * До правки before/after ловились случайно — асимметричное сужение
+       * кандидатов на второй итерации схлопывало позиции до одной,
+       * и self-сравнение падало само. adjacent симметричен, сужения
+       * не происходило вовсе: ни один assert() не вызывался, клетка
+       * оставалась неопределённой без единого сигнала об ошибке.
+       * Кодекс поймал именно adjacent(X, X) при повторной проверке.
+       */
+      const selfRelated: Case = {
+        id: `self-${kind}`,
+        title: `${kind} самой себе`,
+        anchor: 'кто',
+        categories: [
+          { id: 'кто', title: 'Кто', values: ['Аня', 'Боря', 'Вика'] },
+          { id: 'когда', title: 'Когда', values: ['утро', 'полдень', 'вечер'], ordered: true },
+        ],
+        clues: [
+          {
+            kind,
+            a: { category: 'кто', value: 'Аня' },
+            b: { category: 'кто', value: 'Аня' },
+            text: `Аня — ${kind} самой себе.`,
+          },
+        ],
+        epilogue: '',
+      };
+
+      expect(countSolutions(selfRelated)).toBe(0);
+      const deduction = deduceCase(selfRelated);
+      expect(deduction.contradiction).not.toBeNull();
+      expect(deduction.solved).toBe(false);
+    },
+  );
+
+  it('самоотношение через уже установленную same-пару тоже ловится', () => {
+    // a и b в разных категориях, но same-улика уже связала их как одну
+    // сущность — прямая проверка на совпадение ref её не поймает,
+    // нужна проверка по состоянию доски.
+    const viaEquivalence: Case = {
+      id: 'self-via-same',
+      title: 'Самоотношение через same',
       anchor: 'кто',
       categories: [
         { id: 'кто', title: 'Кто', values: ['Аня', 'Боря', 'Вика'] },
+        { id: 'что', title: 'Что', values: ['ключ', 'лопата', 'книга'] },
         { id: 'когда', title: 'Когда', values: ['утро', 'полдень', 'вечер'], ordered: true },
       ],
       clues: [
+        { kind: 'same', a: { category: 'кто', value: 'Аня' }, b: { category: 'что', value: 'ключ' }, text: 'У Ани ключ.' },
         {
-          kind: 'before',
+          kind: 'adjacent',
           a: { category: 'кто', value: 'Аня' },
-          b: { category: 'кто', value: 'Аня' },
-          text: 'Аня пришла раньше Ани.',
+          b: { category: 'что', value: 'ключ' },
+          text: 'Аня рядом с собой же.',
         },
       ],
       epilogue: '',
     };
 
-    expect(countSolutions(selfBefore)).toBe(0);
-    expect(deduceCase(selfBefore).contradiction).not.toBeNull();
+    expect(countSolutions(viaEquivalence)).toBe(0);
+    expect(deduceCase(viaEquivalence).contradiction).not.toBeNull();
   });
 });
 
