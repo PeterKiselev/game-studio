@@ -14,7 +14,8 @@ const { join } = require('node:path');
 const { pathToFileURL } = require('node:url');
 
 const SOURCE = pathToFileURL(join(__dirname, 'banner.html')).href;
-const OUT = join(__dirname, '..', 'static', 'promo');
+const GAME = process.argv[2] || 'gomoku';
+const OUT = join(__dirname, '..', 'games', GAME, 'store', 'promo');
 
 const SIZES = [
   { name: 'snippet-1120x630', width: 1120, height: 630 }, // большой сниппет VK

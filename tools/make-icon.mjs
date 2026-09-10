@@ -2,8 +2,8 @@
  * Генератор иконки студии. Без единой зависимости: рисуем в буфер,
  * сглаживаем суперсэмплингом и кодируем PNG через встроенный zlib.
  *
- * Запуск: node tools/make-icon.mjs
- * Результат: static/icons/icon-{576,512,278,200,150,128,64}.png
+ * Запуск: node tools/make-icon.mjs [игра=gomoku]
+ * Результат: games/<игра>/store/icons/icon-{576,512,278,200,150,128,64}.png
  * Размеры под VK: 576 — универсальная, 278 — каталог, 150 — маленькая
  *
  * Композиция: поле три на три, диагональ из трёх кругов (выигрышная линия)
@@ -17,7 +17,11 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-const OUT_DIR = join(ROOT, 'static', 'icons');
+// Материалы витрины принадлежат конкретной игре, не студии целиком —
+// иначе вторая игра либо перезапишет иконки первой, либо свалится
+// в общую кучу без пометки, чья она.
+const GAME = process.argv[2] || 'gomoku';
+const OUT_DIR = join(ROOT, 'games', GAME, 'store', 'icons');
 
 // --- палитра студии -------------------------------------------------------
 

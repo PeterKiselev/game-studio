@@ -2,10 +2,10 @@
  * Скриншоты игры для магазинов площадок.
  *
  * Запуск (playwright стоит глобально, поэтому нужен NODE_PATH):
- *   NODE_PATH="$(npm root -g)" node tools/shots.cjs [базовый-url]
+ *   NODE_PATH="$(npm root -g)" node tools/shots.cjs [базовый-url] [игра=gomoku]
  *
  * По умолчанию снимает веб-сборку с GitHub Pages. Кадры кладёт
- * в static/shots/ — оттуда их и загружаем в кабинеты площадок.
+ * в games/<игра>/store/shots/ — оттуда их и загружаем в кабинеты площадок.
  *
  * Скрипт не привязан к этой игре: он ходит по общим селекторам
  * дизайн-системы (.menu, .board, .cell), поэтому подойдёт любой
@@ -17,7 +17,8 @@ const { mkdirSync } = require('node:fs');
 const { join } = require('node:path');
 
 const BASE = process.argv[2] || 'https://peterkiselev.github.io/game-studio/';
-const OUT = join(__dirname, '..', 'static', 'shots');
+const GAME = process.argv[3] || 'gomoku'; // 2-й аргумент — url игры, 3-й — имя игры
+const OUT = join(__dirname, '..', 'games', GAME, 'store', 'shots');
 
 // Телефон: снимаем в портрете с тройной плотностью — площадки любят крупные кадры.
 const PHONE = { width: 380, height: 760, deviceScaleFactor: 3 };

@@ -15,7 +15,8 @@ const { pathToFileURL } = require('node:url');
 
 const GAME_URL = process.argv[2] || 'https://peterkiselev.github.io/game-studio/';
 const TEMPLATE = pathToFileURL(join(__dirname, 'store-shot.html')).href;
-const OUT = join(__dirname, '..', 'static', 'shots');
+const GAME = process.argv[3] || 'gomoku';
+const OUT = join(__dirname, '..', 'games', GAME, 'store', 'shots');
 
 const pause = (ms) => new Promise((r) => setTimeout(r, ms));
 

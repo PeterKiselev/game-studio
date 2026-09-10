@@ -6,10 +6,10 @@
  * его не нужно ничего "устанавливать" в системном смысле.
  *
  * Запуск:
- *   NODE_PATH="$(npm root -g)" node tools/video.cjs [базовый-url]
+ *   NODE_PATH="$(npm root -g)" node tools/video.cjs [базовый-url] [игра=gomoku]
  *
- * Результат: static/video/gameplay-landscape.mp4 (десктоп, 16:9)
- *            static/video/gameplay-portrait.mp4  (телефон, 9:16)
+ * Результат: games/<игра>/store/video/gameplay-landscape.mp4 (десктоп, 16:9)
+ *            games/<игра>/store/video/gameplay-portrait.mp4  (телефон, 9:16)
  */
 
 const { chromium } = require('playwright');
@@ -18,7 +18,8 @@ const { mkdirSync, readdirSync, renameSync, rmSync, existsSync } = require('node
 const { join } = require('node:path');
 
 const BASE = process.argv[2] || 'https://peterkiselev.github.io/game-studio/';
-const OUT = join(__dirname, '..', 'static', 'video');
+const GAME = process.argv[3] || 'gomoku';
+const OUT = join(__dirname, '..', 'games', GAME, 'store', 'video');
 const TMP = join(OUT, '_raw');
 
 const FFMPEG = require(join(process.env.NODE_PATH ?? '', 'ffmpeg-static'));
