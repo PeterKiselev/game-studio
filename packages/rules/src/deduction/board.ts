@@ -13,13 +13,15 @@ import type { Case, Category, Clue, Deduction, HintReason, PlayerMarks, Ref } fr
  *
  * Правил ровно столько, сколько нужно для дел пилота:
  *   1. прямое следствие улики;
- *   2. значение уже занято другой сущностью;
+ *   2. клетка закрыта уже установленной парой;
  *   3. остался единственный вариант;
- *   4. перенос связи через третью сущность;
+ *   4. связь перенесена через установленную пару;
  *   5. в упорядоченной категории не остаётся места.
  *
- * Если делу этих правил не хватает, валидатор скажет об этом автору
- * на этапе сборки — такое дело в пилот не попадает.
+ * Пяти правил хватает не на всякое дело. Если решение единственно,
+ * но вывести его не удалось, это значит именно «правил не хватает
+ * объяснить», а не «дело требует угадывания» — валидатор говорит
+ * об этом автору на сборке, и такое дело в пилот не попадает.
  */
 
 export type CellState = 'yes' | 'no' | 'unknown';
@@ -98,25 +100,30 @@ class Board {
 
     this.steps.push({ a, b, positive: isPositive, reason, text: explain(a, b, isPositive, reason, this.clues) });
 
-    if (isPositive) this.excludeRest(a, b, reason);
+    if (isPositive) this.excludeRest(a, b);
     return true;
   }
 
-  /** Одна сущность — одно значение: остальное в строке и столбце отпадает. */
-  private excludeRest(a: Ref, b: Ref, _from: HintReason): void {
+  /**
+   * Одна сущность — одно значение: остальное в строке и столбце отпадает.
+   * В причину кладётся сама установленная пара — объяснение должно
+   * показывать игроку, какая связь закрыла клетку.
+   */
+  private excludeRest(a: Ref, b: Ref): void {
+    const pair: [Ref, Ref] = [a, b];
     const categoryB = this.model.byId.get(b.category);
     const categoryA = this.model.byId.get(a.category);
 
     if (categoryB) {
       for (const value of categoryB.values) {
         if (value === b.value) continue;
-        this.assert(a, { category: b.category, value }, false, { rule: 'taken', by: b.value });
+        this.assert(a, { category: b.category, value }, false, { rule: 'taken', pair });
       }
     }
     if (categoryA) {
       for (const value of categoryA.values) {
         if (value === a.value) continue;
-        this.assert({ category: a.category, value }, b, false, { rule: 'taken', by: a.value });
+        this.assert({ category: a.category, value }, b, false, { rule: 'taken', pair });
       }
     }
   }
@@ -200,6 +207,20 @@ class Board {
 
     const mirror = clue.kind === 'before' ? 'after' : clue.kind === 'after' ? 'before' : 'adjacent';
 
+    /*
+     * Отношение может быть невыполнимо в принципе — «вечер раньше утра»
+     * или «X раньше самого себя». Одними исключениями позиций это не
+     * ловится: если ссылки лежат в самой упорядоченной категории,
+     * исключать нечего, и дело молча считалось бы решённым.
+     */
+    if (!positionsA.some((pa) => positionsB.some((pb) => fits(clue.kind, pa, pb)))) {
+      this.fail(
+        `Улика ${clueIndex + 1} невыполнима: ни одна допустимая пара позиций ` +
+          `в категории «${order.title}» не удовлетворяет отношению «${clue.kind}».`,
+      );
+      return changed;
+    }
+
     for (const position of positionsA) {
       if (!positionsB.some((other) => fits(clue.kind, position, other))) drop(clue.a, position);
     }
@@ -252,12 +273,25 @@ class Board {
           const target: Ref = { category: third.id, value };
           const viaB = this.state(b, target);
           const viaA = this.state(a, target);
-          const through = (side: Ref): HintReason => ({ rule: 'transitive', through: side.value });
+          const link = (x: Ref, y: Ref): HintReason => ({ rule: 'transitive', link: [x, y] });
 
-          if (viaB !== 'unknown' && viaA === 'unknown') {
-            changed = this.assert(a, target, viaB === 'yes', through(b)) || changed;
-          } else if (viaA !== 'unknown' && viaB === 'unknown') {
-            changed = this.assert(b, target, viaA === 'yes', through(a)) || changed;
+          if (viaA !== 'unknown' && viaB !== 'unknown') {
+            // Обе связи известны. Раз a и b — одна сущность, они обязаны
+            // совпадать; расхождение означает, что дело собрано неверно.
+            if (viaA !== viaB) {
+              this.fail(
+                `Противоречие: «${a.value}» и «${b.value}» — одна сущность, ` +
+                  `но с «${value}» связаны по-разному.`,
+              );
+              return changed;
+            }
+            continue;
+          }
+
+          if (viaB !== 'unknown') {
+            changed = this.assert(a, target, viaB === 'yes', link(a, b)) || changed;
+          } else if (viaA !== 'unknown') {
+            changed = this.assert(b, target, viaA === 'yes', link(a, b)) || changed;
           }
         }
       }
@@ -302,6 +336,10 @@ class Board {
   }
 }
 
+function pairLabel([x, y]: [Ref, Ref]): string {
+  return `${x.value} — ${y.value}`;
+}
+
 /** Человеческое объяснение вывода. Структура остаётся в reason. */
 function explain(a: Ref, b: Ref, positive: boolean, reason: HintReason, clues: Clue[]): string {
   const mark = positive ? '«да»' : '«нет»';
@@ -313,11 +351,17 @@ function explain(a: Ref, b: Ref, positive: boolean, reason: HintReason, clues: C
       return `Отметьте ${mark} в клетке «${cell}»: это прямо следует из улики ${reason.clueIndex + 1} — «${clue?.text ?? ''}».`;
     }
     case 'taken':
-      return `Отметьте ${mark} в клетке «${cell}»: «${reason.by}» уже занято другой сущностью.`;
+      return (
+        `Отметьте ${mark} в клетке «${cell}»: ` +
+        `пара «${pairLabel(reason.pair)}» уже установлена.`
+      );
     case 'last-option':
       return `Отметьте ${mark} в клетке «${cell}»: других вариантов для «${a.value}» не осталось.`;
     case 'transitive':
-      return `Отметьте ${mark} в клетке «${cell}»: связь переносится через «${reason.through}».`;
+      return (
+        `Отметьте ${mark} в клетке «${cell}»: ` +
+        `связь идёт через установленную пару «${pairLabel(reason.link)}».`
+      );
     case 'order': {
       const clue = clues[reason.clueIndex];
       return `Отметьте ${mark} в клетке «${cell}»: по улике ${reason.clueIndex + 1} — «${clue?.text ?? ''}» — такая позиция не подходит.`;

@@ -22,6 +22,7 @@ export {
   describeSolution,
   permutations,
   solveCase,
+  TooHeavyError,
   uniqueSolution,
 } from './solve';
 export type { SolveResult } from './solve';

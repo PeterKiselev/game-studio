@@ -128,16 +128,43 @@ export function solveCase(source: Case, limit = 2): SolveResult {
   return { solutions, evaluated, aborted: false };
 }
 
-/** Сколько решений у дела: 0, 1 или 2 (2 означает «больше одного»). */
-export function countSolutions(source: Case): 0 | 1 | 2 {
-  const { solutions } = solveCase(source, 2);
-  return solutions.length as 0 | 1 | 2;
+/**
+ * Дело тяжелее предохранителя: перебор не запускался, ответа нет.
+ *
+ * Отдельная ошибка, а не «ноль решений»: молча вернуть ноль означало бы
+ * выдать отказ считать за доказанное отсутствие решений — худший вид
+ * неверного ответа. Кто хочет обработать это мягко, зовёт assignmentCount()
+ * до перебора; так и делает validateCase().
+ */
+export class TooHeavyError extends Error {
+  constructor(source: Case) {
+    super(
+      `Дело «${source.id}» требует перебора ${assignmentCount(source).toLocaleString('ru')} ` +
+        `расстановок при пределе ${MAX_ASSIGNMENTS.toLocaleString('ru')}. ` +
+        'Число решений не проверено. Сверьтесь с assignmentCount() до вызова.',
+    );
+    this.name = 'TooHeavyError';
+  }
 }
 
-/** Единственное решение или null, если решений нет либо их несколько. */
+/**
+ * Сколько решений у дела: 0, 1 или 2 (2 означает «больше одного»).
+ * Бросает TooHeavyError, если перебор запрещён предохранителем.
+ */
+export function countSolutions(source: Case): 0 | 1 | 2 {
+  const result = solveCase(source, 2);
+  if (result.aborted) throw new TooHeavyError(source);
+  return result.solutions.length as 0 | 1 | 2;
+}
+
+/**
+ * Единственное решение или null, если решений нет либо их несколько.
+ * Бросает TooHeavyError, если перебор запрещён предохранителем.
+ */
 export function uniqueSolution(source: Case): Solution | null {
-  const { solutions } = solveCase(source, 2);
-  return solutions.length === 1 ? solutions[0] : null;
+  const result = solveCase(source, 2);
+  if (result.aborted) throw new TooHeavyError(source);
+  return result.solutions.length === 1 ? result.solutions[0] : null;
 }
 
 /** Читаемая расшифровка решения: сущность -> её значения по категориям. */
