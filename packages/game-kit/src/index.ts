@@ -1,6 +1,8 @@
 import { AdManager, SaveStore, createPlatform } from '@studio/platform';
 import type { AdPolicyConfig, IPlatform } from '@studio/platform';
 import { initTheme } from '@studio/ui';
+import { track } from './analytics';
+import type { TrackedEvent } from './analytics';
 
 export interface BootOptions<T extends object> {
   /** Ключ сохранения. Один на игру, не менять после релиза. */
@@ -73,7 +75,14 @@ export class GameApp<T extends object> {
     const result = await this.ads.rewarded(placement);
     return result.rewarded;
   }
+
+  /** Событие продукта: начал дело, поставил отметку, взял подсказку, ошибся. */
+  track(name: string, props?: TrackedEvent['props']): void {
+    track(name, props);
+  }
 }
 
 export { AdManager, SaveStore } from '@studio/platform';
 export type { AdPolicyConfig, IPlatform } from '@studio/platform';
+export { track, trackedEvents } from './analytics';
+export type { TrackedEvent } from './analytics';
