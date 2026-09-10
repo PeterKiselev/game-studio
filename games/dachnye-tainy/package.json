@@ -1,0 +1,12 @@
+{
+  "name": "@studio/dachnye-tainy",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "homepage": "./",
+  "main": "src/cases/index.ts",
+  "types": "src/cases/index.ts",
+  "dependencies": {
+    "@studio/rules": "*"
+  }
+}

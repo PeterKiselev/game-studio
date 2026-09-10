@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Отскок — макет</title>
+<style>
+  * { box-sizing: border-box; margin: 0; }
+  html, body { width: 100%; height: 100%; overflow: hidden; }
+  body {
+    background: #eff1ee;
+    font-family: "Segoe UI", system-ui, sans-serif;
+  }
+  #app {
+    width: 420px;
+    height: 760px;
+    margin: 0 auto;
+    background: #eff1ee;
+    border-inline: 1px solid #d2d9d3;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+  }
+  .topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 16px;
+    background: #fff;
+    border-bottom: 1px solid #d2d9d3;
+    font-weight: 600;
+  }
+  .lives { display: flex; gap: 5px; }
+  .lives i { width: 12px; height: 12px; border-radius: 50%; background: #e8756a; display: block; }
+  .lives i.lost { background: #d2d9d3; }
+  .score { font-family: ui-monospace, Consolas, monospace; font-variant-numeric: tabular-nums; }
+
+  .field {
+    position: relative;
+    flex: 1;
+    background: #eff1ee;
+    overflow: hidden;
+  }
+
+  .falling {
+    position: absolute;
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    background: #e8756a;
+  }
+
+  .trail {
+    position: absolute;
+    border-radius: 50%;
+    background: #1f6e4e;
+    opacity: .18;
+  }
+
+  .ball {
+    position: absolute;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: #1f6e4e;
+    box-shadow: 0 2px 6px rgba(31,110,78,.4);
+  }
+
+  .paddle {
+    position: absolute;
+    bottom: 26px;
+    width: 92px;
+    height: 16px;
+    border-radius: 8px;
+    background: #1f6e4e;
+    left: 50%;
+    transform: translateX(-38%);
+  }
+
+  .hint {
+    position: absolute;
+    bottom: 4px;
+    left: 0; right: 0;
+    text-align: center;
+    font-size: 12px;
+    color: #79887f;
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="topbar">
+    <div class="lives">
+      <i></i><i></i><i class="lost"></i>
+    </div>
+    <div class="score">1 240</div>
+  </div>
+  <div class="field">
+    <div class="falling" style="left:60px; top:70px;"></div>
+    <div class="falling" style="left:190px; top:140px;"></div>
+    <div class="falling" style="left:300px; top:40px;"></div>
+    <div class="falling" style="left:130px; top:230px;"></div>
+
+    <div class="trail" style="width:60px;height:60px; left:180px; top:330px;"></div>
+    <div class="trail" style="width:40px;height:40px; left:195px; top:345px;"></div>
+    <div class="ball" style="left:205px; top:360px;"></div>
+
+    <div class="paddle"></div>
+    <div class="hint">Двигайте плашку — отбивайте мяч, сбивайте кружки</div>
+  </div>
+</div>
+</body>
+</html>

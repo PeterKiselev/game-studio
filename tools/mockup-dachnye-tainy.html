@@ -1,0 +1,286 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Дачные тайны — макет</title>
+<style>
+  /*
+   * Расширение токенов студии под эту игру: тот же структурный язык
+   * (поверхность/чернила/линия/акцент), но тёплая палитра расследования
+   * вместо зелёного сукна настольных игр — вариация внутри системы,
+   * не отдельный бренд.
+   */
+  :root {
+    --paper: #f3ede0;      /* тёплая бумага вместо холодного --paper студии */
+    --surface: #fffaf0;
+    --ink: #2e2418;
+    --ink-2: #6b5d47;
+    --ink-3: #9a8a70;
+    --line: #ddd0b4;
+    --accent: #1f6e4e;     /* тот же зелёный студии — участок/прогресс */
+    --clue: #b3572a;       /* терракотовый — улики, акцент дела */
+    --stamp: #a83232;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  html, body { width: 100%; height: 100%; }
+  body {
+    background: #ded2b2;
+    font-family: "Segoe UI", system-ui, sans-serif;
+    display: flex;
+    gap: 24px;
+    padding: 24px;
+    align-items: flex-start;
+  }
+  .screen {
+    width: 380px;
+    height: 720px;
+    background: var(--paper);
+    border-radius: 14px;
+    overflow: hidden;
+    box-shadow: 0 12px 40px rgba(46,36,24,.25);
+    display: flex;
+    flex-direction: column;
+    position: relative;
+  }
+  .label {
+    position: absolute;
+    top: -28px; left: 0;
+    font-size: 13px;
+    color: #6b5d47;
+    font-weight: 600;
+  }
+
+  .topbar {
+    padding: 14px 18px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--line);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .topbar h1 { font-size: 16px; color: var(--ink); }
+  .topbar .day { font-size: 12px; color: var(--ink-3); font-family: ui-monospace, monospace; }
+
+  /* --- экран 1: участок --- */
+  .plot {
+    flex: 1;
+    background:
+      radial-gradient(ellipse at 30% 20%, rgba(31,110,78,.10), transparent 55%),
+      var(--paper);
+    padding: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .plot-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    flex: 1;
+  }
+  .plot-cell {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 10px;
+  }
+  .plot-cell .icon { font-size: 30px; }
+  .plot-cell.locked { opacity: .4; }
+  .plot-cell .name { font-size: 12px; color: var(--ink-2); text-align: center; }
+
+  .case-card {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 14px;
+    display: flex;
+    gap: 12px;
+    align-items: center;
+  }
+  .case-card .stamp {
+    width: 44px; height: 44px;
+    border-radius: 50%;
+    background: var(--clue);
+    color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 20px;
+    flex: none;
+  }
+  .case-card .text b { display: block; font-size: 14px; color: var(--ink); }
+  .case-card .text span { font-size: 12px; color: var(--ink-3); }
+
+  /* --- экран 2: дело --- */
+  .case {
+    flex: 1;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    overflow: hidden;
+  }
+  .clues {
+    background: var(--surface);
+    border: 1px dashed var(--line);
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-size: 12.5px;
+    color: var(--ink-2);
+    line-height: 1.5;
+  }
+  .clues b { color: var(--clue); font-weight: 600; }
+
+  .grid-table {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 10px;
+    display: grid;
+    grid-template-columns: 70px repeat(4, 1fr);
+    gap: 4px;
+    font-size: 11px;
+  }
+  .grid-table .h { color: var(--ink-3); text-align: center; writing-mode: vertical-rl; padding: 4px 0; }
+  .grid-table .row-label { color: var(--ink-2); display: flex; align-items: center; font-size: 12px; }
+  .grid-table .cell {
+    aspect-ratio: 1;
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700;
+  }
+  .grid-table .cell.yes { background: var(--accent); color: #fff; }
+  .grid-table .cell.no { color: var(--ink-3); }
+
+  .hint-btn {
+    margin-top: auto;
+    background: var(--clue);
+    color: #fff;
+    border: 0;
+    border-radius: 8px;
+    padding: 12px;
+    font-size: 13px;
+    font-weight: 600;
+    text-align: center;
+  }
+
+  /* --- экран 3: развязка --- */
+  .reveal {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+  }
+  .scene {
+    flex: 1;
+    background: linear-gradient(180deg, #e8dcc0, #d8c69f);
+    position: relative;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    padding-bottom: 30px;
+  }
+  .figure {
+    width: 64px; height: 64px;
+    border-radius: 50%;
+    background: var(--accent);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 28px;
+    margin: 0 -8px;
+    border: 3px solid var(--paper);
+  }
+  .figure.b { background: var(--clue); }
+  .stamp-big {
+    position: absolute;
+    top: 24px; right: 24px;
+    border: 3px solid var(--stamp);
+    color: var(--stamp);
+    padding: 6px 14px;
+    border-radius: 6px;
+    font-weight: 800;
+    font-size: 14px;
+    transform: rotate(-8deg);
+    letter-spacing: .04em;
+  }
+  .reveal-text {
+    padding: 16px 18px;
+    background: var(--surface);
+    border-top: 1px solid var(--line);
+    font-size: 13px;
+    color: var(--ink-2);
+    line-height: 1.5;
+  }
+  .reveal-text b { color: var(--ink); }
+</style>
+</head>
+<body>
+
+<div style="position:relative">
+  <div class="label">1. Участок</div>
+  <div class="screen">
+    <div class="topbar"><h1>Дачные тайны</h1><div class="day">День 4</div></div>
+    <div class="plot">
+      <div class="plot-grid">
+        <div class="plot-cell"><div class="icon">🍓</div><div class="name">Грядка клубники</div></div>
+        <div class="plot-cell"><div class="icon">🐈</div><div class="name">Кот Барсик</div></div>
+        <div class="plot-cell locked"><div class="icon">🔒</div><div class="name">Беседка</div></div>
+        <div class="plot-cell locked"><div class="icon">🔒</div><div class="name">Пруд</div></div>
+      </div>
+      <div class="case-card">
+        <div class="stamp">?</div>
+        <div class="text"><b>Сегодняшнее дело</b><span>Кто перепутал корзины с урожаем</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div style="position:relative">
+  <div class="label">2. Дело</div>
+  <div class="screen">
+    <div class="topbar"><h1>Кто перепутал корзины</h1><div class="day">4×4</div></div>
+    <div class="case">
+      <div class="clues">
+        <b>Улика 1.</b> Ирина пришла раньше владельца зонта.<br>
+        <b>Улика 2.</b> Человек из беседки не приносил пирог.<br>
+        <b>Улика 3.</b> Михаил сидел рядом с владельцем велосипеда.
+      </div>
+      <div class="grid-table">
+        <div></div>
+        <div class="h">Ирина</div><div class="h">Михаил</div><div class="h">Олег</div><div class="h">Дарья</div>
+        <div class="row-label">Пирог</div>
+        <div class="cell no">✕</div><div class="cell yes">✓</div><div class="cell no">✕</div><div class="cell no">✕</div>
+        <div class="row-label">Зонт</div>
+        <div class="cell no">✕</div><div class="cell no">✕</div><div class="cell yes">✓</div><div class="cell no">✕</div>
+        <div class="row-label">Велосипед</div>
+        <div class="cell no">✕</div><div class="cell no">✕</div><div class="cell no">✕</div><div class="cell yes">✓</div>
+      </div>
+      <div class="hint-btn">💡 Подсказка — посмотреть за рекламу</div>
+    </div>
+  </div>
+</div>
+
+<div style="position:relative">
+  <div class="label">3. Развязка</div>
+  <div class="screen">
+    <div class="topbar"><h1>Дело раскрыто</h1><div class="day">✓</div></div>
+    <div class="reveal">
+      <div class="scene">
+        <div class="stamp-big">РАСКРЫТО</div>
+        <div class="figure">👩</div>
+        <div class="figure b">👨</div>
+        <div class="figure">🧑</div>
+      </div>
+      <div class="reveal-text">
+        <b>Дарья</b> взяла велосипед соседа, чтобы успеть на рынок до дождя —
+        а корзину с клубникой по пути перепутала с корзиной <b>Олега</b>.
+        Зонт весь день пролежал у калитки.
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
