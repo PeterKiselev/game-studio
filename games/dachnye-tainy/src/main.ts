@@ -10,6 +10,13 @@ import './style.css';
 interface Save {
   casesCompleted: string[];
   plotStage: number;
+  /**
+   * Незаконченное дело — раньше терялось целиком при уходе на участок:
+   * marks жили только в замыкании startCase(), нигде не сохранялись.
+   * Поддерживаем ровно одно дело в работе (вертикальный срез — одно
+   * дело и есть), это сознательное упрощение, не многодельный прогресс.
+   */
+  inProgress?: { caseId: string; marks: PlayerMarks; hintsUsed: number };
 }
 
 const DEFAULTS: Save = { casesCompleted: [], plotStage: 0 };
@@ -96,8 +103,8 @@ function startCase(source: Case): void {
   app.track('case_start', { caseId: source.id });
   app.startRound();
 
-  const solution = uniqueSolution(source);
-  if (!solution) {
+  const maybeSolution = uniqueSolution(source);
+  if (!maybeSolution) {
     // Не должно случиться — validateCase() гоняется в тестах на каждое дело
     // из cases[]. Если всё-таки случилось, честно останавливаемся,
     // а не показываем игроку неразрешимую головоломку.
@@ -105,6 +112,10 @@ function startCase(source: Case): void {
     showPlot();
     return;
   }
+  // Отдельная константа: TypeScript не сужает solution до non-null внутри
+  // вложенной function-декларации (checkSolved), захватывающей внешнюю
+  // переменную через замыкание — а сюда она передаётся именно так.
+  const solution: Solution = maybeSolution;
 
   // Для проверки ответа хватает пар «категория × якорь»: если для каждого
   // соседа верно найдены место и предмет, дело раскрыто. Пара «места ×
@@ -116,11 +127,22 @@ function startCase(source: Case): void {
   const requiredYes = new Set(
     [...groundTruthYes].filter((key) => key.startsWith(`${source.anchor}|`) || key.includes(`~${source.anchor}|`)),
   );
-  const marks: PlayerMarks = {};
+
+  const saved = app.save.data.inProgress?.caseId === source.id ? app.save.data.inProgress : null;
+  const marks: PlayerMarks = saved ? { ...saved.marks } : {};
   let hintedKey: string | null = null;
-  let markCount = 0;
-  let hintsUsed = 0;
+  let markCount = Object.keys(marks).length;
+  let hintsUsed = saved?.hintsUsed ?? 0;
   let solved = false;
+  // Клик после того, как игрок уже ушёл с экрана: без этого флага
+  // отложенный переход на развязку срабатывает поверх того, куда игрок
+  // успел перейти за эти 500 мс (например, уже открыл другое дело).
+  let left = false;
+
+  function persistProgress(): void {
+    app.save.data.inProgress = { caseId: source.id, marks: { ...marks }, hintsUsed };
+    app.save.markDirty();
+  }
 
   const cluesBox = el('div', { class: 'clues' });
   for (const clue of source.clues) {
@@ -148,6 +170,11 @@ function startCase(source: Case): void {
   const hintBtn = el('button', { class: 'btn hint-btn', type: 'button' }, '💡 Подсказка') as HTMLButtonElement;
   hintBtn.addEventListener('click', () => void useHint());
 
+  // Подсказка живёт в закреплённой нижней панели, а не в конце страницы:
+  // при трёх сетках подряд кнопка внизу потока не видна без прокрутки —
+  // ровно то место, где она действительно нужна игроку в тупике.
+  const hintBar = el('div', { class: 'hint-bar' }, hintText, hintBtn);
+
   const screen = el(
     'div',
     { class: 'screen case' },
@@ -158,10 +185,8 @@ function startCase(source: Case): void {
       el('span', { class: 'spacer' }),
       backButton(),
     ),
-    cluesBox,
-    gridsBox,
-    hintText,
-    hintBtn,
+    el('div', { class: 'case-scroll' }, cluesBox, gridsBox),
+    hintBar,
   );
   root.replaceChildren(screen);
 
@@ -192,21 +217,27 @@ function startCase(source: Case): void {
     }
 
     refreshAll();
+    persistProgress();
     checkSolved();
   }
 
   function autoExclude(a: Ref, b: Ref): void {
     const catA = source.categories.find((c) => c.id === a.category)!;
     const catB = source.categories.find((c) => c.id === b.category)!;
+    // Безусловная перезапись, а не «только если пусто»: отметка «да»
+    // отменяет любую прежнюю отметку в той же строке/столбце, включая
+    // ошибочное «да», поставленное раньше по той же сетке. Раньше
+    // условие «только если undefined» позволяло неверной галочке
+    // пережить верную — и дело раскрывалось при внутренне противоречивой
+    // сетке, потому что проверка завершения смотрела только на нужные
+    // клетки, не на отсутствие лишних.
     for (const value of catB.values) {
       if (value === b.value) continue;
-      const key = markKey(a, { category: catB.id, value });
-      if (marks[key] === undefined) marks[key] = 'no';
+      marks[markKey(a, { category: catB.id, value })] = 'no';
     }
     for (const value of catA.values) {
       if (value === a.value) continue;
-      const key = markKey({ category: catA.id, value }, b);
-      if (marks[key] === undefined) marks[key] = 'no';
+      marks[markKey({ category: catA.id, value }, b)] = 'no';
     }
   }
 
@@ -227,6 +258,7 @@ function startCase(source: Case): void {
 
     app.track('case_hint', { caseId: source.id, rule: hint.reason.rule });
     hintsUsed += 1;
+    persistProgress();
     hintedKey = markKey(hint.a, hint.b);
     hintText.textContent = hint.text;
     hintText.hidden = false;
@@ -242,13 +274,19 @@ function startCase(source: Case): void {
       if (marks[key] !== 'yes') return;
     }
     solved = true;
+    app.save.data.inProgress = undefined; // дело раскрыто — возобновлять нечего
+    app.save.markDirty();
     app.track('case_complete', { caseId: source.id, hintsUsed, markCount });
-    setTimeout(() => void finishCase(source), 500);
+    setTimeout(() => {
+      if (left) return; // игрок уже ушёл с экрана — не выдёргиваем его обратно
+      void finishCase(source, solution);
+    }, 500);
   }
 
   function backButton(): HTMLButtonElement {
     const btn = el('button', { class: 'btn ghost', type: 'button' }, 'Участок') as HTMLButtonElement;
     btn.addEventListener('click', () => {
+      left = true;
       app.track('case_exit', { caseId: source.id, solved });
       void app.endRound();
       showPlot();
@@ -278,23 +316,18 @@ function buildGroundTruthYes(source: Case, solution: Solution): Set<string> {
 
 // --- экран 3: развязка --------------------------------------------------------
 
-async function finishCase(source: Case): Promise<void> {
+async function finishCase(source: Case, solution: Solution): Promise<void> {
   const s = app.save.data;
-  if (!s.casesCompleted.includes(source.id)) {
+  const isNew = !s.casesCompleted.includes(source.id);
+  if (isNew) {
     s.casesCompleted.push(source.id);
     s.plotStage = Math.min(4, s.plotStage + 1);
     app.save.markDirty();
   }
   await app.endRound();
 
-  const screen = el(
-    'div',
-    { class: 'screen reveal' },
-    el(
-      'div',
-      { class: 'topbar' },
-      el('span', { class: 'title' }, 'Дело раскрыто'),
-    ),
+  const children = [
+    el('div', { class: 'topbar' }, el('span', { class: 'title' }, 'Дело раскрыто')),
     el(
       'div',
       { class: 'scene' },
@@ -303,15 +336,52 @@ async function finishCase(source: Case): Promise<void> {
       el('div', { class: 'figure b' }, '👨'),
       el('div', { class: 'figure' }, '🧑'),
     ),
+    caseFileSummary(source, solution),
     el('div', { class: 'reveal-text' }, source.epilogue),
-    el('div', { class: 'reward' }, '🌱 Участок пополнился новым уголком'),
-    continueButton(),
-  );
+  ];
+
+  // Сообщение о награде — только если участок правда пополнился. Дело
+  // при повторном прохождении не должно врать про изменение, которого
+  // не произошло: сохранение не меняется, значит и текст не должен.
+  if (isNew) {
+    children.push(el('div', { class: 'reward' }, '🌱 Участок пополнился новым уголком'));
+  }
+
+  children.push(continueButton());
+
+  const screen = el('div', { class: 'screen reveal' }, ...children);
   root.replaceChildren(screen);
 
   // Между делами, не посреди расследования — ровно то место, что разрешает
   // наша политика рекламы.
   await app.ads.interstitial();
+}
+
+/**
+ * Компактная сводка дела вместо пустого декоративного пространства:
+ * кто где был и что при нём было — то, что игрок только что доказал.
+ * Полноценные иллюстрации персонажей — отдельная, более поздняя работа
+ * (переиспользуемые ассеты по плану Кодекса), а эта сводка не декорация,
+ * а содержательный итог партии, который можно сделать уже сейчас.
+ */
+function caseFileSummary(source: Case, solution: Solution): HTMLElement {
+  const box = el('div', { class: 'case-file' });
+  const anchorCat = source.categories.find((c) => c.id === source.anchor)!;
+  const others = source.categories.filter((c) => c.id !== source.anchor);
+
+  anchorCat.values.forEach((name, subject) => {
+    const parts = others.map((cat) => cat.values[solution[cat.id][subject]]);
+    box.append(
+      el(
+        'div',
+        { class: 'case-file-row' },
+        el('b', {}, name),
+        el('span', {}, parts.join(' · ')),
+      ),
+    );
+  });
+
+  return box;
 }
 
 function continueButton(): HTMLElement {

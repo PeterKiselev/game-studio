@@ -25,10 +25,16 @@
   margin: 0;
 }
 
+/*
+ * Участок — награда и метаигра, второй план, не витрина. Плитки поэтому
+ * заметно компактнее карточки дела: узкая горизонтальная лента иконок,
+ * а не полноразмерная сетка 2×2, которая раньше спорила с делом
+ * за внимание на первом же экране.
+ */
 .plot-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  display: flex;
   gap: var(--gap-2);
+  overflow-x: auto;
 }
 
 .case-list,
@@ -47,20 +53,21 @@
 }
 
 .plot-cell {
+  flex: 0 0 auto;
   background: var(--surface);
   border: 1px solid var(--line);
-  border-radius: var(--r-md);
+  border-radius: var(--r-sm);
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: var(--gap-1);
-  padding: 14px 10px;
-  min-height: 84px;
+  gap: 2px;
+  padding: 8px 12px;
+  min-width: 64px;
 }
 
 .plot-cell .icon {
-  font-size: 28px;
+  font-size: 18px;
 }
 
 .plot-cell.locked {
@@ -68,16 +75,20 @@
 }
 
 .plot-cell .name {
-  font-size: 12px;
+  font-size: 10px;
   color: var(--ink-2);
   text-align: center;
+  white-space: nowrap;
 }
 
+/* Карточка дела — главный элемент первого экрана, поэтому крупнее
+   и заметнее плиток участка: своя тень, живая печать вместо плоского кружка. */
 .case-card {
   background: var(--surface);
   border: 1px solid var(--line);
-  border-radius: var(--r-md);
-  padding: var(--gap-3);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow);
+  padding: 18px var(--gap-3);
   display: flex;
   align-items: center;
   gap: var(--gap-3);
@@ -87,21 +98,21 @@
 }
 
 .case-card .stamp {
-  width: 44px;
-  height: 44px;
+  width: 52px;
+  height: 52px;
   border-radius: 50%;
   background: var(--clue);
   color: #fff;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 20px;
+  font-size: 24px;
   flex: none;
 }
 
 .case-card .text b {
   display: block;
-  font-size: 15px;
+  font-size: 17px;
   color: var(--ink);
 }
 
@@ -116,9 +127,30 @@
   flex: 1;
   display: flex;
   flex-direction: column;
+  min-height: 0;
+}
+
+.case-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
   gap: var(--gap-3);
   padding: var(--gap-3);
-  overflow-y: auto;
+}
+
+/* Закреплённая панель — подсказка видна всегда, без прокрутки до конца
+   трёх сеток. Именно там она нужна игроку, который застрял. */
+.hint-bar {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: var(--gap-3);
+  padding-bottom: max(var(--gap-3), env(safe-area-inset-bottom));
+  border-top: 1px solid var(--line);
+  background: var(--surface);
 }
 
 .clues {
@@ -259,17 +291,45 @@
   flex: 1;
   display: flex;
   flex-direction: column;
+  overflow-y: auto;
 }
 
 .scene {
-  flex: 1;
   background: linear-gradient(180deg, var(--surface-2), var(--paper));
   position: relative;
   display: flex;
   align-items: flex-end;
   justify-content: center;
-  padding-bottom: 30px;
-  min-height: 200px;
+  padding-bottom: 22px;
+  min-height: 130px;
+}
+
+/* Сводка дела — содержательный итог партии вместо пустого пространства:
+   кто где был и что при нём было, то, что игрок только что доказал. */
+.case-file {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: var(--gap-3);
+  background: var(--surface);
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+.case-file-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 13px;
+}
+
+.case-file-row b {
+  color: var(--ink);
+}
+
+.case-file-row span {
+  color: var(--ink-2);
+  text-align: right;
 }
 
 .figure {
