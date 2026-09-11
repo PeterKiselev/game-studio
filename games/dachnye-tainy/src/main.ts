@@ -11,17 +11,27 @@ interface Save {
   casesCompleted: string[];
   plotStage: number;
   /**
-   * Незаконченное дело — раньше терялось целиком при уходе на участок:
-   * marks жили только в замыкании startCase(), нигде не сохранялись.
-   * Поддерживаем ровно одно дело в работе (вертикальный срез — одно
-   * дело и есть), это сознательное упрощение, не многодельный прогресс.
+   * Незаконченный прогресс по каждому делу отдельно, по caseId. Раньше
+   * это было одно поле inProgress на всё сохранение сразу — работало,
+   * пока в игре было одно дело. Как только их стало три, переключение
+   * между незаконченными делами тихо стирало прогресс: открыл третье,
+   * вернулся во второе — там пусто, потому что inProgress успел
+   * перезаписаться. Теперь у каждого дела свой ключ, и они не мешают
+   * друг другу.
    */
-  inProgress?: { caseId: string; marks: PlayerMarks; hintsUsed: number };
+  progress: Record<string, { marks: PlayerMarks; hintsUsed: number }>;
   /** Обучение цели и жесту ✓/✕ показано один раз, не перед каждым делом. */
   onboardingSeen?: boolean;
 }
 
-const DEFAULTS: Save = { casesCompleted: [], plotStage: 0 };
+interface SaveV1 {
+  casesCompleted: string[];
+  plotStage: number;
+  inProgress?: { caseId: string; marks: PlayerMarks; hintsUsed: number };
+  onboardingSeen?: boolean;
+}
+
+const DEFAULTS: Save = { casesCompleted: [], plotStage: 0, progress: {} };
 
 const root = document.getElementById('app')!;
 let app!: GameApp<Save>;
@@ -29,8 +39,28 @@ let app!: GameApp<Save>;
 async function main(): Promise<void> {
   app = await GameApp.boot<Save>({
     gameId: 'dachnye-tainy',
+    saveVersion: 2,
     defaults: DEFAULTS,
     adPolicy: { firstAdAfterRounds: 1, minSecondsBetween: 180 },
+    // v1 хранил ровно одно незаконченное дело в inProgress — переносим его
+    // в progress[caseId] под тем же ключом, остальное копируем как есть.
+    migrate: (old, fromVersion) => {
+      if (fromVersion !== 1) return null;
+      const legacy = old as Partial<SaveV1>;
+      const progress: Save['progress'] = {};
+      if (legacy.inProgress) {
+        progress[legacy.inProgress.caseId] = {
+          marks: legacy.inProgress.marks,
+          hintsUsed: legacy.inProgress.hintsUsed,
+        };
+      }
+      return {
+        casesCompleted: legacy.casesCompleted ?? [],
+        plotStage: legacy.plotStage ?? 0,
+        progress,
+        onboardingSeen: legacy.onboardingSeen,
+      };
+    },
   });
 
   app.track('app_start');
@@ -154,7 +184,7 @@ async function startCase(source: Case): Promise<void> {
     [...groundTruthYes].filter((key) => key.startsWith(`${source.anchor}|`) || key.includes(`~${source.anchor}|`)),
   );
 
-  const saved = app.save.data.inProgress?.caseId === source.id ? app.save.data.inProgress : null;
+  const saved = app.save.data.progress[source.id];
   const marks: PlayerMarks = saved ? { ...saved.marks } : {};
   let hintedKey: string | null = null;
   let markCount = Object.keys(marks).length;
@@ -166,7 +196,7 @@ async function startCase(source: Case): Promise<void> {
   let left = false;
 
   function persistProgress(): void {
-    app.save.data.inProgress = { caseId: source.id, marks: { ...marks }, hintsUsed };
+    app.save.data.progress[source.id] = { marks: { ...marks }, hintsUsed };
     app.save.markDirty();
   }
 
@@ -322,8 +352,20 @@ async function startCase(source: Case): Promise<void> {
     for (const key of requiredYes) {
       if (marks[key] !== 'yes') return;
     }
+    // Обязательных пар хватает только тогда, когда сетка в целом
+    // непротиворечива. autoExclude чистит лишь свою собственную сетку:
+    // ошибочное «да» в неякорной паре (например, «беседка — зонт» в
+    // местах×предметах) никак не связано с тем, что персонажи×места
+    // и персонажи×предметы уже верно заполнены, и остаётся висеть.
+    // Раньше checkSolved это не видел — дело раскрывалось при внутренне
+    // противоречивой сетке. Сверяем КАЖДУЮ отметку «да», не только
+    // обязательные: лишнего верного «да» относительно решения быть не
+    // должно нигде, а не только там, где мы обязаны проверить.
+    for (const [key, value] of Object.entries(marks)) {
+      if (value === 'yes' && !groundTruthYes.has(key)) return;
+    }
     solved = true;
-    app.save.data.inProgress = undefined; // дело раскрыто — возобновлять нечего
+    delete app.save.data.progress[source.id]; // дело раскрыто — возобновлять нечего
     app.save.markDirty();
     app.track('case_complete', { caseId: source.id, hintsUsed, markCount });
     setTimeout(() => {

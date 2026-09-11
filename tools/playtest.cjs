@@ -1,9 +1,10 @@
 /**
  * Автопрохождение «Дачных тайн» — реальные клики по реальным кнопкам,
- * не картинка. Покрывает не только счастливый путь: сценарии 2-4
+ * не картинка. Покрывает не только счастливый путь: сценарии 2-6
  * специально нацелены на классы багов, которые happy-path не ловит
- * (потерянный прогресс, ложная награда при повторе, гонка при выходе).
- * Сценарий 5 — контентная регрессия: второе и третье дело раскрываются
+ * (ложная победа при противоречивой сетке, потерянный прогресс при
+ * повторе и при переключении между делами, гонка при выходе).
+ * Сценарий 7 — контентная регрессия: второе и третье дело раскрываются
  * до конца через тот же интерфейс, не только validateCase() в тестах.
  */
 const { chromium } = require('playwright');
@@ -88,6 +89,19 @@ async function clickCell(page, rowLabel, colLabel) {
   }
 }
 
+/** Клетка ищется в любом порядке строка/столбец — сетки рисуются по-разному. */
+function cellLocator(page, rowLabel, colLabel) {
+  return page.locator(
+    `button[aria-label="${rowLabel} — ${colLabel}"], button[aria-label="${colLabel} — ${rowLabel}"]`,
+  );
+}
+
+async function isYes(page, rowLabel, colLabel) {
+  return cellLocator(page, rowLabel, colLabel).evaluateAll(
+    (els) => els.length > 0 && els.some((el) => el.classList.contains('yes')),
+  );
+}
+
 async function openCase(page, title = /Чей пирог остался в беседке/) {
   await page.getByRole('button', { name: title }).click();
   // Первое открытие дела за сессию показывает обучающий диалог (см.
@@ -102,6 +116,11 @@ async function openCase(page, title = /Чей пирог остался в бе�
     /* обучение уже показано в этом прогоне — диалога нет, и это ожидаемо */
   }
   await page.waitForSelector('.case');
+}
+
+async function backToPlot(page, label = 'Участок') {
+  await page.getByRole('button', { name: label }).click();
+  await page.waitForSelector('.plot');
 }
 
 function assert(cond, message) {
@@ -129,10 +148,21 @@ function assert(cond, message) {
   );
   await page.screenshot({ path: join(OUT, '2-case-empty.png') });
 
-  // Намеренно неверная клетка — Ирина не в беседке. Должна дать case_mistake
-  // и не должна помешать раскрыть дело после исправления.
+  // Намеренно неверная клетка — Ирина не в беседке, но это пара внутри
+  // ТОЙ ЖЕ сетки (персонажи×места), где потом будет верно поставлено
+  // «Ирина — грядка» — автоисключение обязано её перекрыть.
   await clickCell(page, 'Ирина', 'беседка');
   for (const [row, col] of TUTORIAL_YES) await clickCell(page, row, col);
+
+  // Проверяем ДО перехода на развязку, пока клетка ещё существует в DOM.
+  // Раньше эта проверка стояла после waitForSelector('.reveal') — экран
+  // уже был заменён, локатор находил ноль элементов, .some() на пустом
+  // массиве давал false, и «ошибка не осталась» засчитывалось не
+  // проверив вообще ничего. Явно требуем, чтобы клетка была найдена —
+  // иначе тест был бы «зелёным» и без единой реальной проверки.
+  const wrongCell = cellLocator(page, 'Ирина', 'беседка');
+  assert((await wrongCell.count()) > 0, 'ошибочная клетка «Ирина — беседка» найдена в DOM для проверки');
+  assert(!(await isYes(page, 'Ирина', 'беседка')), 'ошибочная клетка автоматически снята, а не осталась «да»');
   await page.screenshot({ path: join(OUT, '3-case-solved.png') });
 
   await page.waitForSelector('.reveal', { timeout: 3000 });
@@ -145,17 +175,43 @@ function assert(cond, message) {
     'при первом раскрытии показана награда участку',
   );
 
-  // Ошибочная клетка не должна была остаться отмеченной «да» после автоисключения.
-  const wrongStillYes = await page
-    .locator('button[aria-label="Ирина — беседка"], button[aria-label="беседка — Ирина"]')
-    .evaluateAll((els) => els.some((el) => el.classList.contains('yes')));
-  assert(!wrongStillYes, 'ошибочная клетка автоматически снята, а не осталась «да»');
+  await backToPlot(page, 'Вернуться на участок');
 
-  await page.getByRole('button', { name: 'Вернуться на участок' }).click();
-  await page.waitForSelector('.plot');
+  // --- сценарий 2: противоречивая неякорная пара не даёт ложной победы -
+  console.log('\n=== 2. Противоречивая сетка не даёт ложной победы ===');
+  logs.length = 0;
+  await openCase(page);
+  // Ошибочное «да» здесь не в паре с персонажем, а в паре «места×предметы»
+  // (беседка — зонт): автоисключение чистит только свою собственную
+  // сетку и никак не связано с тем, что мы дальше верно заполним
+  // персонажей. Это ровно репродукция Кодекса: заполнить всех соседей
+  // правильно, но оставить одну неякорную клетку неверной.
+  await clickCell(page, 'беседка', 'зонт');
+  for (const [row, col] of TUTORIAL_YES) await clickCell(page, row, col);
+  await page.waitForTimeout(700); // дать шанс 500-мс таймауту завершения сработать, если бы он сработал неверно
 
-  // --- сценарий 2: повтор уже раскрытого дела — без повторной награды --
-  console.log('\n=== 2. Повтор раскрытого дела ===');
+  assert((await page.locator('.case').count()) === 1, 'экран дела остаётся — раскрытия не произошло');
+  assert(
+    !logs.some((l) => l.includes('case_complete')),
+    'case_complete не отправлен, пока в сетке остаётся противоречие',
+  );
+  assert(
+    await isYes(page, 'беседка', 'зонт'),
+    'противоречивая клетка «беседка — зонт» остаётся видимой, а не тихо стирается сама',
+  );
+
+  // Правильный ответ здесь — «нет»: один клик по «да» циклит именно туда.
+  await cellLocator(page, 'беседка', 'зонт').first().click();
+  await page.waitForSelector('.reveal', { timeout: 3000 });
+  assert(
+    logs.some((l) => l.includes('case_complete') && l.includes('tutorial-1')),
+    'после исправления противоречия дело раскрывается штатно',
+  );
+
+  await backToPlot(page, 'Вернуться на участок');
+
+  // --- сценарий 3: повтор уже раскрытого дела — без повторной награды --
+  console.log('\n=== 3. Повтор раскрытого дела ===');
   logs.length = 0;
   await openCase(page);
   assert(
@@ -168,11 +224,10 @@ function assert(cond, message) {
     (await page.locator('.reward').count()) === 0,
     'при повторном раскрытии награда НЕ показана — сохранение не менялось',
   );
-  await page.getByRole('button', { name: 'Вернуться на участок' }).click();
-  await page.waitForSelector('.plot');
+  await backToPlot(page, 'Вернуться на участок');
 
-  // --- сценарий 3: вторая подсказка на площадке без рекламы (web) ------
-  console.log('\n=== 3. Вторая подсказка без рекламы на этой площадке ===');
+  // --- сценарий 4: вторая подсказка на площадке без рекламы (web) ------
+  console.log('\n=== 4. Вторая подсказка без рекламы на этой площадке ===');
   logs.length = 0;
   await openCase(page);
   const hintButton = page.locator('.hint-btn');
@@ -194,11 +249,10 @@ function assert(cond, message) {
   // (он ожидаемо тот же), а что событие всё же дошло до аналитики дважды.
   const hintEvents = logs.filter((l) => l.includes('case_hint')).length;
   assert(hintEvents === 2, `оба обращения к подсказке засчитаны аналитикой (получено: ${hintEvents})`);
-  await page.getByRole('button', { name: 'Участок' }).click();
-  await page.waitForSelector('.plot');
+  await backToPlot(page);
 
-  // --- сценарий 4: незаконченное дело переживает перезагрузку страницы -
-  console.log('\n=== 4. Незаконченное дело переживает перезагрузку ===');
+  // --- сценарий 5: незаконченное дело переживает перезагрузку страницы -
+  console.log('\n=== 5. Незаконченное дело переживает перезагрузку ===');
   await openCase(page);
   await clickCell(page, 'Ирина', 'грядка');
   await clickCell(page, 'Михаил', 'беседка');
@@ -208,22 +262,50 @@ function assert(cond, message) {
   await page.waitForSelector('.plot');
   await openCase(page); // то же дело — должно восстановить отметки, не начать заново
 
-  const restored = await page
-    .locator('button[aria-label="Ирина — грядка"], button[aria-label="грядка — Ирина"]')
-    .evaluateAll((els) => els.some((el) => el.classList.contains('yes')));
-  assert(restored, 'отметка пережила перезагрузку страницы — прогресс не потерян');
+  assert(await isYes(page, 'Ирина', 'грядка'), 'отметка пережила перезагрузку страницы — прогресс не потерян');
 
-  // Добиваем дело до конца, чтобы следующий прогон скрипта не унаследовал
+  // Добиваем дело до конца, чтобы следующий сценарий не унаследовал
   // чужое незаконченное состояние.
   for (const [row, col] of TUTORIAL_YES) await clickCell(page, row, col);
   await page.waitForSelector('.reveal', { timeout: 3000 });
-  await page.getByRole('button', { name: 'Вернуться на участок' }).click();
-  await page.waitForSelector('.plot');
+  await backToPlot(page, 'Вернуться на участок');
 
-  // --- сценарий 5: второе и третье дело решаются до конца через интерфейс -
-  console.log('\n=== 5. Второе и третье дело — полный путь через интерфейс ===');
+  // --- сценарий 6: переключение между двумя незаконченными делами ------
+  console.log('\n=== 6. Прогресс двух дел не перезаписывается при переключении ===');
+  // Точная репродукция Кодекса: отметка в одном деле, ход в другом,
+  // возврат в первое — прогресс должен остаться, а не стереться, потому
+  // что раньше вся игра хранила только одно inProgress на все дела сразу.
+  const [second, third] = OTHER_CASES;
+
+  await openCase(page, second.title);
+  await clickCell(page, ...second.yes[0]);
+  await backToPlot(page);
+
+  await openCase(page, third.title);
+  await clickCell(page, ...third.yes[0]);
+  await backToPlot(page);
+
+  await openCase(page, second.title);
+  assert(
+    await isYes(page, ...second.yes[0]),
+    `прогресс ${second.id} не стёрся, пока мы ходили в ${third.id}`,
+  );
+  await backToPlot(page);
+
+  await openCase(page, third.title);
+  assert(
+    await isYes(page, ...third.yes[0]),
+    `прогресс ${third.id} не стёрся, пока мы достраивали ${second.id}`,
+  );
+  await backToPlot(page);
+
+  // --- сценарий 7: второе и третье дело решаются до конца через интерфейс -
+  console.log('\n=== 7. Второе и третье дело — полный путь через интерфейс ===');
   for (const { title, id, yes } of OTHER_CASES) {
     logs.length = 0;
+    // Открываем заново — на part своих клеток уже стоит верное «да» из
+    // сценария 6 (clickCell идемпотентен для уже верной клетки), это
+    // не мешает: остальное дозаполняем тут же.
     await openCase(page, title);
     for (const [row, col] of yes) await clickCell(page, row, col);
     await page.waitForSelector('.reveal', { timeout: 3000 });
@@ -231,8 +313,7 @@ function assert(cond, message) {
       logs.some((l) => l.includes('case_complete') && l.includes(id)),
       `дело ${id} раскрывается кликами, посчитанными по source (не догадкой)`,
     );
-    await page.getByRole('button', { name: 'Вернуться на участок' }).click();
-    await page.waitForSelector('.plot');
+    await backToPlot(page, 'Вернуться на участок');
     const stamp = await page
       .locator('.case-card', { hasText: title })
       .locator('.stamp')
