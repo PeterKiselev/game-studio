@@ -1,4 +1,4 @@
-import { readLocal, writeLocal } from './base';
+import { readLocal, writeLocal, withTimeout } from './base';
 import type { IPlatform } from './types';
 
 interface Envelope<T> {
@@ -6,6 +6,8 @@ interface Envelope<T> {
   t: number;
   data: T;
 }
+
+const CLOUD_TIMEOUT_MS = 5000;
 
 /**
  * Сохранение с двумя уровнями: локальная копия пишется всегда и мгновенно,
@@ -35,9 +37,17 @@ export class SaveStore<T extends object> {
 
   async load(): Promise<T> {
     const local = readLocal<Envelope<T>>(this.localKey);
-    const remote = this.platform.caps.cloudSave
-      ? await this.platform.storage.load<Envelope<T>>(this.key)
-      : null;
+    let remote: Envelope<T> | null = null;
+    if (this.platform.caps.cloudSave) {
+      try {
+        remote = await withTimeout(
+          this.platform.storage.load<Envelope<T>>(this.key),
+          CLOUD_TIMEOUT_MS, 'cloud load',
+        );
+      } catch {
+        console.warn('[storage] cloud load unavailable; using local save');
+      }
+    }
 
     const best = pickFresher(local, remote);
     if (!best) {
@@ -71,7 +81,14 @@ export class SaveStore<T extends object> {
     }
     writeLocal(this.localKey, this.envelope());
     if (this.platform.caps.cloudSave) {
-      await this.platform.storage.save(this.key, this.envelope());
+      try {
+        await withTimeout(
+          this.platform.storage.save(this.key, this.envelope()),
+          CLOUD_TIMEOUT_MS, 'cloud save',
+        );
+      } catch {
+        console.warn('[storage] cloud save unavailable; local save retained');
+      }
     }
   }
 
