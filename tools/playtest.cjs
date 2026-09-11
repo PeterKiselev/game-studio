@@ -1,8 +1,10 @@
 /**
  * Автопрохождение «Дачных тайн» — реальные клики по реальным кнопкам,
- * не картинка. Покрывает не только счастливый путь: три сценария ниже
+ * не картинка. Покрывает не только счастливый путь: сценарии 2-4
  * специально нацелены на классы багов, которые happy-path не ловит
  * (потерянный прогресс, ложная награда при повторе, гонка при выходе).
+ * Сценарий 5 — контентная регрессия: второе и третье дело раскрываются
+ * до конца через тот же интерфейс, не только validateCase() в тестах.
  */
 const { chromium } = require('playwright');
 const { mkdirSync } = require('node:fs');
@@ -18,6 +20,44 @@ const TUTORIAL_YES = [
   ['Ирина', 'лейка'],
   ['Михаил', 'пирог'],
   ['Олег', 'зонт'],
+];
+
+/**
+ * Второе и третье дело добавлены параллельно с подготовкой к первой
+ * подаче — не как отдельная фича, а как проверка, что движок и интерфейс
+ * держат больше одного дела содержательно, а не только технически.
+ * Правильные клетки посчитаны вручную по source в cases/second.ts
+ * и cases/third.ts и перепроверены через countSolutions()===1 в
+ * games/dachnye-tainy/test/cases.test.ts — здесь просто воспроизводится
+ * то же решение кликами по настоящему интерфейсу.
+ */
+const OTHER_CASES = [
+  {
+    title: /Чей велосипед прислонён к забору/,
+    id: 'second-1',
+    yes: [
+      ['Настя', 'забор'],
+      ['Пётр', 'колодец'],
+      ['Женя', 'крыльцо'],
+      ['Настя', 'велосипед'],
+      ['Пётр', 'ведро'],
+      ['Женя', 'книга'],
+    ],
+  },
+  {
+    title: /Кто был в теплице третьим/,
+    id: 'third-1',
+    yes: [
+      ['Аня', 'чердак'],
+      ['Борис', 'погреб'],
+      ['Вика', 'теплица'],
+      ['Гриша', 'курятник'],
+      ['Аня', 'первой'],
+      ['Борис', 'вторым'],
+      ['Вика', 'третьей'],
+      ['Гриша', 'четвёртым'],
+    ],
+  },
 ];
 
 function attachLogger(page, logs) {
@@ -48,8 +88,8 @@ async function clickCell(page, rowLabel, colLabel) {
   }
 }
 
-async function openCase(page) {
-  await page.getByRole('button', { name: /Чей пирог остался в беседке/ }).click();
+async function openCase(page, title = /Чей пирог остался в беседке/) {
+  await page.getByRole('button', { name: title }).click();
   // Первое открытие дела за сессию показывает обучающий диалог (см.
   // maybeShowOnboarding в main.ts) — если он есть на экране, закрываем его,
   // как это сделал бы игрок. На повторных вызовах в этом же прогоне
@@ -177,6 +217,28 @@ function assert(cond, message) {
   // чужое незаконченное состояние.
   for (const [row, col] of TUTORIAL_YES) await clickCell(page, row, col);
   await page.waitForSelector('.reveal', { timeout: 3000 });
+  await page.getByRole('button', { name: 'Вернуться на участок' }).click();
+  await page.waitForSelector('.plot');
+
+  // --- сценарий 5: второе и третье дело решаются до конца через интерфейс -
+  console.log('\n=== 5. Второе и третье дело — полный путь через интерфейс ===');
+  for (const { title, id, yes } of OTHER_CASES) {
+    logs.length = 0;
+    await openCase(page, title);
+    for (const [row, col] of yes) await clickCell(page, row, col);
+    await page.waitForSelector('.reveal', { timeout: 3000 });
+    assert(
+      logs.some((l) => l.includes('case_complete') && l.includes(id)),
+      `дело ${id} раскрывается кликами, посчитанными по source (не догадкой)`,
+    );
+    await page.getByRole('button', { name: 'Вернуться на участок' }).click();
+    await page.waitForSelector('.plot');
+    const stamp = await page
+      .locator('.case-card', { hasText: title })
+      .locator('.stamp')
+      .textContent();
+    assert(stamp === '✓', `карточка дела ${id} на участке помечена раскрытой после прохождения`);
+  }
 
   await browser.close();
 
