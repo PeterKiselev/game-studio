@@ -15,6 +15,9 @@
     "build:all": "npm run build:web && npm run build:yandex && npm run build:vk",
     "pack:yandex": "node tools/pack.mjs gomoku yandex",
     "pack:vk": "node tools/pack.mjs gomoku vk",
+    "build:dachnye-tainy:web": "npm run build -w @studio/dachnye-tainy -- --mode web",
+    "build:dachnye-tainy:vk": "npm run build -w @studio/dachnye-tainy -- --mode vk",
+    "pack:dachnye-tainy:vk": "node tools/pack.mjs dachnye-tainy vk",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },

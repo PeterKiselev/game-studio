@@ -6,9 +6,9 @@
  * Результат: games/<игра>/store/icons/icon-{576,512,278,200,150,128,64}.png
  * Размеры под VK: 576 — универсальная, 278 — каталог, 150 — маленькая
  *
- * Композиция: поле три на три, диагональ из трёх кругов (выигрышная линия)
- * и один ромб соперника. Круг и ромб — те же формы, что и в самой игре,
- * поэтому иконка читается как её кадр, а не как отдельная картинка.
+ * Композиция своя для каждой игры (см. SHADERS ниже), но общая идея одна:
+ * иконка должна читаться как кадр самой игры, а не как отдельная картинка,
+ * поэтому берём формы и цвета прямо из неё (клетки, отметки, печать).
  */
 
 import zlib from 'node:zlib';
@@ -23,62 +23,125 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const GAME = process.argv[2] || 'gomoku';
 const OUT_DIR = join(ROOT, 'games', GAME, 'store', 'icons');
 
-// --- палитра студии -------------------------------------------------------
+// --- гомоку: поле три на три, диагональ из трёх кругов (выигрышная линия)
+// и один ромб соперника — те же формы, что и в самой игре. -----------------
 
-const FELT_TOP = [0x24, 0x78, 0x56];
-const FELT_BOTTOM = [0x14, 0x4c, 0x36];
-const GRID = [0xff, 0xff, 0xff];
-const GRID_ALPHA = 0.2;
-const MARK_O = [0xea, 0xf4, 0xee];
-const MARK_X = [0xe8, 0x75, 0x6a];
+function makeGomokuShader() {
+  const FELT_TOP = [0x24, 0x78, 0x56];
+  const FELT_BOTTOM = [0x14, 0x4c, 0x36];
+  const GRID = [0xff, 0xff, 0xff];
+  const GRID_ALPHA = 0.2;
+  const MARK_O = [0xea, 0xf4, 0xee];
+  const MARK_X = [0xe8, 0x75, 0x6a];
 
-// --- геометрия в единичных координатах ------------------------------------
+  const cell = (i) => (2 * i + 1) / 6; // центр клетки i (0..2)
+  const LINE_T = 0.020;
+  const O_RADIUS = 0.088;
+  const O_STROKE = 0.040;
+  const X_RADIUS = 0.098;
 
-const cell = (i) => (2 * i + 1) / 6; // центр клетки i (0..2)
-const LINE_T = 0.020;
-const O_RADIUS = 0.088;
-const O_STROKE = 0.040;
-const X_RADIUS = 0.098;
+  const CIRCLES = [
+    [cell(0), cell(0)],
+    [cell(1), cell(1)],
+    [cell(2), cell(2)],
+  ];
+  const DIAMONDS = [[cell(2), cell(0)]];
 
-const CIRCLES = [
-  [cell(0), cell(0)],
-  [cell(1), cell(1)],
-  [cell(2), cell(2)],
-];
-const DIAMONDS = [[cell(2), cell(0)]];
+  return function shade(x, y) {
+    // фон: мягкий вертикальный градиент, чтобы иконка не выглядела плоской
+    const t = y;
+    let r = FELT_TOP[0] + (FELT_BOTTOM[0] - FELT_TOP[0]) * t;
+    let g = FELT_TOP[1] + (FELT_BOTTOM[1] - FELT_TOP[1]) * t;
+    let b = FELT_TOP[2] + (FELT_BOTTOM[2] - FELT_TOP[2]) * t;
 
-function shade(x, y) {
-  // фон: мягкий вертикальный градиент, чтобы иконка не выглядела плоской
-  const t = y;
-  let r = FELT_TOP[0] + (FELT_BOTTOM[0] - FELT_TOP[0]) * t;
-  let g = FELT_TOP[1] + (FELT_BOTTOM[1] - FELT_TOP[1]) * t;
-  let b = FELT_TOP[2] + (FELT_BOTTOM[2] - FELT_TOP[2]) * t;
+    // сетка
+    const onGrid =
+      Math.abs(x - 1 / 3) < LINE_T ||
+      Math.abs(x - 2 / 3) < LINE_T ||
+      Math.abs(y - 1 / 3) < LINE_T ||
+      Math.abs(y - 2 / 3) < LINE_T;
+    // линии не доходят до самых краёв — так поле выглядит нарисованным, а не обрезанным
+    const inField = x > 0.08 && x < 0.92 && y > 0.08 && y < 0.92;
+    if (onGrid && inField) {
+      r = r + (GRID[0] - r) * GRID_ALPHA;
+      g = g + (GRID[1] - g) * GRID_ALPHA;
+      b = b + (GRID[2] - b) * GRID_ALPHA;
+    }
 
-  // сетка
-  const onGrid =
-    Math.abs(x - 1 / 3) < LINE_T ||
-    Math.abs(x - 2 / 3) < LINE_T ||
-    Math.abs(y - 1 / 3) < LINE_T ||
-    Math.abs(y - 2 / 3) < LINE_T;
-  // линии не доходят до самых краёв — так поле выглядит нарисованным, а не обрезанным
-  const inField = x > 0.08 && x < 0.92 && y > 0.08 && y < 0.92;
-  if (onGrid && inField) {
-    r = r + (GRID[0] - r) * GRID_ALPHA;
-    g = g + (GRID[1] - g) * GRID_ALPHA;
-    b = b + (GRID[2] - b) * GRID_ALPHA;
-  }
+    for (const [cx, cy] of CIRCLES) {
+      const d = Math.hypot(x - cx, y - cy);
+      if (Math.abs(d - O_RADIUS) < O_STROKE / 2) return MARK_O;
+    }
 
-  for (const [cx, cy] of CIRCLES) {
-    const d = Math.hypot(x - cx, y - cy);
-    if (Math.abs(d - O_RADIUS) < O_STROKE / 2) return MARK_O;
-  }
+    for (const [cx, cy] of DIAMONDS) {
+      if (Math.abs(x - cx) + Math.abs(y - cy) < X_RADIUS) return MARK_X;
+    }
 
-  for (const [cx, cy] of DIAMONDS) {
-    if (Math.abs(x - cx) + Math.abs(y - cy) < X_RADIUS) return MARK_X;
-  }
-
-  return [r, g, b];
+    return [r, g, b];
+  };
 }
+
+// --- «Дачные тайны»: печать «дело раскрыто» — кольцо сургучной печати
+// и жирная галочка внутри, те же цвета --stamp/--paper/--felt, что и в
+// самой игре (games/dachnye-tainy/src/theme.css). Ровно то, что игрок
+// видит на развязке после каждого дела, только крупно и по центру. ---------
+
+function makeDachnyeTainyShader() {
+  const PAPER_TOP = [0xff, 0xfa, 0xf0]; // --surface
+  const PAPER_BOTTOM = [0xf3, 0xed, 0xe0]; // --paper
+  const RING = [0x8a, 0x5a, 0x2b]; // --felt
+  const STAMP = [0xa8, 0x32, 0x32]; // --stamp
+
+  const CX = 0.5;
+  const CY = 0.5;
+  const RING_RADIUS = 0.40;
+  const RING_STROKE = 0.05;
+
+  // Галочка — две сегмента отрезка, чуть повёрнутые, как в настоящей печати.
+  const CHECK_A = [0.30, 0.52];
+  const CHECK_B = [0.44, 0.67];
+  const CHECK_C = [0.72, 0.30];
+  const CHECK_STROKE = 0.10;
+
+  function distToSegment(px, py, [ax, ay], [bx, by]) {
+    const dx = bx - ax;
+    const dy = by - ay;
+    const lenSq = dx * dx + dy * dy;
+    let t = lenSq === 0 ? 0 : ((px - ax) * dx + (py - ay) * dy) / lenSq;
+    t = Math.max(0, Math.min(1, t));
+    return Math.hypot(px - (ax + t * dx), py - (ay + t * dy));
+  }
+
+  return function shade(x, y) {
+    const t = y;
+    let r = PAPER_TOP[0] + (PAPER_BOTTOM[0] - PAPER_TOP[0]) * t;
+    let g = PAPER_TOP[1] + (PAPER_BOTTOM[1] - PAPER_TOP[1]) * t;
+    let b = PAPER_TOP[2] + (PAPER_BOTTOM[2] - PAPER_TOP[2]) * t;
+
+    const distToCheck = Math.min(
+      distToSegment(x, y, CHECK_A, CHECK_B),
+      distToSegment(x, y, CHECK_B, CHECK_C),
+    );
+    if (distToCheck < CHECK_STROKE / 2) return STAMP;
+
+    const distToRing = Math.abs(Math.hypot(x - CX, y - CY) - RING_RADIUS);
+    if (distToRing < RING_STROKE / 2) return RING;
+
+    return [r, g, b];
+  };
+}
+
+const SHADERS = {
+  gomoku: makeGomokuShader,
+  'dachnye-tainy': makeDachnyeTainyShader,
+};
+
+const makeShader = SHADERS[GAME];
+if (!makeShader) {
+  console.error(`Нет композиции иконки для игры «${GAME}». Известные: ${Object.keys(SHADERS).join(', ')}`);
+  process.exit(1);
+}
+const shade = makeShader();
 
 // --- растеризация ---------------------------------------------------------
 

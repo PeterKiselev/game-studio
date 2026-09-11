@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Промо-баннер — Дачные тайны</title>
+<style>
+  /*
+   * Макет большого сниппета «Дачных тайн». Рендерится Playwright в PNG
+   * нужного размера. Палитра и формы — те же токены и та же сетка,
+   * что в самой игре (games/dachnye-tainy/src/theme.css, style.css,
+   * grid.ts), а не отдельная реклама: сниппет должен читаться как кадр
+   * из игры.
+   */
+  * { box-sizing: border-box; margin: 0; }
+
+  html, body {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+  }
+
+  body {
+    display: flex;
+    align-items: center;
+    gap: 6%;
+    padding: 0 7%;
+    background: linear-gradient(160deg, #fffaf0 0%, #f3ede0 100%);
+    color: #2e2418;
+    font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+  }
+
+  .text {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  h1 {
+    font-size: clamp(28px, 5vw, 74px);
+    line-height: 1.06;
+    letter-spacing: -0.01em;
+    font-weight: 700;
+    text-wrap: balance;
+  }
+
+  .slogan {
+    margin-top: 3%;
+    font-size: clamp(14px, 1.9vw, 32px);
+    color: #6b5d47;
+    font-weight: 400;
+  }
+
+  .features {
+    margin-top: 5%;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6em 1.4em;
+    font-size: clamp(11px, 1.6vw, 22px);
+    color: #9a8a70;
+  }
+
+  .features span::before {
+    content: "";
+    display: inline-block;
+    width: 0.42em;
+    height: 0.42em;
+    border-radius: 50%;
+    background: #a83232;
+    margin-right: 0.55em;
+    vertical-align: 0.1em;
+  }
+
+  /* --- карточка справа: та же сетка «кто × где», что и в самой игре --- */
+
+  .card {
+    flex: 0 0 auto;
+    height: 80%;
+    aspect-ratio: 0.86;
+    background: #ffffff;
+    border: 1px solid #ddd0b4;
+    border-radius: 10px;
+    padding: 6%;
+    display: flex;
+    flex-direction: column;
+    gap: 6%;
+    box-shadow: 0 1.2vw 2.4vw rgba(46, 36, 24, 0.14);
+  }
+
+  .grid {
+    flex: 1;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    grid-template-rows: repeat(4, 1fr);
+    gap: 4%;
+  }
+
+  .grid > div {
+    background: #ece2cc;
+    border-radius: 20%;
+    display: grid;
+    place-items: center;
+    font-weight: 700;
+    font-size: clamp(10px, 2.6vw, 34px);
+  }
+
+  .grid .yes { color: #a83232; }
+  .grid .no { color: #9a8a70; font-weight: 400; }
+
+  .stamp {
+    align-self: center;
+    padding: 4% 10%;
+    border: 0.5vw solid #a83232;
+    border-radius: 999px;
+    color: #a83232;
+    font-weight: 700;
+    font-size: clamp(9px, 1.7vw, 22px);
+    letter-spacing: 0.08em;
+    transform: rotate(-6deg);
+  }
+</style>
+</head>
+<body>
+  <div class="text">
+    <h1>Дачные тайны</h1>
+    <div class="slogan">Логические дела соседей по даче</div>
+    <div class="features">
+      <span>Головоломки на рассуждение, не на угадывание</span>
+      <span>Подсказки объясняют шаг, а не выдают ответ</span>
+      <span>Без регистрации</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="grid">
+      <div></div><div class="no">✕</div><div class="yes">✓</div><div class="no">✕</div>
+      <div class="yes">✓</div><div class="no">✕</div><div></div><div class="no">✕</div>
+      <div class="no">✕</div><div></div><div class="no">✕</div><div class="yes">✓</div>
+      <div class="no">✕</div><div class="yes">✓</div><div class="no">✕</div><div></div>
+    </div>
+    <div class="stamp">РАСКРЫТО</div>
+  </div>
+</body>
+</html>

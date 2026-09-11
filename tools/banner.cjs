@@ -2,19 +2,28 @@
  * Промо-баннер для витрин площадок.
  *
  * Запуск:
- *   NODE_PATH="$(npm root -g)" node tools/banner.cjs
+ *   NODE_PATH="$(npm root -g)" node tools/banner.cjs [игра=gomoku]
  *
- * Рендерит tools/banner.html в PNG нужных размеров. Размеры площадок
- * добавляются одной строкой в SIZES — макет резиновый и подстраивается.
+ * Рендерит tools/banner-<игра>.html (или tools/banner.html для gomoku —
+ * так исторически называется первый макет) в PNG нужных размеров.
+ * Размеры площадок добавляются одной строкой в SIZES — макет резиновый
+ * и подстраивается. У каждой игры свой макет: текст, цвета и композиция
+ * специфичны, общего шаблона на все игры студии нет и не должно быть.
  */
 
 const { chromium } = require('playwright');
-const { mkdirSync } = require('node:fs');
+const { existsSync, mkdirSync } = require('node:fs');
 const { join } = require('node:path');
 const { pathToFileURL } = require('node:url');
 
-const SOURCE = pathToFileURL(join(__dirname, 'banner.html')).href;
 const GAME = process.argv[2] || 'gomoku';
+const HTML_FILE = GAME === 'gomoku' ? 'banner.html' : `banner-${GAME}.html`;
+const HTML_PATH = join(__dirname, HTML_FILE);
+if (!existsSync(HTML_PATH)) {
+  console.error(`Нет макета баннера: ${HTML_PATH}`);
+  process.exit(1);
+}
+const SOURCE = pathToFileURL(HTML_PATH).href;
 const OUT = join(__dirname, '..', 'games', GAME, 'store', 'promo');
 
 const SIZES = [
