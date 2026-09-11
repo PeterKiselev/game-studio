@@ -49,7 +49,18 @@ async function clickCell(page, rowLabel, colLabel) {
 }
 
 async function openCase(page) {
-  await page.getByRole('button', { name: /Кто перепутал корзины/ }).click();
+  await page.getByRole('button', { name: /Чей пирог остался в беседке/ }).click();
+  // Первое открытие дела за сессию показывает обучающий диалог (см.
+  // maybeShowOnboarding в main.ts) — если он есть на экране, закрываем его,
+  // как это сделал бы игрок. На повторных вызовах в этом же прогоне
+  // диалога уже не будет: onboardingSeen сохраняется в save. Короткий
+  // таймаут вместо count() — click() синхронно вставляет overlay ДО
+  // await внутри maybeShowOnboarding, но ждать явно надёжнее, чем гонка.
+  try {
+    await page.getByRole('button', { name: 'Понятно, начинаем' }).click({ timeout: 1000 });
+  } catch {
+    /* обучение уже показано в этом прогоне — диалога нет, и это ожидаемо */
+  }
   await page.waitForSelector('.case');
 }
 
@@ -72,6 +83,10 @@ function assert(cond, message) {
   await page.screenshot({ path: join(OUT, '1-plot.png') });
 
   await openCase(page);
+  assert(
+    logs.some((l) => l.includes('onboarding_shown')),
+    'первое дело в жизни показывает обучение цели и жеста ✓/✕',
+  );
   await page.screenshot({ path: join(OUT, '2-case-empty.png') });
 
   // Намеренно неверная клетка — Ирина не в беседке. Должна дать case_mistake
@@ -103,6 +118,10 @@ function assert(cond, message) {
   console.log('\n=== 2. Повтор раскрытого дела ===');
   logs.length = 0;
   await openCase(page);
+  assert(
+    !logs.some((l) => l.includes('onboarding_shown')),
+    'обучение не повторяется на втором открытии дела за сессию',
+  );
   for (const [row, col] of TUTORIAL_YES) await clickCell(page, row, col);
   await page.waitForSelector('.reveal', { timeout: 3000 });
   assert(

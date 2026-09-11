@@ -1,7 +1,7 @@
 import { GameApp } from '@studio/game-kit';
 import { markKey, nextHint, uniqueSolution } from '@studio/rules';
 import type { Case, PlayerMarks, Ref, Solution } from '@studio/rules';
-import { el, toast } from '@studio/ui';
+import { dialog, el, toast } from '@studio/ui';
 import { renderPairGrid } from './grid';
 import { cases, tutorialCase } from './cases';
 import './theme.css';
@@ -17,6 +17,8 @@ interface Save {
    * дело и есть), это сознательное упрощение, не многодельный прогресс.
    */
   inProgress?: { caseId: string; marks: PlayerMarks; hintsUsed: number };
+  /** Обучение цели и жесту ✓/✕ показано один раз, не перед каждым делом. */
+  onboardingSeen?: boolean;
 }
 
 const DEFAULTS: Save = { casesCompleted: [], plotStage: 0 };
@@ -61,7 +63,7 @@ function showPlot(): void {
         el('span', {}, done ? 'Раскрыто' : 'Ждёт расследования'),
       ),
     ) as HTMLButtonElement;
-    card.addEventListener('click', () => startCase(c));
+    card.addEventListener('click', () => void startCase(c));
     cardsBox.append(card);
   }
 
@@ -97,9 +99,33 @@ function showPlot(): void {
   root.replaceChildren(screen);
 }
 
+/**
+ * Игрок открывает первое в жизни дело без устного объяснения — сам экран
+ * обязан рассказать, что происходит. Показываем один раз, до самого первого
+ * дела: и цель расследования, и жест по клеткам, который нигде больше
+ * не объясняется (клик циклит пусто → ✓ → ✕ → пусто).
+ */
+async function maybeShowOnboarding(): Promise<void> {
+  if (app.save.data.onboardingSeen) return;
+  app.track('onboarding_shown');
+  await dialog({
+    title: 'Как раскрыть дело',
+    text:
+      'Слева — улики соседей. Справа — таблицы: сопоставьте, кто где был ' +
+      'и что при нём было. Нажимайте на клетку: первый клик — ✓ (точно да), ' +
+      'второй — ✕ (точно нет), третий — снова пусто. Заполните верно все ' +
+      'клетки по каждому соседу — и дело раскрыто.',
+    actions: [{ label: 'Понятно, начинаем', kind: 'primary', value: 'ok' }],
+  });
+  app.save.data.onboardingSeen = true;
+  app.save.markDirty();
+}
+
 // --- экран 2: расследование --------------------------------------------------
 
-function startCase(source: Case): void {
+async function startCase(source: Case): Promise<void> {
+  await maybeShowOnboarding();
+
   app.track('case_start', { caseId: source.id });
   app.startRound();
 
