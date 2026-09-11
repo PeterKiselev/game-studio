@@ -3,7 +3,8 @@
  * сглаживаем суперсэмплингом и кодируем PNG через встроенный zlib.
  *
  * Запуск: node tools/make-icon.mjs [игра=gomoku]
- * Результат: games/<игра>/store/icons/icon-{576,512,278,200,150,128,64}.png
+ * Результат: games/<игра>/store/icons/icon-{576,512,278,200,150,128,64,32}.png
+ * 32 — фавикон вкладки браузера, отдельное требование VK (JPG/PNG/GIF, ≤50 КБ)
  * Размеры под VK: 576 — универсальная, 278 — каталог, 150 — маленькая
  *
  * Композиция своя для каждой игры (см. SHADERS ниже), но общая идея одна:
@@ -236,7 +237,7 @@ function encodePng(size, rgba) {
 
 mkdirSync(OUT_DIR, { recursive: true });
 
-for (const size of [576, 512, 278, 200, 150, 128, 64]) {
+for (const size of [576, 512, 278, 200, 150, 128, 64, 32]) {
   const png = encodePng(size, render(size));
   const file = join(OUT_DIR, `icon-${size}.png`);
   writeFileSync(file, png);
