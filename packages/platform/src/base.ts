@@ -73,3 +73,22 @@ export function loadScript(src: string, timeoutMs = 8000): Promise<void> {
     document.head.appendChild(el);
   });
 }
+
+/**
+ * Не только загрузка скрипта может зависнуть — переписка с площадкой через
+ * postMessage (vk-bridge и его VKWebAppInit) точно так же может никогда
+ * не получить ответ, если игра открыта не внутри настоящего VK/OK, а сеть
+ * площадки — не выдумка, а реальная сессия, которая может не подняться.
+ * Промис, который никогда не решается, не бросает и не резолвится —
+ * `try/catch` вокруг него ничего не ловит. Только явный таймаут превращает
+ * зависание в отказ, на который уже есть обработка ниже, в createPlatform().
+ */
+export function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`${label}: timeout after ${timeoutMs}ms`)), timeoutMs);
+    promise.then(
+      (value) => { clearTimeout(timer); resolve(value); },
+      (err) => { clearTimeout(timer); reject(err); },
+    );
+  });
+}
