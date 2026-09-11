@@ -70,6 +70,18 @@ export class GameApp<T extends object> {
     await this.save.flush();
   }
 
+  /**
+   * Игрок бросил партию на середине — не результат, а отказ от игры.
+   * Останавливаем геймплей и сохраняем, как при обычном завершении,
+   * но НЕ засчитываем это в счётчик раундов для политики рекламы:
+   * незаконченная попытка — не «партия», а её отсутствие. Настоящее
+   * завершение по-прежнему идёт через endRound().
+   */
+  async abandonRound(): Promise<void> {
+    this.platform.gameplayStop();
+    await this.save.flush();
+  }
+
   /** Предложение «посмотри рекламу — получи бонус». true, если награду выдаём. */
   async offerReward(placement: string): Promise<boolean> {
     const result = await this.ads.rewarded(placement);

@@ -189,6 +189,7 @@ function startCase(source: Case): void {
     hintBar,
   );
   root.replaceChildren(screen);
+  updateHintButtonLabel(); // на случай восстановленного saved.hintsUsed > 0
 
   function refreshAll(): void {
     for (const g of grids) g.refresh();
@@ -241,14 +242,35 @@ function startCase(source: Case): void {
     }
   }
 
+  /**
+   * Кнопка должна честно говорить, что будет, ДО клика — «игрок всегда
+   * заранее видит, что получит» (CLAUDE.md, политика рекламы). Первая
+   * подсказка free, дальше — за рекламу, но только если она на этой
+   * площадке вообще есть: caps.rewarded проверяем один раз и подписываем
+   * кнопку соответственно, а не молча ловим отказ уже после клика.
+   */
+  function updateHintButtonLabel(): void {
+    if (hintsUsed === 0) {
+      hintBtn.textContent = '💡 Подсказка';
+    } else if (app.ads.rewardedAvailable) {
+      hintBtn.textContent = '💡 Ещё подсказка за рекламу';
+    } else {
+      hintBtn.textContent = '💡 Ещё подсказка';
+    }
+  }
+
   async function useHint(): Promise<void> {
-    if (hintsUsed > 0) {
+    const needsAd = hintsUsed > 0 && app.ads.rewardedAvailable;
+    if (needsAd) {
       const granted = await app.offerReward('hint');
       if (!granted) {
         toast('Реклама не загрузилась — попробуйте ещё раз');
         return;
       }
     }
+    // hintsUsed > 0 и rewardedAvailable === false: подсказка бесплатна,
+    // площадка просто не даёт рекламы — это не повод запирать игрока,
+    // а не наша политика показов; см. правило 2 в CLAUDE.md про caps.
 
     const hint = nextHint(source, marks);
     if (!hint) {
@@ -256,9 +278,10 @@ function startCase(source: Case): void {
       return;
     }
 
-    app.track('case_hint', { caseId: source.id, rule: hint.reason.rule });
+    app.track('case_hint', { caseId: source.id, rule: hint.reason.rule, viaAd: needsAd });
     hintsUsed += 1;
     persistProgress();
+    updateHintButtonLabel();
     hintedKey = markKey(hint.a, hint.b);
     hintText.textContent = hint.text;
     hintText.hidden = false;
@@ -288,7 +311,10 @@ function startCase(source: Case): void {
     btn.addEventListener('click', () => {
       left = true;
       app.track('case_exit', { caseId: source.id, solved });
-      void app.endRound();
+      // Раунд засчитывается для политики рекламы только при настоящем
+      // завершении. Ушёл на середине — гейм-плей стопаем и сохраняем,
+      // но это не партия, и в счётчик показов она попадать не должна.
+      void (solved ? app.endRound() : app.abandonRound());
       showPlot();
     });
     return btn;

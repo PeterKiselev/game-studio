@@ -112,8 +112,34 @@ function assert(cond, message) {
   await page.getByRole('button', { name: 'Вернуться на участок' }).click();
   await page.waitForSelector('.plot');
 
-  // --- сценарий 3: незаконченное дело переживает перезагрузку страницы -
-  console.log('\n=== 3. Незаконченное дело переживает перезагрузку ===');
+  // --- сценарий 3: вторая подсказка на площадке без рекламы (web) ------
+  console.log('\n=== 3. Вторая подсказка без рекламы на этой площадке ===');
+  logs.length = 0;
+  await openCase(page);
+  const hintButton = page.locator('.hint-btn');
+  await hintButton.click();
+  await page.waitForTimeout(150);
+  const labelAfterFirst = await hintButton.textContent();
+  assert(
+    /за рекламу/.test(labelAfterFirst || '') === false,
+    `после первой подсказки на web кнопка не обещает рекламу, которой тут нет (текст: «${labelAfterFirst}»)`,
+  );
+  await hintButton.click();
+  await page.waitForTimeout(150);
+  assert(
+    !logs.some((l) => l.includes('реклама') || l.includes('не загрузилась')),
+    'вторая подсказка на web выдана бесплатно, а не заблокирована навсегда',
+  );
+  // Подсказка не продвигается, пока игрок не применит предыдущую —
+  // движок честно повторяет тот же шаг, это не баг. Проверяем не текст
+  // (он ожидаемо тот же), а что событие всё же дошло до аналитики дважды.
+  const hintEvents = logs.filter((l) => l.includes('case_hint')).length;
+  assert(hintEvents === 2, `оба обращения к подсказке засчитаны аналитикой (получено: ${hintEvents})`);
+  await page.getByRole('button', { name: 'Участок' }).click();
+  await page.waitForSelector('.plot');
+
+  // --- сценарий 4: незаконченное дело переживает перезагрузку страницы -
+  console.log('\n=== 4. Незаконченное дело переживает перезагрузку ===');
   await openCase(page);
   await clickCell(page, 'Ирина', 'грядка');
   await clickCell(page, 'Михаил', 'беседка');
