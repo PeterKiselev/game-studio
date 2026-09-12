@@ -19,8 +19,14 @@ const BASE = process.argv[2] || 'https://peterkiselev.github.io/game-studio/dach
 const OUT = join(__dirname, '..', 'games', 'dachnye-tainy', 'store', 'shots');
 
 const PHONE = { width: 390, height: 780, deviceScaleFactor: 3 };
-// Точный размер, который просит витрина VK/OK под скриншоты (общая инфраструктура).
+// Точный размер, который просит витрина VK/OK под скриншоты каталога (общая инфраструктура).
 const VK_STORE = { width: 1200, height: 600, deviceScaleFactor: 1 };
+// Экран запуска мини-приложения (десктопная версия) — отдельный слот
+// с другим размером и книжной ориентацией: 600×1200, ровно вдвое уже
+// и вдвое выше VK_STORE, но то же соотношение сторон (1:2) — под
+// портретную игру подходит естественно, не пришлось выбирать между
+// «обрезать» и «оставить поля».
+const VK_LAUNCH = { width: 600, height: 1200, deviceScaleFactor: 1 };
 
 const pause = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -115,6 +121,26 @@ async function shot(page, name) {
     await clickCell(page, 'Михаил', 'беседка');
     await pause(200);
     await shot(page, 'vk-store-case');
+    await context.close();
+  }
+
+  // 7-9. Экран запуска мини-приложения на десктопе — книжная 600×1200,
+  // минимум три штуки рекомендует сама форма VK.
+  {
+    const { context, page } = await openGame(browser, VK_LAUNCH, 'light');
+    await shot(page, 'vk-launch-1-plot');
+    await openCase(page, /Чей пирог остался в беседке/);
+    await clickCell(page, 'Ирина', 'грядка');
+    await clickCell(page, 'Михаил', 'беседка');
+    await pause(200);
+    await shot(page, 'vk-launch-2-case');
+    await clickCell(page, 'Олег', 'калитка');
+    await clickCell(page, 'Ирина', 'лейка');
+    await clickCell(page, 'Михаил', 'пирог');
+    await clickCell(page, 'Олег', 'зонт');
+    await page.waitForSelector('.reveal', { timeout: 3000 });
+    await pause(200);
+    await shot(page, 'vk-launch-3-reveal');
     await context.close();
   }
 
