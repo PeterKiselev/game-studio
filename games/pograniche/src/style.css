@@ -1,0 +1,153 @@
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{min-height:100%;overflow:auto}
+body{margin:0;background:radial-gradient(circle at 70% 10%,var(--surface-2),var(--night) 58%);color:var(--ink);font-family:Georgia,serif}
+#app{max-width:1060px;min-height:100%;height:auto;border:0;background:transparent}
+main{width:100%;padding:22px}
+.topbar{padding:0 0 16px;background:transparent;border-color:var(--line)}
+.topbar>div:first-child{display:grid}
+.brand{color:var(--gold);font-size:23px;font-weight:800;letter-spacing:.12em}
+.topbar small,.record span{color:var(--ink-3);font:10px/1.4 var(--font-ui);letter-spacing:.16em}
+.record{margin-left:auto;text-align:right;display:grid}
+.record strong{color:var(--gold);font:700 22px var(--font-num)}
+.screen{min-height:auto}
+.journey{display:flex;align-items:center;justify-content:space-between;padding:18px 0 13px}
+.journey>span{color:var(--ink-2);font:11px var(--font-ui);letter-spacing:.12em;text-transform:uppercase}
+.route{display:flex;gap:8px}
+.route span{width:27px;height:27px;display:grid;place-items:center;border:1px solid var(--line);border-radius:50%;color:var(--ink-3);font:700 11px var(--font-num)}
+.route span.current{border-color:var(--gold);color:var(--gold);box-shadow:0 0 0 3px var(--felt-soft)}
+.route span.done{border-color:var(--side-1);background:var(--side-1);color:var(--night)}
+.arena{display:grid;grid-template-columns:1fr .95fr 1fr;gap:16px;align-items:stretch}
+.fighter,.intent,.gear-strip,.combat-panel,.result-card,.loot-card,.final-gear{border:1px solid var(--line);background:var(--surface);box-shadow:var(--shadow)}
+.fighter{padding:18px;display:flex;align-items:center;gap:16px;min-height:174px}
+.figure{width:118px;height:150px;flex:0 0 auto;position:relative;border:1px solid var(--line);background-color:var(--surface-2);background-repeat:no-repeat;overflow:hidden}
+.hero-figure{width:132px;height:132px;background-image:url('./assets/hero-equipment-grid.jpg');background-size:300% 300%;background-repeat:no-repeat}
+.hero-figure[data-weapon="road-blade"]{background-position-x:0}
+.hero-figure[data-weapon="watch-cleaver"]{background-position-x:50%}
+.hero-figure[data-weapon="warden-spear"]{background-position-x:100%}
+.hero-figure[data-armor="patched-coat"]{background-position-y:0}
+.hero-figure[data-armor="chain-jacket"]{background-position-y:50%}
+.hero-figure[data-armor="warden-shell"]{background-position-y:100%}
+.item-preview{display:block;background-image:url('./assets/equipment-items.jpg');background-size:300% 200%;background-repeat:no-repeat;background-color:var(--surface-2)}
+.item-preview[data-item="road-blade"]{background-position:0 0}
+.item-preview[data-item="watch-cleaver"]{background-position:50% 0}
+.item-preview[data-item="warden-spear"]{background-position:100% 0}
+.item-preview[data-item="patched-coat"]{background-position:0 100%}
+.item-preview[data-item="chain-jacket"]{background-position:50% 100%}
+.item-preview[data-item="warden-shell"]{background-position:100% 100%}
+.enemy-figure{background-image:url('./assets/enemies-strip.jpg');background-size:300% 100%}
+.enemy-figure[data-enemy="rust-sentry"]{background-position:0 center}
+.enemy-figure[data-enemy="ash-hound"]{background-position:50% center}
+.enemy-figure[data-enemy="gate-warden"]{background-position:100% center}
+.enemy-figure[data-enemy="plague-rats"],.enemy-figure[data-enemy="dread-wolf"],.enemy-figure[data-enemy="hollow-stag"],.enemy-figure[data-enemy="scar-bear"]{width:150px;height:100px;background-image:url('./assets/beasts-grid.jpg');background-size:200% 200%}
+.enemy-figure[data-enemy="plague-rats"]{background-position:0 0}
+.enemy-figure[data-enemy="dread-wolf"]{background-position:100% 0}
+.enemy-figure[data-enemy="hollow-stag"]{background-position:0 100%}
+.enemy-figure[data-enemy="scar-bear"]{background-position:100% 100%}
+.fighter-info{flex:1;min-width:0}
+.fighter-info small,.intent span,.gear-strip small,.result-card>small,.chapter-mark,.ending-screen>small,.loot-card small{display:block;color:var(--gold);font:10px/1.4 var(--font-ui);letter-spacing:.14em}
+.fighter-info strong{display:block;margin-top:7px;font-size:20px}
+progress{display:block;width:100%;height:13px;margin-top:14px;accent-color:var(--danger)}
+.hero-card progress{accent-color:var(--side-1)}
+.fighter-info>span{display:block;color:var(--ink-2);margin-top:5px;font:11px var(--font-ui)}
+.hero-card>b{color:var(--gold);font:700 20px var(--font-num);white-space:nowrap}
+.intent{padding:20px;border-left:4px solid var(--gold);display:flex;flex-direction:column;justify-content:center}
+.intent strong{display:block;margin:8px 0;font-size:22px}
+.intent p{margin:0;color:var(--ink-2);font:13px/1.45 var(--font-ui)}
+.gear-strip{display:grid;grid-template-columns:1fr 1fr;margin-top:12px}
+.gear-strip>div{display:flex;align-items:center;gap:12px;padding:10px 16px}
+.gear-strip>div+div{border-left:1px solid var(--line)}
+.gear-item-preview{width:58px;height:58px;flex:0 0 auto;border:1px solid var(--line)}
+.gear-strip p{margin:0}
+.gear-strip strong{display:block;font:600 13px var(--font-ui)}
+.combat-panel{margin-top:12px;padding:14px}
+.actions{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.actions button,.end-turn,.loot-card{appearance:none;min-height:var(--tap);border:1px solid var(--line);background:var(--surface-2);color:var(--ink);cursor:pointer}
+.actions button{padding:10px;display:grid;grid-template-columns:29px 1fr;text-align:left}
+.actions button>span{grid-row:1/3;color:var(--gold);font-size:21px}
+.actions button strong{font:700 13px var(--font-ui)}
+.actions button small{color:var(--ink-2);font:10px var(--font-ui)}
+.actions button:hover:not(:disabled),.actions button.chosen,.loot-card:hover{border-color:var(--gold);background:var(--felt-soft)}
+.actions button:focus-visible,.end-turn:focus-visible,.loot-card:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+.actions button:disabled,.end-turn:disabled{opacity:.38;cursor:default}
+.end-turn{width:100%;margin-top:8px;color:var(--ink-2);font:600 12px var(--font-ui)}
+.combat-log{min-height:58px;margin:12px 0 0;padding-left:22px;color:var(--ink-3);font:11px/1.45 var(--font-ui)}
+.combat-log li:first-child{color:var(--gold)}
+.result-card{margin-top:12px;padding:22px;text-align:center;border-color:var(--gold)}
+.result-card h2{margin:5px 0;font-size:24px}
+.result-card p{margin:0 0 15px;color:var(--ink-2);font:13px var(--font-ui)}
+.result-actions{display:flex;justify-content:center;gap:10px;flex-wrap:wrap}
+.result-card .btn,.ending-screen .btn{min-width:220px}
+.map-screen,.loot-screen,.inventory-screen,.ending-screen{max-width:860px;margin:34px auto;text-align:center}
+.map-screen h1,.loot-screen h1,.inventory-screen h1,.ending-screen h1{margin:8px 0;font-size:clamp(38px,7vw,68px);text-transform:uppercase}
+.map-screen>p,.loot-screen>p,.inventory-screen>p,.ending-screen>p{max-width:600px;margin:0 auto 28px;color:var(--ink-2);font-family:var(--font-ui)}
+.expedition-resources{width:max-content;max-width:100%;margin:-12px auto 22px;padding:9px 14px;border:1px solid var(--line);background:var(--surface-2);color:var(--gold);font:700 11px/1.35 var(--font-ui);letter-spacing:.08em}
+.expedition-map{display:grid;grid-template-columns:repeat(auto-fit,minmax(96px,1fr));gap:7px;align-items:center;margin:24px 0}
+.map-node{min-height:68px;padding:9px 5px;display:grid;place-items:center;border:1px solid var(--line);background:var(--surface);color:var(--ink-3);font:10px/1.25 var(--font-ui)}
+.map-node.visited{color:var(--ink);border-color:var(--side-1)}
+.map-node.current{border-color:var(--gold);color:var(--gold);box-shadow:0 0 0 3px var(--felt-soft)}
+.map-node.available{border-style:dashed;color:var(--ink-2)}
+.map-options{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin-bottom:18px}
+.map-choice,.inventory-card{appearance:none;border:1px solid var(--line);background:var(--surface-2);color:var(--ink);cursor:pointer;text-align:left}
+.map-choice{min-height:120px;padding:20px;display:grid;gap:6px}
+.map-choice small{color:var(--gold);font:10px var(--font-ui);letter-spacing:.14em}
+.map-choice strong{font-size:22px}
+.map-choice span{color:var(--ink-2);font:12px/1.45 var(--font-ui)}
+.map-choice:hover,.inventory-card:hover:not(:disabled){border-color:var(--gold);background:var(--felt-soft)}
+.map-choice:focus-visible,.inventory-card:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+.loot-list{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.loot-card{padding:24px;display:flex;gap:20px;align-items:center;text-align:left}
+.loot-preview{width:126px;height:126px;flex:0 0 auto;border:1px solid var(--line)}
+.loot-card strong{display:block;margin:6px 0;font-size:20px}
+.loot-card p{margin:0;color:var(--ink-2);font:12px/1.45 var(--font-ui)}
+.inventory-slots{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:24px;text-align:left}
+.marks-balance{max-width:280px;margin:0 auto 14px;padding:10px 14px;border:1px solid var(--gold);color:var(--gold);font:11px var(--font-ui);letter-spacing:.12em}
+.marks-balance strong{margin-left:8px;font:700 20px var(--font-num)}
+.talent-list{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:20px}
+.talent-card{appearance:none;padding:14px;display:grid;gap:6px;border:1px solid var(--line);background:var(--surface-2);color:var(--ink);text-align:left;cursor:pointer}
+.talent-card strong{color:var(--gold);font-size:18px}
+.talent-card span{color:var(--ink-2);font:11px/1.4 var(--font-ui)}
+.talent-card small{font:10px var(--font-ui)}
+.talent-card:hover:not(:disabled){border-color:var(--gold);background:var(--felt-soft)}
+.talent-card:disabled{opacity:.55;cursor:default}
+.inventory-slots>section{padding:16px;border:1px solid var(--line);background:var(--surface)}
+.inventory-slots h2{margin:0 0 12px;color:var(--gold);font-size:20px}
+.inventory-list{display:grid;gap:9px}
+.inventory-card{width:100%;padding:10px;display:flex;align-items:center;gap:12px}
+.inventory-card.equipped{border-color:var(--side-1);cursor:default}
+.inventory-preview{width:76px;height:76px;flex:0 0 auto;border:1px solid var(--line)}
+.inventory-card>span:last-child{display:grid;gap:4px}
+.inventory-card strong{font-size:16px}
+.inventory-card small{color:var(--ink-2);font:11px var(--font-ui)}
+.inventory-card b{color:var(--gold);font:10px var(--font-ui);letter-spacing:.1em}
+.ending-actions{display:flex;justify-content:center;gap:10px;flex-wrap:wrap}
+.gate{margin:0 auto 15px;width:145px;height:145px;display:grid;place-items:center;border:1px solid var(--gold);color:var(--gold);font-size:92px}
+.final-gear{margin:0 auto 22px;padding:14px;max-width:460px;color:var(--gold);font:600 14px var(--font-ui)}
+footer{padding:18px 0 0;text-align:center;color:var(--ink-3);font:11px var(--font-ui)}
+
+@media(max-width:780px){main{padding:12px}
+.arena{grid-template-columns:1fr 1fr}
+.intent{grid-column:1/-1;grid-row:1;min-height:110px}
+.fighter{min-height:145px;padding:12px}
+.figure{width:86px;height:112px}
+.hero-figure{width:100px;height:100px}
+.actions{grid-template-columns:1fr 1fr}
+}
+
+@media(max-width:520px){.brand{font-size:18px}
+.journey{align-items:flex-start;gap:10px}
+.journey>span{max-width:190px}
+.arena{display:flex;flex-direction:column}
+.intent{order:-1}
+.fighter{min-height:116px}
+.gear-strip{font-size:11px}
+.gear-strip>div{padding:9px;gap:5px}
+.gear-item-preview{width:46px;height:46px}
+.loot-list{grid-template-columns:1fr}
+.map-screen,.loot-screen,.inventory-screen,.ending-screen{margin-top:24px}
+.expedition-map{grid-template-columns:repeat(4,1fr)}
+.map-options,.inventory-slots{grid-template-columns:1fr}
+.talent-list{grid-template-columns:1fr}
+}
+
+

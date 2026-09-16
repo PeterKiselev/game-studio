@@ -18,6 +18,10 @@
     "build:dachnye-tainy:web": "npm run build -w @studio/dachnye-tainy -- --mode web",
     "build:dachnye-tainy:vk": "npm run build -w @studio/dachnye-tainy -- --mode vk",
     "pack:dachnye-tainy:vk": "node tools/pack.mjs dachnye-tainy vk",
+    "dev:pograniche": "npm run dev -w @studio/pograniche",
+    "build:pograniche:web": "npm run build -w @studio/pograniche -- --mode web",
+    "build:pograniche:vk": "npm run build -w @studio/pograniche -- --mode vk",
+    "pack:pograniche:vk": "node tools/pack.mjs pograniche vk",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },

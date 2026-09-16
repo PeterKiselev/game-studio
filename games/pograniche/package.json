@@ -1,0 +1,17 @@
+{
+  "name": "@studio/pograniche",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "homepage": "./",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build --mode web",
+    "preview": "vite preview --mode web"
+  },
+  "dependencies": {
+    "@studio/game-kit": "*",
+    "@studio/rules": "*",
+    "@studio/ui": "*"
+  }
+}
