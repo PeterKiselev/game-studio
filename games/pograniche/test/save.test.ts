@@ -17,8 +17,9 @@ describe('Пограничье: миграция сохранения', () => {
     };
     const migrated = migratePogranicheSave(legacy, 3);
 
-    expect(migrated?.victories).toBe(4);
-    expect(migrated?.bestStage).toBe(2);
+    expect(migrated?.progress.prologue.victories).toBe(4);
+    expect(migrated?.progress.prologue.bestStage).toBe(2);
+    expect(migrated?.chapter).toBe('prologue');
     expect(migrated?.run?.nodeId).toBe('old-road');
     expect(migrated?.run?.combat.turn).toBe(current.combat.turn);
     expect(migrated?.inventory.weapons).toContain('watch-cleaver');
@@ -55,7 +56,7 @@ describe('Пограничье: миграция сохранения', () => {
       loadout: { weapon: 'road-blade' as const, armor: 'patched-coat' as const },
     };
     const migrated = migratePogranicheSave(legacy, 5);
-    expect(migrated?.victories).toBe(3);
+    expect(migrated?.progress.prologue.victories).toBe(3);
     expect(migrated?.run?.nodeId).toBe('trailhead');
     expect(migrated?.marks).toBe(0);
     expect(migrated?.talents).toEqual({ strength: 0, vitality: 0, supplies: 0 });
@@ -107,7 +108,7 @@ describe('Пограничье: миграция сохранения', () => {
     expect(migrated?.run?.combat.tinctures).toBe(0);
     expect(migrated?.run?.combat.tinctureUsed).toBe(false);
     expect(migrated?.run?.checkpointTinctures).toBe(0);
-    expect(migrated?.victories).toBe(4);
+    expect(migrated?.progress.prologue.victories).toBe(4);
     expect(migrated?.marks).toBe(1);
   });
 
@@ -126,5 +127,26 @@ describe('Пограничье: миграция сохранения', () => {
     }, 7);
     expect(migrated?.run?.combat.tinctures).toBe(2);
     expect(migrated?.run?.checkpointTinctures).toBe(2);
+  });
+
+  it('переносит save v8 в независимый прогресс глав', () => {
+    const legacy = {
+      victories: 5,
+      bestStage: 3,
+      run: startExpedition(),
+      inventory: { weapons: ['road-blade'] as const, armors: ['patched-coat'] as const },
+      loadout: { weapon: 'road-blade' as const, armor: 'patched-coat' as const },
+      marks: 2,
+      talents: { strength: 1, vitality: 1, supplies: 0 },
+    };
+    const migrated = migratePogranicheSave(legacy, 8);
+    expect(migrated?.chapter).toBe('prologue');
+    expect(migrated?.progress).toEqual({
+      prologue: { victories: 5, bestStage: 3 },
+      'chapter-1': { victories: 0, bestStage: 0 },
+    });
+    expect(migrated?.run?.chapter).toBe('prologue');
+    expect(migrated?.run?.combat.bleed).toBe(0);
+    expect(migrated?.run?.combat.parryOpen).toBe(false);
   });
 });

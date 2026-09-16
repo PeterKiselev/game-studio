@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  ARMORS, EMPTY_FRONTIER_TALENTS, ENEMIES, STARTER_INVENTORY, WEAPONS, availableMapNodes, chooseLoot,
+  ARMORS, CHAPTERS, EMPTY_FRONTIER_TALENTS, ENEMIES, STARTER_INVENTORY, WEAPONS, availableMapNodes, chooseLoot,
   claimVictory, createFrontierCombat, equipFrontierLoot, finishFrontierTurn, frontierIntent, lootOptions,
   frontierPouchSize, learnFrontierTalent, playFrontierAction, retryEncounter, selectMapNode, startExpedition, unlockFrontierLoot,
 } from '../src/pograniche';
@@ -33,20 +33,33 @@ function winCurrent(state: ExpeditionState): ExpeditionState {
   for (let guard = 0; guard < 30 && !next.combat.outcome; guard++) {
     const turn = next.combat.turn;
     const maxHp = ARMORS[next.gear.armor].maxHp;
-    const shouldHeal = next.encounterIndex === 2
+    const intent = frontierIntent(next.combat);
+    const shouldHeal = next.combat.bleed > 0 || (next.encounterIndex === 2
       ? maxHp - next.combat.playerHp >= 10
-      : next.combat.playerHp <= 12;
+      : next.combat.playerHp <= 12);
     if (shouldHeal && next.combat.potions > 0) {
       next = actions(next, 'potion');
       if (!next.combat.outcome && next.combat.turn === turn) next = actions(next, 'attack', 'attack');
-    } else if (frontierIntent(next.combat).kind === 'windup' && next.combat.heavyCooldown === 0) {
-      next = actions(next, 'heavy');
-      if (!next.combat.outcome && next.combat.turn === turn) next = actions(next, 'attack');
-    } else if (frontierIntent(next.combat).kind === 'stance' && next.combat.heavyCooldown === 0) {
-      next = actions(next, 'heavy');
-      if (!next.combat.outcome && next.combat.turn === turn) next = actions(next, 'attack');
-    } else {
+    } else if (intent.kind === 'parry') {
+      next = actions(next, 'feint');
       while (!next.combat.outcome && next.combat.turn === turn && next.combat.ap > 0) next = actions(next, 'attack');
+    } else if ((intent.kind === 'rend' || intent.kind === 'toll') && next.combat.dodgeCooldown === 0) {
+      next = actions(next, 'dodge');
+      if (!next.combat.outcome && next.combat.turn === turn) next = actions(next, 'attack');
+    } else if (intent.kind === 'windup' && next.combat.heavyCooldown === 0) {
+      next = actions(next, 'heavy');
+      if (!next.combat.outcome && next.combat.turn === turn) next = actions(next, 'attack');
+    } else if (intent.kind === 'stance' && next.combat.heavyCooldown === 0) {
+      next = actions(next, 'heavy');
+      if (!next.combat.outcome && next.combat.turn === turn) next = actions(next, 'attack');
+    } else if (next.combat.tinctures > 0 && !next.combat.tinctureUsed && next.combat.ap < 3) {
+      next = actions(next, 'tincture');
+    } else if (intent.kind === 'stance') {
+      next = actions(next, 'feint');
+      if (!next.combat.outcome && next.combat.turn === turn && next.combat.ap > 0) next = actions(next, 'guard');
+      if (!next.combat.outcome && next.combat.turn === turn && next.combat.ap > 0) next = actions(next, 'attack');
+    } else {
+      next = actions(next, 'attack');
     }
   }
   return next;
@@ -376,5 +389,100 @@ describe('Пограничье: экспедиция', () => {
     let state = selectMapNode(startExpedition(undefined, EMPTY_FRONTIER_TALENTS, 1), 'old-road');
     state = { ...state, combat: { ...state.combat, tinctures: 0, playerHp: 0, outcome: 'lost' } };
     expect(retryEncounter(state).combat.tinctures).toBe(1);
+  });
+
+  it('глава «За воротами» начинается на отдельной карте с тремя обязательными боями', () => {
+    const state = startExpedition(undefined, EMPTY_FRONTIER_TALENTS, 1, 'chapter-1');
+    expect(state.chapter).toBe('chapter-1');
+    expect(state.nodeId).toBe('gate-yard');
+    expect(state.encounterIndex).toBe(7);
+    expect(availableMapNodes(state).map((node) => node.id)).toEqual(['outpost']);
+    expect(CHAPTERS['chapter-1'].stages).toEqual(['outpost', 'butcher-row', 'toll-yard']);
+  });
+
+  it('карта главы даёт честный выбор между обменом и припасами со зверем', () => {
+    let state = selectMapNode(startExpedition(undefined, EMPTY_FRONTIER_TALENTS, 0, 'chapter-1'), 'outpost');
+    state = { ...state, combat: { ...state.combat, outcome: 'won' } };
+    state = chooseLoot(claimVictory(state), 'bandit-sabre');
+    expect(availableMapNodes(state).map((node) => node.id)).toEqual(['market-rows', 'backyards']);
+
+    const traded = selectMapNode(state, 'market-rows');
+    expect(traded.combat.potions).toBe(state.combat.potions - 1);
+    expect(traded.combat.tinctures).toBe(state.combat.tinctures + 1);
+
+    const supplied = selectMapNode(state, 'backyards');
+    expect(availableMapNodes(supplied).map((node) => node.id)).toEqual(['butcher-row', 'rotten-pond']);
+    const viper = selectMapNode(supplied, 'rotten-pond');
+    expect(viper.encounterIndex).toBe(10);
+    expect(viper.combat.potions).toBe(state.combat.potions + 1);
+  });
+
+  it('отвод отбивает прямую атаку, а финт безопасно раскрывает защиту', () => {
+    const gear = { weapon: 'road-blade', armor: 'patched-coat' } as const;
+    const combat = createFrontierCombat(7, gear);
+    const punished = playFrontierAction(combat, gear, 'attack');
+    expect(punished.enemyHp).toBe(combat.enemyHp);
+    expect(punished.playerHp).toBe(combat.playerHp - 9);
+    expect(punished.parryOpen).toBe(true);
+
+    const opened = playFrontierAction(combat, gear, 'feint');
+    expect(opened.enemyHp).toBe(combat.enemyHp - 2);
+    expect(opened.playerHp).toBe(combat.playerHp);
+    expect(opened.parryOpen).toBe(true);
+  });
+
+  it('рваный удар вызывает три хода кровотечения, которое снимается зельем', () => {
+    const gear = { weapon: 'road-blade', armor: 'patched-coat' } as const;
+    let combat = finishFrontierTurn(createFrontierCombat(8, gear), gear);
+    expect(combat.bleed).toBe(3);
+    combat = finishFrontierTurn(combat, gear);
+    expect(combat.bleed).toBe(2);
+    expect(combat.log[0]).toContain('Кровотечение');
+    combat = playFrontierAction(combat, gear, 'potion');
+    expect(combat.bleed).toBe(0);
+  });
+
+  it('Мытарь забирает зелье и лечится, а без зелий наносит урон', () => {
+    const gear = { weapon: 'road-blade', armor: 'patched-coat' } as const;
+    const wounded = { ...createFrontierCombat(9, gear), enemyHp: 50 };
+    const paid = finishFrontierTurn(wounded, gear);
+    expect(paid.potions).toBe(1);
+    expect(paid.enemyHp).toBe(60);
+    expect(paid.playerHp).toBe(wounded.playerHp);
+
+    const empty = finishFrontierTurn({ ...wounded, potions: 0 }, gear);
+    expect(empty.playerHp).toBeLessThan(wounded.playerHp);
+  });
+
+  it('новая экипировка меняет правила, а не только числа', () => {
+    const sabre = { weapon: 'bandit-sabre', armor: 'patched-coat' } as const;
+    const feint = playFrontierAction(createFrontierCombat(7, sabre), sabre, 'feint');
+    expect(ENEMIES[7].maxHp - feint.enemyHp).toBe(5);
+
+    const cuirass = { weapon: 'road-blade', armor: 'watch-cuirass' } as const;
+    let swarm = playFrontierAction(createFrontierCombat(11, cuirass), cuirass, 'guard');
+    swarm = finishFrontierTurn(swarm, cuirass);
+    expect(swarm.playerHp).toBe(38);
+
+    const mail = { weapon: 'road-blade', armor: 'aventail-mail' } as const;
+    const crushed = finishFrontierTurn({ ...createFrontierCombat(9, mail), turn: 5, charged: true }, mail);
+    expect(crushed.stunned).toBe(false);
+  });
+
+  it.each([
+    ['bandit-sabre', 'outpost-mace', 'market-rows', 'chapel'],
+    ['bandit-sabre', 'aventail-mail', 'backyards', 'chapel'],
+    ['watch-cuirass', 'outpost-mace', 'market-rows', 'chapel'],
+    ['watch-cuirass', 'aventail-mail', 'backyards', 'chapel'],
+  ] as const)('глава проходится после пролога с добычей %s + %s', (firstLoot, secondLoot, firstRoute, secondRoute) => {
+    const weakestCompletedPrologue = { weapon: 'road-blade', armor: 'warden-shell' } as const;
+    let state = selectMapNode(startExpedition(weakestCompletedPrologue, EMPTY_FRONTIER_TALENTS, 1, 'chapter-1'), 'outpost');
+    state = chooseLoot(claimVictory(winCurrent(state)), firstLoot);
+    state = selectMapNode(selectMapNode(state, firstRoute), 'butcher-row');
+    state = chooseLoot(claimVictory(winCurrent(state)), secondLoot);
+    state = selectMapNode(selectMapNode(state, secondRoute), 'toll-yard');
+    state = claimVictory(winCurrent(state));
+    expect(state.phase, `${state.combat.outcome}: ${state.combat.playerHp}/${state.combat.enemyHp}; ${state.combat.log.join(' | ')}`).toBe('complete');
+    expect(state.nodeId).toBe('town-square');
   });
 });

@@ -1,13 +1,14 @@
 export type FrontierAction = 'attack' | 'feint' | 'guard' | 'dodge' | 'heavy' | 'potion' | 'tincture';
 export type CombatOutcome = 'won' | 'lost' | null;
-export type WeaponId = 'road-blade' | 'watch-cleaver' | 'warden-spear';
-export type ArmorId = 'patched-coat' | 'chain-jacket' | 'warden-shell';
+export type WeaponId = 'road-blade' | 'watch-cleaver' | 'warden-spear' | 'bandit-sabre' | 'outpost-mace';
+export type ArmorId = 'patched-coat' | 'chain-jacket' | 'warden-shell' | 'watch-cuirass' | 'aventail-mail';
 export type LootId = WeaponId | ArmorId;
 export type ExpeditionPhase = 'map' | 'battle' | 'loot' | 'complete';
-export type MapNodeId = 'trailhead' | 'old-road' | 'watchtower' | 'hidden-path' | 'rat-den' | 'bear-cave' | 'wolf-woods' | 'hollow-grove' | 'burned-road' | 'wormwood-ravine' | 'forester-lodge' | 'gate' | 'city';
+export type MapNodeId = 'trailhead' | 'old-road' | 'watchtower' | 'hidden-path' | 'rat-den' | 'bear-cave' | 'wolf-woods' | 'hollow-grove' | 'burned-road' | 'wormwood-ravine' | 'forester-lodge' | 'gate' | 'city' | 'gate-yard' | 'outpost' | 'market-rows' | 'backyards' | 'rotten-pond' | 'butcher-row' | 'chapel' | 'wine-cellar' | 'smuggler-hole' | 'toll-yard' | 'town-square';
 export type MapNodeKind = 'start' | 'battle' | 'event' | 'finish';
 export type NextBattleEffect = 'supplies' | 'ambush' | null;
 export type FrontierTalentId = 'strength' | 'vitality' | 'supplies';
+export type ChapterId = 'prologue' | 'chapter-1';
 
 export interface FrontierTalents {
   strength: number;
@@ -39,6 +40,7 @@ export interface Weapon {
   attack: number;
   heavy: number;
   description: string;
+  feint?: number;
 }
 
 export interface Armor {
@@ -48,6 +50,8 @@ export interface Armor {
   maxHp: number;
   block: number;
   description: string;
+  steadfast?: boolean;
+  stunProof?: boolean;
 }
 
 export interface Enemy {
@@ -65,9 +69,11 @@ export interface Enemy {
   potionRetaliation?: number;
   crushIgnoresGuard?: boolean;
   retaliateOnHeavy?: number;
+  riposte?: number;
+  rend?: number;
 }
 
-export type IntentKind = 'strike' | 'windup' | 'crush' | 'stance' | 'swarm';
+export type IntentKind = 'strike' | 'windup' | 'crush' | 'stance' | 'swarm' | 'parry' | 'rend' | 'toll';
 
 export interface EnemyIntent {
   kind: IntentKind;
@@ -85,6 +91,8 @@ export interface CombatState {
   potions: number;
   tinctures: number;
   tinctureUsed: boolean;
+  bleed: number;
+  parryOpen: boolean;
   guard: boolean;
   guardUsed: boolean;
   evade: boolean;
@@ -113,6 +121,7 @@ export interface FrontierInventory {
 }
 
 export interface ExpeditionState {
+  chapter: ChapterId;
   phase: ExpeditionPhase;
   nodeId: MapNodeId;
   visited: MapNodeId[];
@@ -132,9 +141,14 @@ export interface FrontierMapNode {
   name: string;
   description: string;
   label?: string;
+  effect?: MapEventEffect;
   enemyIndex?: number;
   next: readonly MapNodeId[];
 }
+
+export type MapEventEffect =
+  | { kind: 'supplies' | 'ambush' | 'tincture' | 'heal'; amount: number }
+  | { kind: 'trade'; potions: number; tinctures: number };
 
 export interface LootOption {
   id: LootId;
@@ -142,6 +156,18 @@ export interface LootOption {
   name: string;
   icon: string;
   description: string;
+}
+
+export interface FrontierChapter {
+  id: ChapterId;
+  title: string;
+  intro: string;
+  start: MapNodeId;
+  finish: MapNodeId;
+  stages: readonly MapNodeId[];
+  nodes: readonly MapNodeId[];
+  loot: readonly (readonly [LootOption, LootOption])[];
+  requiresPrologueVictories: number;
 }
 
 export const WEAPONS: Record<WeaponId, Weapon> = {
@@ -157,6 +183,14 @@ export const WEAPONS: Record<WeaponId, Weapon> = {
     id: 'warden-spear', name: 'Копьё привратника', icon: '⚚', attack: 6, heavy: 13,
     description: 'Быстрые атаки +2, тяжёлые +3.',
   },
+  'bandit-sabre': {
+    id: 'bandit-sabre', name: 'Разбойничья сабля', icon: '⌁', attack: 6, heavy: 12, feint: 5,
+    description: 'Финт наносит 5 урона и раскрывает отвод.',
+  },
+  'outpost-mace': {
+    id: 'outpost-mace', name: 'Шестопёр заставы', icon: '✦', attack: 5, heavy: 16,
+    description: 'Медленнее сабли, зато тяжёлый удар особенно силён.',
+  },
 };
 
 export const ARMORS: Record<ArmorId, Armor> = {
@@ -171,6 +205,14 @@ export const ARMORS: Record<ArmorId, Armor> = {
   'warden-shell': {
     id: 'warden-shell', name: 'Панцирь стража', icon: '⬡', maxHp: 40, block: 9,
     description: '+10 здоровья, защита поглощает 9 урона.',
+  },
+  'watch-cuirass': {
+    id: 'watch-cuirass', name: 'Дозорная кираса', icon: '▤', maxHp: 38, block: 7, steadfast: true,
+    description: 'Блок держится против всех ударов врага в этом ходу.',
+  },
+  'aventail-mail': {
+    id: 'aventail-mail', name: 'Кольчуга с бармицей', icon: '◫', maxHp: 42, block: 7, stunProof: true,
+    description: 'Сокрушение наносит урон, но не оглушает.',
   },
 };
 
@@ -229,28 +271,84 @@ export const ENEMIES: readonly Enemy[] = [
     maxHp: 72, strike: 8, crush: 18, reflect: 4, retaliateOnHeavy: 5,
     pattern: ['strike', 'stance', 'windup', 'crush', 'strike'],
   },
+  {
+    id: 'outpost-sergeant', name: 'Десятник заставы', epithet: 'Надвратная застава', icon: '♜',
+    maxHp: 66, strike: 8, crush: 17, reflect: 0, riposte: 9,
+    pattern: ['parry', 'strike', 'windup', 'crush', 'parry'],
+  },
+  {
+    id: 'row-butcher', name: 'Мясник с рядов', epithet: 'Мясной ряд', icon: '♝',
+    maxHp: 62, strike: 7, crush: 16, reflect: 4, rend: 2,
+    pattern: ['rend', 'stance', 'strike', 'windup', 'crush'],
+  },
+  {
+    id: 'toll-master', name: 'Мытарь', epithet: 'Мытный двор', icon: '♚',
+    maxHp: 68, strike: 9, crush: 18, reflect: 5, riposte: 9,
+    pattern: ['toll', 'strike', 'parry', 'windup', 'crush', 'stance'],
+  },
+  {
+    id: 'bog-viper', name: 'Болотная гадюка', epithet: 'Гнилой затон', icon: '♟', optional: true,
+    maxHp: 44, strike: 5, crush: 0, reflect: 0, riposte: 7, rend: 3,
+    pattern: ['parry', 'rend', 'parry', 'strike'],
+  },
+  {
+    id: 'toll-hound', name: 'Волкодав Мытаря', epithet: 'Винные погреба', icon: '♞', optional: true,
+    maxHp: 58, strike: 6, crush: 0, reflect: 3, rend: 2, swarmHits: 2,
+    pattern: ['swarm', 'rend', 'stance', 'swarm'],
+  },
 ] as const;
 
 export const EXPEDITION_MAP: readonly FrontierMapNode[] = [
   { id: 'trailhead', kind: 'start', name: 'Начало пути', description: 'Выбери первый участок дороги.', next: ['old-road'] },
   { id: 'old-road', kind: 'battle', name: 'Старая дорога', description: 'Ржавый страж перекрыл тракт.', enemyIndex: 0, next: ['watchtower', 'hidden-path'] },
-  { id: 'watchtower', kind: 'event', name: 'Заброшенная башня', description: 'В тайнике осталось дополнительное зелье.', label: 'ЗАПАСЫ', next: ['burned-road', 'rat-den', 'bear-cave'] },
-  { id: 'hidden-path', kind: 'event', name: 'Скрытая тропа', description: 'Можно зайти следующему врагу во фланг и начать бой с преимуществом.', label: 'ЗАСАДА', next: ['burned-road', 'wolf-woods', 'hollow-grove'] },
+  { id: 'watchtower', kind: 'event', name: 'Заброшенная башня', description: 'В тайнике осталось дополнительное зелье.', label: 'ЗАПАСЫ', effect: { kind: 'supplies', amount: 1 }, next: ['burned-road', 'rat-den', 'bear-cave'] },
+  { id: 'hidden-path', kind: 'event', name: 'Скрытая тропа', description: 'Можно зайти следующему врагу во фланг и начать бой с преимуществом.', label: 'ЗАСАДА', effect: { kind: 'ambush', amount: 10 }, next: ['burned-road', 'wolf-woods', 'hollow-grove'] },
   { id: 'rat-den', kind: 'battle', name: 'Крысиное логово', description: 'Стая атакует несколькими укусами. Уклонение надёжнее блока.', enemyIndex: 3, next: ['burned-road'] },
   { id: 'bear-cave', kind: 'battle', name: 'Медвежья пещера', description: 'Медведь отвечает на неосторожные тяжёлые удары.', enemyIndex: 6, next: ['burned-road'] },
   { id: 'wolf-woods', kind: 'battle', name: 'Волчья низина', description: 'Волк чует запах зелий и усиливает следующую атаку.', enemyIndex: 4, next: ['burned-road'] },
   { id: 'hollow-grove', kind: 'battle', name: 'Мёртвая роща', description: 'Рога пробивают блок — от разгона спасает только уклонение.', enemyIndex: 5, next: ['burned-road'] },
   { id: 'burned-road', kind: 'battle', name: 'Сгоревший тракт', description: 'Пепельный гончий почуял добычу.', enemyIndex: 1, next: ['wormwood-ravine', 'forester-lodge'] },
-  { id: 'wormwood-ravine', kind: 'event', name: 'Полынный овраг', description: 'Собрать полынь: +1 настойка, которая возвращает 1 ОД в бою.', label: 'ПОЛЫНЬ', next: ['gate'] },
-  { id: 'forester-lodge', kind: 'event', name: 'Сторожка лесника', description: 'Отдохнуть перед воротами и восстановить до 8 здоровья.', label: 'НОЧЛЕГ', next: ['gate'] },
+  { id: 'wormwood-ravine', kind: 'event', name: 'Полынный овраг', description: 'Собрать полынь: +1 настойка, которая возвращает 1 ОД в бою.', label: 'ПОЛЫНЬ', effect: { kind: 'tincture', amount: 1 }, next: ['gate'] },
+  { id: 'forester-lodge', kind: 'event', name: 'Сторожка лесника', description: 'Отдохнуть перед воротами и восстановить до 8 здоровья.', label: 'НОЧЛЕГ', effect: { kind: 'heal', amount: 8 }, next: ['gate'] },
   { id: 'gate', kind: 'battle', name: 'Ворота Пограничья', description: 'Последний привратник ждёт у ворот.', enemyIndex: 2, next: ['city'] },
   { id: 'city', kind: 'finish', name: 'Пограничье', description: 'Ворота открыты.', next: [] },
+  { id: 'gate-yard', kind: 'start', name: 'Надвратный двор', description: 'За воротами начинается тесный и недружелюбный посад.', next: ['outpost'] },
+  { id: 'outpost', kind: 'battle', name: 'Застава', description: 'Десятник требует назвать цель визита — или доказать её клинком.', enemyIndex: 7, next: ['market-rows', 'backyards'] },
+  { id: 'market-rows', kind: 'event', name: 'Торговые ряды', description: 'Обменять 1 зелье на 1 полынную настойку.', label: 'ЛАВКА', effect: { kind: 'trade', potions: 1, tinctures: 1 }, next: ['butcher-row'] },
+  { id: 'backyards', kind: 'event', name: 'Задворки', description: 'Найти оставленные припасы: +1 зелье в следующем бою.', label: 'ПОДАЧКА', effect: { kind: 'supplies', amount: 1 }, next: ['butcher-row', 'rotten-pond'] },
+  { id: 'rotten-pond', kind: 'battle', name: 'Гнилой затон', description: 'Гадюка отбивает поспешные удары и оставляет кровоточащие раны.', enemyIndex: 10, next: ['butcher-row'] },
+  { id: 'butcher-row', kind: 'battle', name: 'Мясной ряд', description: 'Мясник закрывает дорогу к площади.', enemyIndex: 8, next: ['chapel', 'wine-cellar'] },
+  { id: 'chapel', kind: 'event', name: 'Часовня', description: 'Перевязать раны и восстановить до 8 здоровья.', label: 'ПЕРЕВЯЗКА', effect: { kind: 'heal', amount: 8 }, next: ['toll-yard'] },
+  { id: 'wine-cellar', kind: 'battle', name: 'Винные погреба', description: 'Волкодав охраняет тайный путь контрабандистов.', enemyIndex: 11, next: ['smuggler-hole'] },
+  { id: 'smuggler-hole', kind: 'event', name: 'Лаз контрабандистов', description: 'Зайти Мытарю во фланг: он начнёт бой без 10 здоровья.', label: 'ЗАСАДА', effect: { kind: 'ambush', amount: 10 }, next: ['toll-yard'] },
+  { id: 'toll-yard', kind: 'battle', name: 'Мытный двор', description: 'Мытарь назначил цену за проход к Ратушной площади.', enemyIndex: 9, next: ['town-square'] },
+  { id: 'town-square', kind: 'finish', name: 'Ратушная площадь', description: 'Первая улица Пограничья пройдена.', next: [] },
 ] as const;
 
 const LOOT: readonly (readonly [LootOption, LootOption])[] = [
   [toLoot(WEAPONS['watch-cleaver']), toLoot(ARMORS['chain-jacket'])],
   [toLoot(WEAPONS['warden-spear']), toLoot(ARMORS['warden-shell'])],
 ] as const;
+
+const CHAPTER_ONE_LOOT: readonly (readonly [LootOption, LootOption])[] = [
+  [toLoot(WEAPONS['bandit-sabre']), toLoot(ARMORS['watch-cuirass'])],
+  [toLoot(WEAPONS['outpost-mace']), toLoot(ARMORS['aventail-mail'])],
+] as const;
+
+export const CHAPTERS: Readonly<Record<ChapterId, FrontierChapter>> = {
+  prologue: {
+    id: 'prologue', title: 'Первый поход', intro: 'Дорога к воротам Пограничья.',
+    start: 'trailhead', finish: 'city', stages: ['old-road', 'burned-road', 'gate'],
+    nodes: ['trailhead', 'old-road', 'watchtower', 'hidden-path', 'rat-den', 'bear-cave', 'wolf-woods', 'hollow-grove', 'burned-road', 'wormwood-ravine', 'forester-lodge', 'gate', 'city'],
+    loot: LOOT, requiresPrologueVictories: 0,
+  },
+  'chapter-1': {
+    id: 'chapter-1', title: 'За воротами', intro: 'Путь через посад к Ратушной площади.',
+    start: 'gate-yard', finish: 'town-square', stages: ['outpost', 'butcher-row', 'toll-yard'],
+    nodes: ['gate-yard', 'outpost', 'market-rows', 'backyards', 'rotten-pond', 'butcher-row', 'chapel', 'wine-cellar', 'smuggler-hole', 'toll-yard', 'town-square'],
+    loot: CHAPTER_ONE_LOOT, requiresPrologueVictories: 1,
+  },
+};
 
 function toLoot(item: Weapon | Armor): LootOption {
   return {
@@ -262,11 +360,14 @@ function toLoot(item: Weapon | Armor): LootOption {
   };
 }
 
-export function startExpedition(loadout: FrontierGear = { weapon: 'road-blade', armor: 'patched-coat' }, talents: FrontierTalents = EMPTY_FRONTIER_TALENTS, tinctures = 0): ExpeditionState {
+export function startExpedition(loadout: FrontierGear = { weapon: 'road-blade', armor: 'patched-coat' }, talents: FrontierTalents = EMPTY_FRONTIER_TALENTS, tinctures = 0, chapterId: ChapterId = 'prologue'): ExpeditionState {
   const gear = { ...loadout };
-  const combat = createFrontierCombat(0, gear, talents, tinctures);
+  const chapter = CHAPTERS[chapterId];
+  const firstStage = mapNode(chapter.stages[0]);
+  if (firstStage.enemyIndex === undefined) throw new RangeError(`Chapter ${chapterId} starts without an encounter`);
+  const combat = createFrontierCombat(firstStage.enemyIndex, gear, talents, tinctures);
   return {
-    phase: 'map', nodeId: 'trailhead', visited: ['trailhead'], encounterIndex: 0, gear, combat,
+    chapter: chapterId, phase: 'map', nodeId: chapter.start, visited: [chapter.start], encounterIndex: firstStage.enemyIndex, gear, combat,
     checkpointHp: combat.playerHp, checkpointPotions: combat.potions, checkpointEnemyHp: combat.enemyHp,
     checkpointTinctures: combat.tinctures,
     nextBattleEffect: null,
@@ -284,21 +385,35 @@ export function selectMapNode(state: ExpeditionState, id: MapNodeId, talents: Fr
   if (!target) return state;
   if (target.kind === 'event') {
     const combat = cloneCombat(state.combat);
-    if (target.id === 'wormwood-ravine') {
-      combat.tinctures++;
-      combat.log.unshift('В овраге собрана полынная настойка: +1 ОД при использовании в бою.');
-    } else if (target.id === 'forester-lodge') {
+    const effect = target.effect;
+    let nextBattleEffect = state.nextBattleEffect;
+    if (effect?.kind === 'tincture') {
+      combat.tinctures += effect.amount;
+      combat.log.unshift(`Получена полынная настойка: +${effect.amount}.`);
+    } else if (effect?.kind === 'heal') {
       const maxHp = ARMORS[state.gear.armor].maxHp + talents.vitality * 4;
-      const healed = Math.min(8, maxHp - combat.playerHp);
+      const healed = Math.min(effect.amount, maxHp - combat.playerHp);
       combat.playerHp += healed;
-      combat.log.unshift(healed > 0 ? `Ночлег восстановил ${healed} здоровья.` : 'В сторожке не пришлось лечить раны: здоровье полное.');
+      combat.log.unshift(healed > 0 ? `Перевязка восстановила ${healed} здоровья.` : 'Здоровье уже полное.');
+    } else if (effect?.kind === 'trade') {
+      if (combat.potions >= effect.potions) {
+        combat.potions -= effect.potions;
+        combat.tinctures += effect.tinctures;
+        combat.log.unshift(`Обмен: −${effect.potions} зелье, +${effect.tinctures} настойка.`);
+      } else {
+        combat.log.unshift('Для обмена не хватило зелий.');
+      }
+    } else if (effect?.kind === 'supplies') {
+      nextBattleEffect = 'supplies';
+    } else if (effect?.kind === 'ambush') {
+      nextBattleEffect = 'ambush';
     }
     return {
       ...state,
       combat,
       nodeId: target.id,
       visited: state.visited.includes(target.id) ? state.visited : [...state.visited, target.id],
-      nextBattleEffect: target.id === 'watchtower' ? 'supplies' : target.id === 'hidden-path' ? 'ambush' : state.nextBattleEffect,
+      nextBattleEffect,
     };
   }
   if (target.kind !== 'battle' || target.enemyIndex === undefined) return state;
@@ -308,7 +423,7 @@ export function selectMapNode(state: ExpeditionState, id: MapNodeId, talents: Fr
   combat.potions = Math.max(0, state.combat.potions);
   if (state.nextBattleEffect === 'supplies') {
     combat.potions++;
-    combat.log.unshift('Запасы из башни: дополнительное зелье останется с героем до использования.');
+    combat.log.unshift('Найденные запасы: дополнительное зелье останется с героем до использования.');
   } else if (state.nextBattleEffect === 'ambush') {
     combat.enemyHp = Math.max(1, combat.enemyHp - 10);
     combat.log.unshift('Засада удалась: враг начинает бой, потеряв 10 здоровья.');
@@ -333,7 +448,7 @@ export function createFrontierCombat(enemyIndex: number, gear: FrontierGear, tal
   if (!enemy) throw new RangeError(`Unknown encounter: ${enemyIndex}`);
   return {
     enemyIndex, turn: 1, playerHp: ARMORS[gear.armor].maxHp + talents.vitality * 4, enemyHp: enemy.maxHp,
-    ap: 3, potions: 2 + talents.supplies, tinctures, tinctureUsed: false, guard: false, guardUsed: false, evade: false,
+    ap: 3, potions: 2 + talents.supplies, tinctures, tinctureUsed: false, bleed: 0, parryOpen: false, guard: false, guardUsed: false, evade: false,
     feintUsed: false, dodgeCooldown: 0, heavyCooldown: 0, scentBonus: 0,
     rage: 0, blood: false, damageThisTurn: 0, heavyThisTurn: false,
     charged: false, stunned: false, outcome: null,
@@ -345,6 +460,18 @@ export function frontierIntent(state: CombatState): EnemyIntent {
   const enemy = ENEMIES[state.enemyIndex];
   const kind = enemy.pattern[(state.turn - 1) % enemy.pattern.length];
   const strike = enemy.strike + state.rage + (state.blood ? 2 : 0) + state.scentBonus;
+  if (kind === 'parry') {
+    const riposte = enemy.riposte ?? enemy.strike;
+    return { kind, name: 'Отвод', damage: riposte, text: `Первый прямой удар будет отбит с ответом ${riposte}. Начни с финта.` };
+  }
+  if (kind === 'rend') {
+    return { kind, name: 'Рваный удар', damage: strike, text: `Прошедший урон вызовет кровотечение: ${enemy.rend ?? 1} урона в конце трёх ходов. Зелье снимает эффект.` };
+  }
+  if (kind === 'toll') {
+    return state.potions > 0
+      ? { kind, name: 'Подать', damage: 0, text: 'Мытарь отнимет зелье и восстановит 10 здоровья. Можно уклониться.' }
+      : { kind, name: 'Подать силой', damage: strike + 4, text: 'Зелий нет — Мытарь взыщет подать ударом. Можно уклониться.' };
+  }
   if (kind === 'swarm') {
     const hits = enemy.swarmHits ?? 2;
     return { kind, name: `Стая · ${hits} укуса`, damage: strike * hits, text: 'Блок остановит только первый укус. Уклонение спасёт от всей стаи.' };
@@ -381,8 +508,14 @@ export function playFrontierAction(
     if (!canPay(next, 1)) return state;
     next.ap--;
     const damage = weapon.attack + talents.strength;
-    next.log.unshift(`Быстрая атака: ${damage} урона.`);
-    hurtEnemy(next, damage);
+    if (currentIntent.kind === 'parry' && !next.parryOpen) {
+      next.parryOpen = true;
+      next.log.unshift('Быстрая атака отбита отводом. Теперь защита врага раскрыта.');
+      hurtPlayer(next, armor, ENEMIES[next.enemyIndex].riposte ?? ENEMIES[next.enemyIndex].strike, 'Ответ отвода');
+    } else {
+      next.log.unshift(`Быстрая атака: ${damage} урона.`);
+      hurtEnemy(next, damage);
+    }
     if (!next.outcome && currentIntent.kind === 'stance' && !next.heavyThisTurn) {
       const reflected = ENEMIES[next.enemyIndex].reflect + (next.blood ? 1 : 0);
       hurtPlayer(next, armor, reflected, 'Отражение стойки');
@@ -391,10 +524,11 @@ export function playFrontierAction(
     if (!canPay(next, 1) || next.feintUsed) return state;
     next.ap--;
     next.feintUsed = true;
-    const damage = Math.max(2, Math.floor((weapon.attack + talents.strength) * 0.4));
+    const damage = weapon.feint ?? Math.max(2, Math.floor((weapon.attack + talents.strength) * 0.4));
     const calmed = next.rage > 0;
     if (calmed) next.rage--;
     next.log.unshift(`Финт: ${damage} урона${calmed ? ', ярость врага -1' : ''}.`);
+    if (currentIntent.kind === 'parry') next.parryOpen = true;
     hurtEnemy(next, damage);
   } else if (action === 'guard') {
     if (!canPay(next, 1) || next.guardUsed) return state;
@@ -417,20 +551,28 @@ export function playFrontierAction(
       ? 'Тяжёлый удар срывает замах'
       : currentIntent.kind === 'stance' ? 'Тяжёлый удар ломает стойку' : 'Тяжёлый удар';
     const damage = weapon.heavy + talents.strength * 2;
-    next.log.unshift(`${prefix}: ${damage} урона.`);
-    hurtEnemy(next, damage);
+    if (currentIntent.kind === 'parry' && !next.parryOpen) {
+      next.parryOpen = true;
+      next.log.unshift('Тяжёлый удар отбил отвод. Теперь защита врага раскрыта.');
+      hurtPlayer(next, armor, ENEMIES[next.enemyIndex].riposte ?? ENEMIES[next.enemyIndex].strike, 'Ответ отвода');
+    } else {
+      next.log.unshift(`${prefix}: ${damage} урона.`);
+      hurtEnemy(next, damage);
+    }
     const retaliation = ENEMIES[next.enemyIndex].retaliateOnHeavy ?? 0;
     if (!next.outcome && retaliation > 0 && currentIntent.kind !== 'windup' && currentIntent.kind !== 'stance') {
       hurtPlayer(next, armor, retaliation, 'Ответный удар зверя');
     }
   } else if (action === 'potion') {
     const maxHp = armor.maxHp + talents.vitality * 4;
-    if (!canPay(next, 1) || next.potions === 0 || next.playerHp === maxHp) return state;
+    if (!canPay(next, 1) || next.potions === 0 || (next.playerHp === maxHp && next.bleed === 0)) return state;
     next.ap--;
     next.potions--;
     const healed = Math.min(10, maxHp - next.playerHp);
     next.playerHp += healed;
-    next.log.unshift(`Зелье восстановило ${healed} здоровья.`);
+    const stoppedBleed = next.bleed > 0;
+    next.bleed = 0;
+    next.log.unshift(`Зелье восстановило ${healed} здоровья${stoppedBleed ? ' и остановило кровотечение' : ''}.`);
     const scent = ENEMIES[next.enemyIndex].potionRetaliation ?? 0;
     if (scent > 0) {
       next.scentBonus = Math.max(next.scentBonus, scent);
@@ -454,12 +596,13 @@ export function finishFrontierTurn(state: CombatState, gear: FrontierGear): Comb
   const enemy = ENEMIES[next.enemyIndex];
   const armor = ARMORS[gear.armor];
   let willBeStunned = false;
+  let bleedApplied = false;
 
   if (next.damageThisTurn < 10) {
     next.rage++;
     next.log.unshift(`Ярость врага растёт до ${next.rage}: он получил меньше 10 урона.`);
   }
-  if (next.evade && (move.kind === 'strike' || move.kind === 'crush' || move.kind === 'swarm')) {
+  if (next.evade && (move.kind === 'strike' || move.kind === 'crush' || move.kind === 'swarm' || move.kind === 'rend' || move.kind === 'toll')) {
     next.log.unshift(`${move.name}: промах после уклонения.`);
     next.scentBonus = 0;
   } else if (move.kind === 'swarm') {
@@ -470,11 +613,31 @@ export function finishFrontierTurn(state: CombatState, gear: FrontierGear): Comb
   } else if (move.kind === 'strike') {
     hurtPlayer(next, armor, move.damage, move.name);
     next.scentBonus = 0;
+  } else if (move.kind === 'rend') {
+    const before = next.playerHp;
+    hurtPlayer(next, armor, move.damage, move.name);
+    if (!next.outcome && next.playerHp < before) {
+      next.bleed = 3;
+      bleedApplied = true;
+      next.log.unshift(`Кровотечение: ещё ${next.bleed} хода.`);
+    }
+    next.scentBonus = 0;
+  } else if (move.kind === 'toll') {
+    if (next.potions > 0) {
+      next.potions--;
+      const healed = Math.min(10, enemy.maxHp - next.enemyHp);
+      next.enemyHp += healed;
+      next.log.unshift(`Мытарь забрал зелье и восстановил ${healed} здоровья.`);
+    } else {
+      hurtPlayer(next, armor, move.damage, move.name);
+    }
+  } else if (move.kind === 'parry') {
+    next.log.unshift(next.parryOpen ? 'Отвод раскрыт финтом или атакой.' : 'Враг сохранил отвод и не атаковал.');
   } else if (move.kind === 'crush') {
     const guarded = next.guard && !enemy.crushIgnoresGuard;
     hurtPlayer(next, armor, move.damage, move.name, Boolean(enemy.crushIgnoresGuard));
     next.scentBonus = 0;
-    willBeStunned = !guarded && !next.outcome;
+    willBeStunned = !guarded && !armor.stunProof && !next.outcome;
     if (willBeStunned) next.log.unshift('Оглушение: в следующем ходу будет 2 ОД.');
   } else if (move.kind === 'windup') {
     next.charged = !next.heavyThisTurn;
@@ -483,6 +646,11 @@ export function finishFrontierTurn(state: CombatState, gear: FrontierGear): Comb
     next.log.unshift(next.heavyThisTurn ? 'Стойка сломана — отражения не было.' : 'Враг удерживает стойку и ждёт атаки.');
   }
 
+  if (!next.outcome && next.bleed > 0 && !bleedApplied) {
+    const bleedDamage = enemy.rend ?? 1;
+    next.bleed--;
+    hurtPlayer(next, armor, bleedDamage, 'Кровотечение', true);
+  }
   if (next.outcome) return next;
   next.turn++;
   next.ap = willBeStunned ? 2 : 3;
@@ -492,6 +660,7 @@ export function finishFrontierTurn(state: CombatState, gear: FrontierGear): Comb
   next.evade = false;
   next.feintUsed = false;
   next.tinctureUsed = false;
+  next.parryOpen = false;
   next.heavyThisTurn = false;
   next.damageThisTurn = 0;
   next.dodgeCooldown = Math.max(0, next.dodgeCooldown - 1);
@@ -501,15 +670,24 @@ export function finishFrontierTurn(state: CombatState, gear: FrontierGear): Comb
 }
 
 export function lootOptions(state: ExpeditionState): readonly LootOption[] {
-  return state.phase === 'loot' ? (LOOT[state.encounterIndex] ?? []) : [];
+  return state.phase === 'loot' ? (CHAPTERS[state.chapter].loot[chapterStage(state)] ?? []) : [];
 }
 
 export function claimVictory(state: ExpeditionState, talents: FrontierTalents = EMPTY_FRONTIER_TALENTS): ExpeditionState {
   if (state.phase !== 'battle' || state.combat.outcome !== 'won') return state;
   if (ENEMIES[state.encounterIndex].optional) return { ...state, phase: 'map' };
-  if (state.encounterIndex === 2) return { ...state, phase: 'complete', nodeId: 'city', visited: [...state.visited, 'city'] };
+  const chapter = CHAPTERS[state.chapter];
+  if (isFinalStage(state)) return { ...state, phase: 'complete', nodeId: chapter.finish, visited: [...state.visited, chapter.finish] };
   const maxHp = ARMORS[state.gear.armor].maxHp + talents.vitality * 4;
   return { ...state, phase: 'loot', combat: { ...state.combat, playerHp: Math.min(maxHp, state.combat.playerHp + 8) } };
+}
+
+export function chapterStage(state: ExpeditionState): number {
+  return CHAPTERS[state.chapter].stages.indexOf(state.nodeId);
+}
+
+export function isFinalStage(state: ExpeditionState): boolean {
+  return chapterStage(state) === CHAPTERS[state.chapter].stages.length - 1;
 }
 
 export function chooseLoot(state: ExpeditionState, id: LootId, talents: FrontierTalents = EMPTY_FRONTIER_TALENTS): ExpeditionState {
@@ -572,7 +750,7 @@ function hurtEnemy(state: CombatState, amount: number): void {
 
 function hurtPlayer(state: CombatState, armor: Armor, amount: number, label: string, ignoreGuard = false): void {
   const blocked = state.guard && !ignoreGuard ? Math.min(armor.block, amount) : 0;
-  state.guard = false;
+  if (!armor.steadfast) state.guard = false;
   state.playerHp = Math.max(0, state.playerHp - amount + blocked);
   state.log.unshift(`${label}: ${amount} урона${blocked ? `, броня поглотила ${blocked}` : ''}.`);
   if (state.playerHp === 0) {

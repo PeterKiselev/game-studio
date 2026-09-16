@@ -8,6 +8,7 @@ import {
 } from '@studio/rules';
 import type {
   CombatState,
+  ChapterId,
   ExpeditionState,
   FrontierGear,
   FrontierInventory,
@@ -16,6 +17,16 @@ import type {
 } from '@studio/rules';
 
 export interface PogranicheSave {
+  chapter: ChapterId;
+  progress: Record<ChapterId, { victories: number; bestStage: number }>;
+  run: ExpeditionState | null;
+  inventory: FrontierInventory;
+  loadout: FrontierGear;
+  marks: number;
+  talents: FrontierTalents;
+}
+
+interface LegacyV8Save {
   victories: number;
   bestStage: number;
   run: ExpeditionState | null;
@@ -42,8 +53,8 @@ export const DEFAULT_LOADOUT: FrontierGear = { weapon: 'road-blade', armor: 'pat
 
 export function defaultPogranicheSave(): PogranicheSave {
   return {
-    victories: 0,
-    bestStage: 0,
+    chapter: 'prologue',
+    progress: { prologue: { victories: 0, bestStage: 0 }, 'chapter-1': { victories: 0, bestStage: 0 } },
     run: null,
     inventory: { weapons: [...STARTER_INVENTORY.weapons], armors: [...STARTER_INVENTORY.armors] },
     loadout: { ...DEFAULT_LOADOUT },
@@ -53,26 +64,37 @@ export function defaultPogranicheSave(): PogranicheSave {
 }
 
 export function migratePogranicheSave(old: unknown, fromVersion: number): PogranicheSave | null {
+  if (typeof old !== 'object' || old === null || fromVersion < 1 || fromVersion > 8) return null;
+  if (fromVersion === 8) {
+    const saved = old as LegacyV8Save;
+    if (!hasCurrentSaveShape(saved)) return null;
+    return upgradeV8Save(saved);
+  }
+  const legacy = migrateLegacyV8(old, fromVersion);
+  return legacy ? upgradeV8Save(legacy) : null;
+}
+
+function migrateLegacyV8(old: unknown, fromVersion: number): LegacyV8Save | null {
   if (typeof old !== 'object' || old === null || fromVersion < 1 || fromVersion > 7) return null;
   if (fromVersion === 7) {
-    const saved = old as PogranicheSave;
+    const saved = old as LegacyV8Save;
     if (!hasCurrentSaveShape(saved)) return null;
     const atTrailhead = saved.run?.phase === 'map' && saved.run.nodeId === 'trailhead';
     const tinctures = atTrailhead ? frontierPouchSize(numberOrZero(saved.victories)) : 0;
     return { ...saved, run: saved.run ? withV8Fields(saved.run, tinctures) : null };
   }
   if (fromVersion === 6) {
-    const saved = old as PogranicheSave;
+    const saved = old as LegacyV8Save;
     if (!hasCurrentSaveShape(saved)) return null;
     return { ...saved, run: saved.run ? withCheckpoints(saved.run) : null };
   }
   if (fromVersion === 5) {
-    const saved = old as PogranicheSave;
+    const saved = old as LegacyV8Save;
     if (!hasCurrentSaveShape(saved)) return null;
     return { ...saved, run: saved.run ? withCheckpoints(saved.run) : null, marks: 0, talents: { ...EMPTY_FRONTIER_TALENTS } };
   }
   if (fromVersion === 4) {
-    const saved = old as Partial<PogranicheSave>;
+    const saved = old as Partial<LegacyV8Save>;
     if (!saved.inventory || !saved.loadout) return null;
     return {
       victories: numberOrZero(saved.victories),
@@ -86,7 +108,11 @@ export function migratePogranicheSave(old: unknown, fromVersion: number): Pogran
   }
   const saved = old as LegacySave;
   if (fromVersion === 1) {
-    return { ...defaultPogranicheSave(), victories: numberOrZero(saved.victories) };
+    return {
+      victories: numberOrZero(saved.victories), bestStage: 0, run: null,
+      inventory: { weapons: [...STARTER_INVENTORY.weapons], armors: [...STARTER_INVENTORY.armors] },
+      loadout: { ...DEFAULT_LOADOUT }, marks: 0, talents: { ...EMPTY_FRONTIER_TALENTS },
+    };
   }
 
   const legacyRun = saved.run && isLegacyRun(saved.run) ? saved.run : null;
@@ -110,15 +136,39 @@ export function migratePogranicheSave(old: unknown, fromVersion: number): Pogran
   };
 }
 
+function upgradeV8Save(saved: LegacyV8Save): PogranicheSave {
+  return {
+    chapter: 'prologue',
+    progress: {
+      prologue: { victories: numberOrZero(saved.victories), bestStage: numberOrZero(saved.bestStage) },
+      'chapter-1': { victories: 0, bestStage: 0 },
+    },
+    run: saved.run ? withChapterFields(saved.run) : null,
+    inventory: saved.inventory,
+    loadout: saved.loadout,
+    marks: numberOrZero(saved.marks),
+    talents: saved.talents,
+  };
+}
+
+function withChapterFields(run: ExpeditionState): ExpeditionState {
+  return {
+    ...run,
+    chapter: 'prologue',
+    combat: { ...run.combat, bleed: 0, parryOpen: false },
+  };
+}
+
 function normalizeRun(run: LegacyRun, addV3CombatFields: boolean): ExpeditionState {
   const combat = addV3CombatFields
     ? { ...run.combat, evade: false, feintUsed: false, dodgeCooldown: 0 }
     : { ...run.combat };
   return {
     ...run,
+    chapter: 'prologue',
     nodeId: nodeForLegacyRun(run),
     visited: visitedForLegacyRun(run),
-    combat: { ...combat, scentBonus: 0, tinctures: 0, tinctureUsed: false },
+    combat: { ...combat, scentBonus: 0, tinctures: 0, tinctureUsed: false, bleed: 0, parryOpen: false },
     checkpointHp: combat.playerHp,
     checkpointPotions: combat.potions,
     checkpointEnemyHp: combat.enemyHp,
@@ -141,7 +191,8 @@ function withCheckpoints(run: ExpeditionState): ExpeditionState {
 function withV8Fields(run: ExpeditionState, tinctures = 0): ExpeditionState {
   return {
     ...run,
-    combat: { ...run.combat, tinctures, tinctureUsed: false },
+    chapter: 'prologue',
+    combat: { ...run.combat, tinctures, tinctureUsed: false, bleed: 0, parryOpen: false },
     checkpointTinctures: tinctures,
   };
 }
