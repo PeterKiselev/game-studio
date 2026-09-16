@@ -3,6 +3,7 @@ import {
   EMPTY_FRONTIER_TALENTS,
   STARTER_INVENTORY,
   WEAPONS,
+  frontierPouchSize,
   unlockFrontierLoot,
 } from '@studio/rules';
 import type {
@@ -52,14 +53,21 @@ export function defaultPogranicheSave(): PogranicheSave {
 }
 
 export function migratePogranicheSave(old: unknown, fromVersion: number): PogranicheSave | null {
-  if (typeof old !== 'object' || old === null || fromVersion < 1 || fromVersion > 6) return null;
+  if (typeof old !== 'object' || old === null || fromVersion < 1 || fromVersion > 7) return null;
+  if (fromVersion === 7) {
+    const saved = old as PogranicheSave;
+    if (!hasCurrentSaveShape(saved)) return null;
+    const atTrailhead = saved.run?.phase === 'map' && saved.run.nodeId === 'trailhead';
+    const tinctures = atTrailhead ? frontierPouchSize(numberOrZero(saved.victories)) : 0;
+    return { ...saved, run: saved.run ? withV8Fields(saved.run, tinctures) : null };
+  }
   if (fromVersion === 6) {
-    const saved = old as Omit<PogranicheSave, 'run'> & { run: Omit<ExpeditionState, 'checkpointHp' | 'checkpointPotions' | 'checkpointEnemyHp'> | null };
+    const saved = old as PogranicheSave;
     if (!hasCurrentSaveShape(saved)) return null;
     return { ...saved, run: saved.run ? withCheckpoints(saved.run) : null };
   }
   if (fromVersion === 5) {
-    const saved = old as Omit<PogranicheSave, 'marks' | 'talents' | 'run'> & { run: Omit<ExpeditionState, 'checkpointHp' | 'checkpointPotions' | 'checkpointEnemyHp'> | null };
+    const saved = old as PogranicheSave;
     if (!hasCurrentSaveShape(saved)) return null;
     return { ...saved, run: saved.run ? withCheckpoints(saved.run) : null, marks: 0, talents: { ...EMPTY_FRONTIER_TALENTS } };
   }
@@ -110,20 +118,31 @@ function normalizeRun(run: LegacyRun, addV3CombatFields: boolean): ExpeditionSta
     ...run,
     nodeId: nodeForLegacyRun(run),
     visited: visitedForLegacyRun(run),
-    combat: { ...combat, scentBonus: 0 },
+    combat: { ...combat, scentBonus: 0, tinctures: 0, tinctureUsed: false },
     checkpointHp: combat.playerHp,
     checkpointPotions: combat.potions,
     checkpointEnemyHp: combat.enemyHp,
+    checkpointTinctures: 0,
     nextBattleEffect: null,
   };
 }
 
-function withCheckpoints(run: Omit<ExpeditionState, 'checkpointHp' | 'checkpointPotions' | 'checkpointEnemyHp'>): ExpeditionState {
+function withCheckpoints(run: ExpeditionState): ExpeditionState {
+  const upgraded = withV8Fields(run);
+  return {
+    ...upgraded,
+    checkpointHp: upgraded.combat.playerHp,
+    checkpointPotions: upgraded.combat.potions,
+    checkpointEnemyHp: upgraded.combat.enemyHp,
+    checkpointTinctures: upgraded.combat.tinctures,
+  };
+}
+
+function withV8Fields(run: ExpeditionState, tinctures = 0): ExpeditionState {
   return {
     ...run,
-    checkpointHp: run.combat.playerHp,
-    checkpointPotions: run.combat.potions,
-    checkpointEnemyHp: run.combat.enemyHp,
+    combat: { ...run.combat, tinctures, tinctureUsed: false },
+    checkpointTinctures: tinctures,
   };
 }
 

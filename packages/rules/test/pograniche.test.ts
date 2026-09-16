@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   ARMORS, EMPTY_FRONTIER_TALENTS, ENEMIES, STARTER_INVENTORY, WEAPONS, availableMapNodes, chooseLoot,
   claimVictory, createFrontierCombat, equipFrontierLoot, finishFrontierTurn, frontierIntent, lootOptions,
-  learnFrontierTalent, playFrontierAction, retryEncounter, selectMapNode, startExpedition, unlockFrontierLoot,
+  frontierPouchSize, learnFrontierTalent, playFrontierAction, retryEncounter, selectMapNode, startExpedition, unlockFrontierLoot,
 } from '../src/pograniche';
 import type { ExpeditionState, FrontierAction } from '../src/pograniche';
 
@@ -12,6 +12,10 @@ function begin(): ExpeditionState {
 
 function enterSecondBattle(state: ExpeditionState, path: 'watchtower' | 'hidden-path' = 'watchtower'): ExpeditionState {
   return selectMapNode(selectMapNode(state, path), 'burned-road');
+}
+
+function enterGate(state: ExpeditionState, path: 'wormwood-ravine' | 'forester-lodge' = 'forester-lodge'): ExpeditionState {
+  return selectMapNode(selectMapNode(state, path), 'gate');
 }
 
 function actions(state: ExpeditionState, ...list: FrontierAction[]): ExpeditionState {
@@ -97,7 +101,7 @@ describe('Пограничье: экспедиция', () => {
     state = claimVictory(winCurrent(state));
     expect(state.phase).toBe('loot');
     state = chooseLoot(state, 'warden-shell');
-    state = selectMapNode(state, 'gate');
+    state = enterGate(state);
     expect(state.encounterIndex).toBe(2);
     expect(state.combat.outcome).toBeNull();
     state = claimVictory(winCurrent(state));
@@ -116,7 +120,7 @@ describe('Пограничье: экспедиция', () => {
     state = enterSecondBattle(state, 'hidden-path');
     state = claimVictory(winCurrent(state));
     state = chooseLoot(state, secondLoot);
-    state = selectMapNode(state, 'gate');
+    state = enterGate(state);
     state = claimVictory(winCurrent(state));
     expect(state.phase).toBe('complete');
   });
@@ -324,5 +328,53 @@ describe('Пограничье: экспедиция', () => {
     const capped = { strength: 2, vitality: 0, supplies: 0 };
     expect(learnFrontierTalent(capped, 10, 'strength').talents).toBe(capped);
     expect(learnFrontierTalent(EMPTY_FRONTIER_TALENTS, 0, 'vitality').talents).toBe(EMPTY_FRONTIER_TALENTS);
+  });
+
+  it('настойка бесплатно возвращает одно ОД, но используется только раз за ход', () => {
+    const gear = { weapon: 'road-blade', armor: 'patched-coat' } as const;
+    const combat = createFrontierCombat(0, gear, EMPTY_FRONTIER_TALENTS, 1);
+    const used = playFrontierAction(combat, gear, 'tincture');
+    expect(used.ap).toBe(4);
+    expect(used.tinctures).toBe(0);
+    expect(used.tinctureUsed).toBe(true);
+    expect(playFrontierAction(used, gear, 'tincture')).toBe(used);
+  });
+
+  it('настойка снимает штраф по ОД после оглушения и не тревожит волка', () => {
+    const gear = { weapon: 'road-blade', armor: 'patched-coat' } as const;
+    const stunned = { ...createFrontierCombat(4, gear, EMPTY_FRONTIER_TALENTS, 1), ap: 2, stunned: true };
+    const used = playFrontierAction(stunned, gear, 'tincture');
+    expect(used.ap).toBe(3);
+    expect(used.scentBonus).toBe(0);
+  });
+
+  it('после второго боя выбираются овраг с настойкой или сторожка с лечением', () => {
+    let state = claimVictory(winCurrent(begin()));
+    state = chooseLoot(state, 'watch-cleaver');
+    state = claimVictory(winCurrent(enterSecondBattle(state, 'hidden-path')));
+    state = chooseLoot(state, 'warden-spear');
+    expect(availableMapNodes(state).map((node) => node.id)).toEqual(['wormwood-ravine', 'forester-lodge']);
+
+    const ravine = selectMapNode(state, 'wormwood-ravine');
+    expect(ravine.combat.tinctures).toBe(state.combat.tinctures + 1);
+    expect(availableMapNodes(ravine).map((node) => node.id)).toEqual(['gate']);
+
+    const wounded = { ...state, combat: { ...state.combat, playerHp: 20 } };
+    const lodge = selectMapNode(wounded, 'forester-lodge');
+    expect(lodge.combat.playerHp).toBe(28);
+    expect(availableMapNodes(lodge).map((node) => node.id)).toEqual(['gate']);
+  });
+
+  it('печать привратника открывает кисет на первой и третьей победах', () => {
+    expect([0, 1, 2, 3, 10].map(frontierPouchSize)).toEqual([0, 1, 1, 2, 2]);
+    const state = startExpedition(undefined, EMPTY_FRONTIER_TALENTS, frontierPouchSize(3));
+    expect(state.combat.tinctures).toBe(2);
+    expect(state.checkpointTinctures).toBe(2);
+  });
+
+  it('повтор боя восстанавливает настойки чекпоинта', () => {
+    let state = selectMapNode(startExpedition(undefined, EMPTY_FRONTIER_TALENTS, 1), 'old-road');
+    state = { ...state, combat: { ...state.combat, tinctures: 0, playerHp: 0, outcome: 'lost' } };
+    expect(retryEncounter(state).combat.tinctures).toBe(1);
   });
 });

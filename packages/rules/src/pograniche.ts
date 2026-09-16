@@ -1,10 +1,10 @@
-export type FrontierAction = 'attack' | 'feint' | 'guard' | 'dodge' | 'heavy' | 'potion';
+export type FrontierAction = 'attack' | 'feint' | 'guard' | 'dodge' | 'heavy' | 'potion' | 'tincture';
 export type CombatOutcome = 'won' | 'lost' | null;
 export type WeaponId = 'road-blade' | 'watch-cleaver' | 'warden-spear';
 export type ArmorId = 'patched-coat' | 'chain-jacket' | 'warden-shell';
 export type LootId = WeaponId | ArmorId;
 export type ExpeditionPhase = 'map' | 'battle' | 'loot' | 'complete';
-export type MapNodeId = 'trailhead' | 'old-road' | 'watchtower' | 'hidden-path' | 'rat-den' | 'bear-cave' | 'wolf-woods' | 'hollow-grove' | 'burned-road' | 'gate' | 'city';
+export type MapNodeId = 'trailhead' | 'old-road' | 'watchtower' | 'hidden-path' | 'rat-den' | 'bear-cave' | 'wolf-woods' | 'hollow-grove' | 'burned-road' | 'wormwood-ravine' | 'forester-lodge' | 'gate' | 'city';
 export type MapNodeKind = 'start' | 'battle' | 'event' | 'finish';
 export type NextBattleEffect = 'supplies' | 'ambush' | null;
 export type FrontierTalentId = 'strength' | 'vitality' | 'supplies';
@@ -20,6 +20,10 @@ export const FRONTIER_TALENT_CAPS: Readonly<Record<FrontierTalentId, number>> = 
 
 export function frontierTalentCost(talents: FrontierTalents, id: FrontierTalentId): number {
   return talents[id] + 1;
+}
+
+export function frontierPouchSize(victories: number): number {
+  return victories >= 3 ? 2 : victories >= 1 ? 1 : 0;
 }
 
 export function learnFrontierTalent(talents: FrontierTalents, marks: number, id: FrontierTalentId): { talents: FrontierTalents; marks: number } {
@@ -79,6 +83,8 @@ export interface CombatState {
   enemyHp: number;
   ap: number;
   potions: number;
+  tinctures: number;
+  tinctureUsed: boolean;
   guard: boolean;
   guardUsed: boolean;
   evade: boolean;
@@ -116,6 +122,7 @@ export interface ExpeditionState {
   checkpointHp: number;
   checkpointPotions: number;
   checkpointEnemyHp: number;
+  checkpointTinctures: number;
   nextBattleEffect: NextBattleEffect;
 }
 
@@ -124,6 +131,7 @@ export interface FrontierMapNode {
   kind: MapNodeKind;
   name: string;
   description: string;
+  label?: string;
   enemyIndex?: number;
   next: readonly MapNodeId[];
 }
@@ -226,13 +234,15 @@ export const ENEMIES: readonly Enemy[] = [
 export const EXPEDITION_MAP: readonly FrontierMapNode[] = [
   { id: 'trailhead', kind: 'start', name: 'Начало пути', description: 'Выбери первый участок дороги.', next: ['old-road'] },
   { id: 'old-road', kind: 'battle', name: 'Старая дорога', description: 'Ржавый страж перекрыл тракт.', enemyIndex: 0, next: ['watchtower', 'hidden-path'] },
-  { id: 'watchtower', kind: 'event', name: 'Заброшенная башня', description: 'В тайнике осталось дополнительное зелье.', next: ['burned-road', 'rat-den', 'bear-cave'] },
-  { id: 'hidden-path', kind: 'event', name: 'Скрытая тропа', description: 'Можно зайти следующему врагу во фланг и начать бой с преимуществом.', next: ['burned-road', 'wolf-woods', 'hollow-grove'] },
+  { id: 'watchtower', kind: 'event', name: 'Заброшенная башня', description: 'В тайнике осталось дополнительное зелье.', label: 'ЗАПАСЫ', next: ['burned-road', 'rat-den', 'bear-cave'] },
+  { id: 'hidden-path', kind: 'event', name: 'Скрытая тропа', description: 'Можно зайти следующему врагу во фланг и начать бой с преимуществом.', label: 'ЗАСАДА', next: ['burned-road', 'wolf-woods', 'hollow-grove'] },
   { id: 'rat-den', kind: 'battle', name: 'Крысиное логово', description: 'Стая атакует несколькими укусами. Уклонение надёжнее блока.', enemyIndex: 3, next: ['burned-road'] },
   { id: 'bear-cave', kind: 'battle', name: 'Медвежья пещера', description: 'Медведь отвечает на неосторожные тяжёлые удары.', enemyIndex: 6, next: ['burned-road'] },
   { id: 'wolf-woods', kind: 'battle', name: 'Волчья низина', description: 'Волк чует запах зелий и усиливает следующую атаку.', enemyIndex: 4, next: ['burned-road'] },
   { id: 'hollow-grove', kind: 'battle', name: 'Мёртвая роща', description: 'Рога пробивают блок — от разгона спасает только уклонение.', enemyIndex: 5, next: ['burned-road'] },
-  { id: 'burned-road', kind: 'battle', name: 'Сгоревший тракт', description: 'Пепельный гончий почуял добычу.', enemyIndex: 1, next: ['gate'] },
+  { id: 'burned-road', kind: 'battle', name: 'Сгоревший тракт', description: 'Пепельный гончий почуял добычу.', enemyIndex: 1, next: ['wormwood-ravine', 'forester-lodge'] },
+  { id: 'wormwood-ravine', kind: 'event', name: 'Полынный овраг', description: 'Собрать полынь: +1 настойка, которая возвращает 1 ОД в бою.', label: 'ПОЛЫНЬ', next: ['gate'] },
+  { id: 'forester-lodge', kind: 'event', name: 'Сторожка лесника', description: 'Отдохнуть перед воротами и восстановить до 8 здоровья.', label: 'НОЧЛЕГ', next: ['gate'] },
   { id: 'gate', kind: 'battle', name: 'Ворота Пограничья', description: 'Последний привратник ждёт у ворот.', enemyIndex: 2, next: ['city'] },
   { id: 'city', kind: 'finish', name: 'Пограничье', description: 'Ворота открыты.', next: [] },
 ] as const;
@@ -252,12 +262,13 @@ function toLoot(item: Weapon | Armor): LootOption {
   };
 }
 
-export function startExpedition(loadout: FrontierGear = { weapon: 'road-blade', armor: 'patched-coat' }, talents: FrontierTalents = EMPTY_FRONTIER_TALENTS): ExpeditionState {
+export function startExpedition(loadout: FrontierGear = { weapon: 'road-blade', armor: 'patched-coat' }, talents: FrontierTalents = EMPTY_FRONTIER_TALENTS, tinctures = 0): ExpeditionState {
   const gear = { ...loadout };
-  const combat = createFrontierCombat(0, gear, talents);
+  const combat = createFrontierCombat(0, gear, talents, tinctures);
   return {
     phase: 'map', nodeId: 'trailhead', visited: ['trailhead'], encounterIndex: 0, gear, combat,
     checkpointHp: combat.playerHp, checkpointPotions: combat.potions, checkpointEnemyHp: combat.enemyHp,
+    checkpointTinctures: combat.tinctures,
     nextBattleEffect: null,
   };
 }
@@ -272,15 +283,26 @@ export function selectMapNode(state: ExpeditionState, id: MapNodeId, talents: Fr
   const target = availableMapNodes(state).find((node) => node.id === id);
   if (!target) return state;
   if (target.kind === 'event') {
+    const combat = cloneCombat(state.combat);
+    if (target.id === 'wormwood-ravine') {
+      combat.tinctures++;
+      combat.log.unshift('В овраге собрана полынная настойка: +1 ОД при использовании в бою.');
+    } else if (target.id === 'forester-lodge') {
+      const maxHp = ARMORS[state.gear.armor].maxHp + talents.vitality * 4;
+      const healed = Math.min(8, maxHp - combat.playerHp);
+      combat.playerHp += healed;
+      combat.log.unshift(healed > 0 ? `Ночлег восстановил ${healed} здоровья.` : 'В сторожке не пришлось лечить раны: здоровье полное.');
+    }
     return {
       ...state,
+      combat,
       nodeId: target.id,
       visited: state.visited.includes(target.id) ? state.visited : [...state.visited, target.id],
-      nextBattleEffect: target.id === 'watchtower' ? 'supplies' : 'ambush',
+      nextBattleEffect: target.id === 'watchtower' ? 'supplies' : target.id === 'hidden-path' ? 'ambush' : state.nextBattleEffect,
     };
   }
   if (target.kind !== 'battle' || target.enemyIndex === undefined) return state;
-  const combat = createFrontierCombat(target.enemyIndex, state.gear, talents);
+  const combat = createFrontierCombat(target.enemyIndex, state.gear, talents, state.combat.tinctures);
   const maxHp = ARMORS[state.gear.armor].maxHp + talents.vitality * 4;
   combat.playerHp = clamp(state.combat.playerHp, 1, maxHp);
   combat.potions = Math.max(0, state.combat.potions);
@@ -301,16 +323,17 @@ export function selectMapNode(state: ExpeditionState, id: MapNodeId, talents: Fr
     checkpointHp: combat.playerHp,
     checkpointPotions: combat.potions,
     checkpointEnemyHp: combat.enemyHp,
+    checkpointTinctures: combat.tinctures,
     nextBattleEffect: null,
   };
 }
 
-export function createFrontierCombat(enemyIndex: number, gear: FrontierGear, talents: FrontierTalents = EMPTY_FRONTIER_TALENTS): CombatState {
+export function createFrontierCombat(enemyIndex: number, gear: FrontierGear, talents: FrontierTalents = EMPTY_FRONTIER_TALENTS, tinctures = 0): CombatState {
   const enemy = ENEMIES[enemyIndex];
   if (!enemy) throw new RangeError(`Unknown encounter: ${enemyIndex}`);
   return {
     enemyIndex, turn: 1, playerHp: ARMORS[gear.armor].maxHp + talents.vitality * 4, enemyHp: enemy.maxHp,
-    ap: 3, potions: 2 + talents.supplies, guard: false, guardUsed: false, evade: false,
+    ap: 3, potions: 2 + talents.supplies, tinctures, tinctureUsed: false, guard: false, guardUsed: false, evade: false,
     feintUsed: false, dodgeCooldown: 0, heavyCooldown: 0, scentBonus: 0,
     rage: 0, blood: false, damageThisTurn: 0, heavyThisTurn: false,
     charged: false, stunned: false, outcome: null,
@@ -400,7 +423,7 @@ export function playFrontierAction(
     if (!next.outcome && retaliation > 0 && currentIntent.kind !== 'windup' && currentIntent.kind !== 'stance') {
       hurtPlayer(next, armor, retaliation, 'Ответный удар зверя');
     }
-  } else {
+  } else if (action === 'potion') {
     const maxHp = armor.maxHp + talents.vitality * 4;
     if (!canPay(next, 1) || next.potions === 0 || next.playerHp === maxHp) return state;
     next.ap--;
@@ -413,6 +436,12 @@ export function playFrontierAction(
       next.scentBonus = Math.max(next.scentBonus, scent);
       next.log.unshift(`Волк чует зелье: следующая атака получит +${scent} урона.`);
     }
+  } else {
+    if (next.outcome || next.tinctures === 0 || next.tinctureUsed || next.ap >= 4) return state;
+    next.tinctures--;
+    next.tinctureUsed = true;
+    next.ap++;
+    next.log.unshift('Полынная настойка вернула 1 ОД.');
   }
 
   return next.ap === 0 && !next.outcome ? finishFrontierTurn(next, gear) : next;
@@ -462,6 +491,7 @@ export function finishFrontierTurn(state: CombatState, gear: FrontierGear): Comb
   next.guardUsed = false;
   next.evade = false;
   next.feintUsed = false;
+  next.tinctureUsed = false;
   next.heavyThisTurn = false;
   next.damageThisTurn = 0;
   next.dodgeCooldown = Math.max(0, next.dodgeCooldown - 1);
@@ -507,8 +537,9 @@ export function retryEncounter(state: ExpeditionState, talents: FrontierTalents 
   const maxHp = ARMORS[state.gear.armor].maxHp + talents.vitality * 4;
   combat.playerHp = clamp(state.checkpointHp, 1, maxHp);
   combat.potions = Math.max(0, state.checkpointPotions);
+  combat.tinctures = Math.max(0, state.checkpointTinctures);
   combat.enemyHp = clamp(state.checkpointEnemyHp, 1, ENEMIES[state.encounterIndex].maxHp);
-  combat.log.unshift(`Повтор с чекпоинта: ${combat.playerHp} здоровья, зелий ${combat.potions}, у врага ${combat.enemyHp} здоровья.`);
+  combat.log.unshift(`Повтор с чекпоинта: ${combat.playerHp} здоровья, зелий ${combat.potions}, настоек ${combat.tinctures}, у врага ${combat.enemyHp} здоровья.`);
   return { ...state, combat };
 }
 

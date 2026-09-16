@@ -89,4 +89,42 @@ describe('Пограничье: миграция сохранения', () => {
       run: null,
     }, 6)).toBeNull();
   });
+
+  it('добавляет настойки и их чекпоинт в save v7 без подарка посреди похода', () => {
+    const current = selectMapNode(startExpedition(), 'old-road');
+    const { checkpointTinctures: _checkpoint, ...runWithoutCheckpoint } = current;
+    const { tinctures: _tinctures, tinctureUsed: _used, ...combatWithoutTinctures } = current.combat;
+    const legacy = {
+      victories: 4,
+      bestStage: 2,
+      run: { ...runWithoutCheckpoint, combat: combatWithoutTinctures },
+      inventory: { weapons: ['road-blade'] as const, armors: ['patched-coat'] as const },
+      loadout: { weapon: 'road-blade' as const, armor: 'patched-coat' as const },
+      marks: 1,
+      talents: { strength: 1, vitality: 0, supplies: 0 },
+    };
+    const migrated = migratePogranicheSave(legacy, 7);
+    expect(migrated?.run?.combat.tinctures).toBe(0);
+    expect(migrated?.run?.combat.tinctureUsed).toBe(false);
+    expect(migrated?.run?.checkpointTinctures).toBe(0);
+    expect(migrated?.victories).toBe(4);
+    expect(migrated?.marks).toBe(1);
+  });
+
+  it('выдаёт заслуженный кисет при миграции v7, если поход ещё не начат', () => {
+    const current = startExpedition();
+    const { checkpointTinctures: _checkpoint, ...runWithoutCheckpoint } = current;
+    const { tinctures: _tinctures, tinctureUsed: _used, ...combatWithoutTinctures } = current.combat;
+    const migrated = migratePogranicheSave({
+      victories: 4,
+      bestStage: 3,
+      run: { ...runWithoutCheckpoint, combat: combatWithoutTinctures },
+      inventory: { weapons: ['road-blade'] as const, armors: ['patched-coat'] as const },
+      loadout: { weapon: 'road-blade' as const, armor: 'patched-coat' as const },
+      marks: 0,
+      talents: { strength: 0, vitality: 0, supplies: 0 },
+    }, 7);
+    expect(migrated?.run?.combat.tinctures).toBe(2);
+    expect(migrated?.run?.checkpointTinctures).toBe(2);
+  });
 });

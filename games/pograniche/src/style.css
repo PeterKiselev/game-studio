@@ -67,6 +67,7 @@ progress{display:block;width:100%;height:13px;margin-top:14px;accent-color:var(-
 .actions button>span{grid-row:1/3;color:var(--gold);font-size:21px}
 .actions button strong{font:700 13px var(--font-ui)}
 .actions button small{color:var(--ink-2);font:10px var(--font-ui)}
+.actions button[data-action="tincture"]{grid-column:1/-1}
 .actions button:hover:not(:disabled),.actions button.chosen,.loot-card:hover{border-color:var(--gold);background:var(--felt-soft)}
 .actions button:focus-visible,.end-turn:focus-visible,.loot-card:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
 .actions button:disabled,.end-turn:disabled{opacity:.38;cursor:default}
@@ -101,7 +102,8 @@ progress{display:block;width:100%;height:13px;margin-top:14px;accent-color:var(-
 .loot-card strong{display:block;margin:6px 0;font-size:20px}
 .loot-card p{margin:0;color:var(--ink-2);font:12px/1.45 var(--font-ui)}
 .inventory-slots{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:24px;text-align:left}
-.marks-balance{max-width:280px;margin:0 auto 14px;padding:10px 14px;border:1px solid var(--gold);color:var(--gold);font:11px var(--font-ui);letter-spacing:.12em}
+.progress-balances{display:flex;justify-content:center;gap:10px;flex-wrap:wrap;margin-bottom:14px}
+.marks-balance{max-width:280px;margin:0;padding:10px 14px;border:1px solid var(--gold);color:var(--gold);font:11px var(--font-ui);letter-spacing:.12em}
 .marks-balance strong{margin-left:8px;font:700 20px var(--font-num)}
 .talent-list{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:20px}
 .talent-card{appearance:none;padding:14px;display:grid;gap:6px;border:1px solid var(--line);background:var(--surface-2);color:var(--ink);text-align:left;cursor:pointer}
@@ -123,6 +125,7 @@ progress{display:block;width:100%;height:13px;margin-top:14px;accent-color:var(-
 .ending-actions{display:flex;justify-content:center;gap:10px;flex-wrap:wrap}
 .gate{margin:0 auto 15px;width:145px;height:145px;display:grid;place-items:center;border:1px solid var(--gold);color:var(--gold);font-size:92px}
 .final-gear{margin:0 auto 22px;padding:14px;max-width:460px;color:var(--gold);font:600 14px var(--font-ui)}
+.seal-status{max-width:560px;margin:0 auto 14px;padding:12px 16px;border:1px solid var(--gold);background:var(--felt-soft);color:var(--gold);font:700 12px/1.5 var(--font-ui);letter-spacing:.06em}
 footer{padding:18px 0 0;text-align:center;color:var(--ink-3);font:11px var(--font-ui)}
 
 @media(max-width:780px){main{padding:12px}
