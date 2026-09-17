@@ -149,4 +149,33 @@ describe('Пограничье: миграция сохранения', () => {
     expect(migrated?.run?.combat.bleed).toBe(0);
     expect(migrated?.run?.combat.parryOpen).toBe(false);
   });
+
+  it('добавляет город в save v9 без потери главы и похода', () => {
+    const run = startExpedition({ weapon: 'warden-spear', armor: 'warden-shell' }, undefined, 1, 'chapter-1');
+    const legacy = {
+      chapter: 'chapter-1' as const,
+      progress: { prologue: { victories: 2, bestStage: 3 }, 'chapter-1': { victories: 1, bestStage: 2 } },
+      run,
+      inventory: { weapons: ['road-blade', 'warden-spear'] as const, armors: ['patched-coat', 'warden-shell'] as const },
+      loadout: { weapon: 'warden-spear' as const, armor: 'warden-shell' as const },
+      marks: 4,
+      talents: { strength: 1, vitality: 1, supplies: 0 },
+    };
+    const migrated = migratePogranicheSave(legacy, 9);
+    expect(migrated?.chapter).toBe('chapter-1');
+    expect(migrated?.run?.nodeId).toBe('gate-yard');
+    expect(migrated?.marks).toBe(4);
+    expect(migrated?.city).toEqual({ forgeLevel: 0, extraPotion: false, contract: null });
+  });
+
+  it('отклоняет повреждённый save v9 до запуска интерфейса', () => {
+    const broken = {
+      chapter: 'chapter-1', progress: null, run: null,
+      inventory: { weapons: ['road-blade'], armors: ['patched-coat'] },
+      loadout: { weapon: 'road-blade', armor: 'patched-coat' },
+      marks: 2, talents: { strength: 0, vitality: 0, supplies: 0 },
+    };
+    expect(migratePogranicheSave(broken, 9)).toBeNull();
+    expect(migratePogranicheSave({ ...broken, progress: { prologue: { victories: 1, bestStage: 3 }, 'chapter-1': { victories: 0, bestStage: 0 } }, talents: null }, 9)).toBeNull();
+  });
 });

@@ -1,5 +1,6 @@
 import {
   ARMORS,
+  DEFAULT_FRONTIER_CITY,
   EMPTY_FRONTIER_TALENTS,
   STARTER_INVENTORY,
   WEAPONS,
@@ -11,6 +12,7 @@ import type {
   ChapterId,
   ExpeditionState,
   FrontierGear,
+  FrontierCityState,
   FrontierInventory,
   FrontierTalents,
   MapNodeId,
@@ -24,7 +26,10 @@ export interface PogranicheSave {
   loadout: FrontierGear;
   marks: number;
   talents: FrontierTalents;
+  city: FrontierCityState;
 }
+
+type LegacyV9Save = Omit<PogranicheSave, 'city'>;
 
 interface LegacyV8Save {
   victories: number;
@@ -60,11 +65,17 @@ export function defaultPogranicheSave(): PogranicheSave {
     loadout: { ...DEFAULT_LOADOUT },
     marks: 0,
     talents: { ...EMPTY_FRONTIER_TALENTS },
+    city: { ...DEFAULT_FRONTIER_CITY },
   };
 }
 
 export function migratePogranicheSave(old: unknown, fromVersion: number): PogranicheSave | null {
-  if (typeof old !== 'object' || old === null || fromVersion < 1 || fromVersion > 8) return null;
+  if (typeof old !== 'object' || old === null || fromVersion < 1 || fromVersion > 9) return null;
+  if (fromVersion === 9) {
+    const saved = old as LegacyV9Save;
+    if (!hasV9SaveShape(saved)) return null;
+    return { ...saved, city: { ...DEFAULT_FRONTIER_CITY } };
+  }
   if (fromVersion === 8) {
     const saved = old as LegacyV8Save;
     if (!hasCurrentSaveShape(saved)) return null;
@@ -148,6 +159,7 @@ function upgradeV8Save(saved: LegacyV8Save): PogranicheSave {
     loadout: saved.loadout,
     marks: numberOrZero(saved.marks),
     talents: saved.talents,
+    city: { ...DEFAULT_FRONTIER_CITY },
   };
 }
 
@@ -210,6 +222,22 @@ function hasCurrentSaveShape(saved: { inventory?: unknown; loadout?: unknown; ru
   if (typeof run.combat !== 'object' || run.combat === null) return false;
   const combat = run.combat as { playerHp?: unknown; potions?: unknown; enemyHp?: unknown };
   return Number.isFinite(combat.playerHp) && Number.isFinite(combat.potions) && Number.isFinite(combat.enemyHp);
+}
+
+function hasV9SaveShape(saved: Partial<LegacyV9Save>): saved is LegacyV9Save {
+  if (!hasCurrentSaveShape(saved)) return false;
+  if (saved.chapter !== 'prologue' && saved.chapter !== 'chapter-1') return false;
+  if (!saved.progress || typeof saved.progress !== 'object') return false;
+  const progress = saved.progress as Partial<Record<ChapterId, { victories?: unknown; bestStage?: unknown }>>;
+  const validProgress = (chapter: ChapterId): boolean => {
+    const value = progress[chapter];
+    return Boolean(value) && Number.isFinite(value?.victories) && Number.isFinite(value?.bestStage);
+  };
+  if (!validProgress('prologue') || !validProgress('chapter-1')) return false;
+  if (!Number.isFinite(saved.marks) || !saved.talents || typeof saved.talents !== 'object') return false;
+  return Number.isFinite(saved.talents.strength)
+    && Number.isFinite(saved.talents.vitality)
+    && Number.isFinite(saved.talents.supplies);
 }
 
 function visitedForLegacyRun(run: LegacyRun): MapNodeId[] {

@@ -60,7 +60,7 @@ main{width:100%;padding:22px}
 .enemy-figure[data-enemy="bog-viper"]{background-position:75% center}
 .enemy-figure[data-enemy="toll-hound"]{background-position:100% center}
 .fighter-info{flex:1;min-width:0}
-.fighter-info small,.intent span,.gear-strip small,.result-card>small,.chapter-mark,.ending-screen>small,.loot-card small{display:block;color:var(--gold);font:10px/1.4 var(--font-ui);letter-spacing:.14em}
+.fighter-info small,.intent span,.gear-strip small,.result-card>small,.chapter-mark,.ending-screen>small,.loot-card small,.city-places article>small,.city-hero small{display:block;color:var(--gold);font:10px/1.4 var(--font-ui);letter-spacing:.14em}
 .fighter-info strong{display:block;margin-top:7px;font-size:20px}
 progress{display:block;width:100%;height:13px;margin-top:14px;accent-color:var(--danger)}
 .hero-card progress{accent-color:var(--side-1)}
@@ -94,9 +94,23 @@ progress{display:block;width:100%;height:13px;margin-top:14px;accent-color:var(-
 .result-card p{margin:0 0 15px;color:var(--ink-2);font:13px var(--font-ui)}
 .result-actions{display:flex;justify-content:center;gap:10px;flex-wrap:wrap}
 .result-card .btn,.ending-screen .btn{min-width:220px}
-.map-screen,.loot-screen,.inventory-screen,.ending-screen{max-width:860px;margin:34px auto;text-align:center}
-.map-screen h1,.loot-screen h1,.inventory-screen h1,.ending-screen h1{margin:8px 0;font-size:clamp(38px,7vw,68px);text-transform:uppercase}
-.map-screen>p,.loot-screen>p,.inventory-screen>p,.ending-screen>p{max-width:600px;margin:0 auto 28px;color:var(--ink-2);font-family:var(--font-ui)}
+.map-screen,.loot-screen,.inventory-screen,.ending-screen,.city-screen{max-width:860px;margin:34px auto;text-align:center}
+.map-screen h1,.loot-screen h1,.inventory-screen h1,.ending-screen h1,.city-screen>h1{margin:8px 0;font-size:clamp(38px,7vw,68px);text-transform:uppercase}
+.map-screen>p,.loot-screen>p,.inventory-screen>p,.ending-screen>p,.city-screen>p{max-width:600px;margin:0 auto 28px;color:var(--ink-2);font-family:var(--font-ui)}
+.map-footer-actions,.city-actions{display:flex;justify-content:center;gap:10px;flex-wrap:wrap}
+.city-balance{width:max-content;max-width:100%;margin:-12px auto 18px;padding:10px 15px;border:1px solid var(--gold);color:var(--gold);font:11px var(--font-ui);letter-spacing:.12em}
+.city-balance strong{margin-left:8px;font:700 20px var(--font-num)}
+.city-hero{display:flex;align-items:center;justify-content:center;gap:22px;margin-bottom:16px;padding:18px;border:1px solid var(--line);background:var(--surface);text-align:left;box-shadow:var(--shadow)}
+.city-hero h2{margin:4px 0 10px;font-size:25px}
+.city-loadout{display:grid;grid-template-columns:58px 1fr 58px 1fr;align-items:center;gap:8px;font:600 12px var(--font-ui)}
+.city-loadout .item-preview{width:58px;height:58px;border:1px solid var(--line)}
+.city-places{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;text-align:left}
+.city-places article{padding:20px;border:1px solid var(--line);background:var(--surface);box-shadow:var(--shadow)}
+.city-places article h2{margin:5px 0 8px;font-size:23px}
+.city-places article p{min-height:50px;margin:0 0 15px;color:var(--ink-2);font:12px/1.5 var(--font-ui)}
+.city-places .contract-place{grid-column:1/-1}
+.city-places .btn{width:100%}
+#contract-actions{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
 .expedition-resources{width:max-content;max-width:100%;margin:-12px auto 22px;padding:9px 14px;border:1px solid var(--line);background:var(--surface-2);color:var(--gold);font:700 11px/1.35 var(--font-ui);letter-spacing:.08em}
 .chapter-switcher{display:flex;justify-content:center;gap:8px;flex-wrap:wrap;margin:0 auto 20px}
 .chapter-choice{appearance:none;min-height:40px;padding:8px 15px;border:1px solid var(--line);background:var(--surface);color:var(--ink-2);font:700 11px var(--font-ui);letter-spacing:.08em;text-transform:uppercase;cursor:pointer}
@@ -166,10 +180,11 @@ footer{padding:18px 0 0;text-align:center;color:var(--ink-3);font:11px var(--fon
 .gear-strip>div{padding:9px;gap:5px}
 .gear-item-preview{width:46px;height:46px}
 .loot-list{grid-template-columns:1fr}
-.map-screen,.loot-screen,.inventory-screen,.ending-screen{margin-top:24px}
+.map-screen,.loot-screen,.inventory-screen,.ending-screen,.city-screen{margin-top:24px}
 .expedition-map{grid-template-columns:repeat(4,1fr)}
 .map-options,.inventory-slots{grid-template-columns:1fr}
 .talent-list{grid-template-columns:1fr}
+.city-hero{align-items:flex-start;gap:12px;padding:12px}.city-loadout{grid-template-columns:50px 1fr}.city-loadout .item-preview{width:50px;height:50px}.city-places{grid-template-columns:1fr}.city-places .contract-place{grid-column:auto}#contract-actions{grid-template-columns:1fr}
 }
 
 

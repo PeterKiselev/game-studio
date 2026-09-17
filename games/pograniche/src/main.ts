@@ -1,11 +1,11 @@
 import { GameApp } from '@studio/game-kit';
 import {
-  ARMORS, CHAPTERS, ENEMIES, EXPEDITION_MAP, FRONTIER_TALENT_CAPS, WEAPONS, availableMapNodes,
-  chooseLoot, claimVictory, equipFrontierLoot, finishFrontierTurn, frontierIntent,
+  ARMORS, CHAPTERS, ENEMIES, EXPEDITION_MAP, FRONTIER_TALENT_CAPS, WEAPONS, acceptFrontierContract, applyFrontierForge, availableMapNodes,
+  buyFrontierPotion, chooseLoot, claimFrontierContract, claimVictory, equipFrontierLoot, finishFrontierTurn, frontierIntent,
   chapterStage, frontierPouchSize, frontierTalentCost, isFinalStage, learnFrontierTalent, lootOptions, playFrontierAction,
-  retryEncounter, selectMapNode, startExpedition, unlockFrontierLoot,
+  improveFrontierForge, progressFrontierContract, retryEncounter, selectMapNode, startExpedition, unlockFrontierLoot,
 } from '@studio/rules';
-import type { ChapterId, FrontierAction, FrontierTalentId, LootId, MapNodeId } from '@studio/rules';
+import type { ChapterId, FrontierAction, FrontierContractId, FrontierTalentId, LootId, MapNodeId } from '@studio/rules';
 import { haptic } from '@studio/ui';
 import { defaultPogranicheSave, migratePogranicheSave } from './save';
 import type { PogranicheSave } from './save';
@@ -16,15 +16,22 @@ const root = document.getElementById('app')!;
 
 async function main(): Promise<void> {
   const app = await GameApp.boot<PogranicheSave>({
-    gameId: 'pograniche', saveVersion: 9,
+    gameId: 'pograniche', saveVersion: 10,
     defaults: defaultPogranicheSave(),
     migrate: migratePogranicheSave,
     adPolicy: { firstAdAfterRounds: 2, minSecondsBetween: 180 },
   });
 
-  const freshExpedition = (chapter: ChapterId = app.save.data.chapter): ReturnType<typeof startExpedition> => startExpedition(app.save.data.loadout, app.save.data.talents, frontierPouchSize(app.save.data.progress.prologue.victories), chapter);
+  const effectiveTalents = (): typeof app.save.data.talents => applyFrontierForge(app.save.data.talents, app.save.data.city);
+  const freshExpedition = (chapter: ChapterId = app.save.data.chapter): ReturnType<typeof startExpedition> => {
+    const expedition = startExpedition(app.save.data.loadout, effectiveTalents(), frontierPouchSize(app.save.data.progress.prologue.victories), chapter);
+    if (!app.save.data.city.extraPotion) return expedition;
+    return { ...expedition, combat: { ...expedition.combat, potions: expedition.combat.potions + 1, log: ['Лавка снарядила героя дополнительным зельем.', ...expedition.combat.log] }, checkpointPotions: expedition.checkpointPotions + 1 };
+  };
   let run = app.save.data.run ?? freshExpedition();
   let inventoryOpen = false;
+  let cityOpen = false;
+  let inventoryReturnsToCity = false;
   let roundClosed = run.phase !== 'battle' || run.combat.outcome !== null;
   root.innerHTML = `
     <main>
@@ -35,7 +42,7 @@ async function main(): Promise<void> {
         <div class="chapter-switcher" id="chapter-switcher"></div>
         <div class="expedition-map" id="expedition-map" aria-label="Карта маршрута"></div>
         <div class="map-options" id="map-options"></div>
-        <button type="button" class="btn secondary" id="map-inventory">Снаряжение и инвентарь</button>
+        <div class="map-footer-actions"><button type="button" class="btn secondary" id="map-inventory">Снаряжение и инвентарь</button><button type="button" class="btn primary" id="map-city">Войти в город</button></div>
       </section>
       <section class="screen battle-screen" id="battle-screen">
         <div class="journey"><span id="location"></span><div class="route" id="route" aria-label="Прогресс похода"></div></div>
@@ -53,7 +60,18 @@ async function main(): Promise<void> {
       </section>
       <section class="screen loot-screen" id="loot-screen" hidden><div class="chapter-mark">ДОРОГА ОТКРЫТА</div><h1>Выбери добычу</h1><p id="loot-copy"></p><div class="loot-list" id="loot-list"></div></section>
       <section class="screen inventory-screen" id="inventory-screen" hidden><div class="chapter-mark">ПОСТОЯННАЯ КОЛЛЕКЦИЯ</div><h1>Снаряжение</h1><p>Найденные вещи и выученные навыки остаются между походами.</p><div class="progress-balances"><div class="marks-balance">ЗВЕРИНЫЕ МЕТКИ <strong id="marks-balance">0</strong></div><div class="marks-balance">ПЕЧАТЬ ПРИВРАТНИКА <strong id="seal-balance">0 / 2</strong></div></div><div class="talent-list" id="talent-list"></div><div class="inventory-slots"><section><h2>Оружие</h2><div class="inventory-list" id="inventory-weapons"></div></section><section><h2>Броня</h2><div class="inventory-list" id="inventory-armors"></div></section></div><button type="button" class="btn secondary" id="inventory-back">Вернуться</button></section>
-      <section class="screen ending-screen" id="ending-screen" hidden><div class="gate" aria-hidden="true">♜</div><small id="ending-kicker"></small><h1 id="ending-title"></h1><p id="ending-copy"></p><div class="seal-status" id="seal-status"></div><div class="final-gear" id="final-gear"></div><div class="ending-actions"><button type="button" class="btn secondary" id="ending-inventory">Выбрать снаряжение</button><button type="button" class="btn secondary" id="new-expedition">Повторить главу</button><button type="button" class="btn primary" id="continue-chapter" hidden>Начать главу «За воротами»</button></div></section>
+      <section class="screen city-screen" id="city-screen" hidden>
+        <div class="chapter-mark">РАТУШНАЯ ПЛОЩАДЬ</div><h1>Город</h1><p>Подготовь следующий поход. Здесь тратятся только заработанные в боях звериные метки.</p>
+        <div class="city-balance">ЗВЕРИНЫЕ МЕТКИ <strong id="city-marks">0</strong></div>
+        <div class="city-hero"><div class="figure hero-figure" id="city-hero-art" role="img"></div><div><small>СТРАННИК</small><h2>Перед выходом</h2><div class="city-loadout"><span class="item-preview" id="city-weapon-art" role="img"></span><strong id="city-weapon-name"></strong><span class="item-preview" id="city-armor-art" role="img"></span><strong id="city-armor-name"></strong></div></div></div>
+        <div class="city-places">
+          <article><small>КУЗНИЦА</small><h2>Закалка клинка</h2><p>Постоянно: +1 к быстрой и +2 к тяжёлой атаке для любого оружия.</p><button type="button" class="btn secondary" id="city-forge"></button></article>
+          <article><small>ЛАВКА ЗЕЛЬЯРКИ</small><h2>Походный запас</h2><p>Одно дополнительное зелье в начале следующего похода. Расходуется при выходе.</p><button type="button" class="btn secondary" id="city-potion"></button></article>
+          <article class="contract-place"><small>ДОСКА ПОРУЧЕНИЙ</small><h2 id="contract-title">Выбери поручение</h2><p id="contract-copy"></p><div id="contract-actions"></div></article>
+        </div>
+        <div class="city-actions"><button type="button" class="btn secondary" id="city-inventory">Сменить снаряжение</button><button type="button" class="btn primary" id="city-back">Вернуться к походу</button></div>
+      </section>
+      <section class="screen ending-screen" id="ending-screen" hidden><div class="gate" aria-hidden="true">♜</div><small id="ending-kicker"></small><h1 id="ending-title"></h1><p id="ending-copy"></p><div class="seal-status" id="seal-status"></div><div class="final-gear" id="final-gear"></div><div class="ending-actions"><button type="button" class="btn secondary" id="ending-inventory">Выбрать снаряжение</button><button type="button" class="btn secondary" id="ending-city">Войти в город</button><button type="button" class="btn secondary" id="new-expedition">Повторить главу</button><button type="button" class="btn primary" id="continue-chapter" hidden>Начать главу «За воротами»</button></div></section>
       <footer>Намерение врага известно заранее. Побеждает не скорость, а порядок действий.</footer>
     </main>`;
 
@@ -107,11 +125,13 @@ async function main(): Promise<void> {
     }));
     const atStart = run.nodeId === chapter.start;
     byId<HTMLButtonElement>('map-inventory').hidden = !atStart;
+    byId<HTMLButtonElement>('map-city').hidden = !atStart || app.save.data.progress.prologue.victories < 1;
     const availableChapters = (Object.values(CHAPTERS)).filter((candidate) => app.save.data.progress.prologue.victories >= candidate.requiresPrologueVictories);
     byId('chapter-switcher').replaceChildren(...(atStart ? availableChapters.map((candidate) => { const button = document.createElement('button'); button.type = 'button'; button.className = `chapter-choice${candidate.id === run.chapter ? ' active' : ''}`; button.dataset.chapter = candidate.id; button.disabled = candidate.id === run.chapter; button.textContent = candidate.title; return button; }) : []));
   };
 
   const renderInventory = (): void => {
+    const talents = effectiveTalents();
     const talentCopy: Record<FrontierTalentId, { name: string; effect: string }> = {
       strength: { name: 'Сила', effect: '+1 к быстрой и +2 к тяжёлой атаке' },
       vitality: { name: 'Живучесть', effect: '+4 максимального здоровья' },
@@ -134,16 +154,42 @@ async function main(): Promise<void> {
       const art = document.createElement('span'); art.className = 'item-preview inventory-preview'; art.dataset.item = id; art.setAttribute('role', 'img'); art.setAttribute('aria-label', item.name);
       const copy = document.createElement('span'), name = document.createElement('strong'), stats = document.createElement('small'), status = document.createElement('b');
       name.textContent = item.name;
-      stats.textContent = 'attack' in item ? `${item.attack} быстрый · ${item.heavy} тяжёлый` : `${item.maxHp} здоровья · ${item.block} блок`;
+      stats.textContent = 'attack' in item
+        ? `${item.attack + talents.strength} быстрый · ${item.heavy + talents.strength * 2} тяжёлый`
+        : `${item.maxHp + talents.vitality * 4} здоровья · ${item.block} блок`;
       status.textContent = equipped ? 'НАДЕТО' : 'Надеть'; copy.append(name, stats, status); button.append(art, copy); return button;
     };
     byId('inventory-weapons').replaceChildren(...app.save.data.inventory.weapons.map(makeCard));
     byId('inventory-armors').replaceChildren(...app.save.data.inventory.armors.map(makeCard));
   };
 
+  const renderCity = (): void => {
+    const city = app.save.data.city, weapon = WEAPONS[app.save.data.loadout.weapon], armor = ARMORS[app.save.data.loadout.armor];
+    byId('city-marks').textContent = String(app.save.data.marks);
+    const hero = byId('city-hero-art'); hero.dataset.weapon = weapon.id; hero.dataset.armor = armor.id; hero.setAttribute('aria-label', `Странник: ${weapon.name}, ${armor.name}`);
+    const weaponArt = byId('city-weapon-art'); weaponArt.dataset.item = weapon.id; weaponArt.setAttribute('aria-label', weapon.name); byId('city-weapon-name').textContent = weapon.name;
+    const armorArt = byId('city-armor-art'); armorArt.dataset.item = armor.id; armorArt.setAttribute('aria-label', armor.name); byId('city-armor-name').textContent = armor.name;
+    const forge = byId<HTMLButtonElement>('city-forge'); forge.disabled = city.forgeLevel >= 1 || app.save.data.marks < 3; forge.textContent = city.forgeLevel >= 1 ? 'Закалка выполнена' : app.save.data.marks < 3 ? `Нужно 3 метки · у вас ${app.save.data.marks}` : 'Закалить за 3 метки';
+    const potion = byId<HTMLButtonElement>('city-potion'); potion.disabled = city.extraPotion || app.save.data.marks < 1; potion.textContent = city.extraPotion ? 'Зелье уже уложено' : app.save.data.marks < 1 ? 'Нужна 1 метка' : 'Купить за 1 метку';
+    const contractTitle = byId('contract-title'), contractCopy = byId('contract-copy'), actions = byId('contract-actions');
+    if (!city.contract) {
+      contractTitle.textContent = 'Выбери поручение'; contractCopy.textContent = 'Одновременно можно выполнять только одно поручение. Награда выдаётся в городе.';
+      actions.replaceChildren(...([
+        ['beast-hunt', 'Зверолов · победить любого необязательного зверя'],
+        ['quartermaster', 'Квартирмейстер · завершить главу хотя бы с одним зельем'],
+      ] as const).map(([id, label]) => { const button = document.createElement('button'); button.type = 'button'; button.className = 'btn secondary'; button.dataset.contract = id; button.textContent = label; return button; }));
+    } else {
+      const beast = city.contract.id === 'beast-hunt'; contractTitle.textContent = beast ? 'Поручение: Зверолов' : 'Поручение: Квартирмейстер';
+      contractCopy.textContent = city.contract.ready ? 'Условие выполнено. Забери две звериные метки.' : beast ? 'Победи любого необязательного зверя в любом походе.' : 'Заверши любую главу, сохранив хотя бы одно зелье.';
+      const button = document.createElement('button'); button.type = 'button'; button.className = 'btn primary'; button.id = 'claim-contract'; button.disabled = !city.contract.ready; button.textContent = city.contract.ready ? 'Получить 2 метки' : 'Поручение выполняется'; actions.replaceChildren(button);
+    }
+  };
+
   const render = (): void => {
-    byId('inventory-screen').hidden = !inventoryOpen; byId('map-screen').hidden = inventoryOpen || run.phase !== 'map'; byId('battle-screen').hidden = inventoryOpen || run.phase !== 'battle'; byId('loot-screen').hidden = inventoryOpen || run.phase !== 'loot'; byId('ending-screen').hidden = inventoryOpen || run.phase !== 'complete'; byId('chapter-title').textContent = CHAPTERS[run.chapter].title.toUpperCase(); byId('victories').textContent = String(app.save.data.progress[run.chapter].victories);
+    const overlayOpen = inventoryOpen || cityOpen;
+    byId('inventory-screen').hidden = !inventoryOpen; byId('city-screen').hidden = !cityOpen; byId('map-screen').hidden = overlayOpen || run.phase !== 'map'; byId('battle-screen').hidden = overlayOpen || run.phase !== 'battle'; byId('loot-screen').hidden = overlayOpen || run.phase !== 'loot'; byId('ending-screen').hidden = overlayOpen || run.phase !== 'complete'; byId('chapter-title').textContent = cityOpen ? 'РАТУШНАЯ ПЛОЩАДЬ' : CHAPTERS[run.chapter].title.toUpperCase(); byId('victories').textContent = String(app.save.data.progress[run.chapter].victories);
     if (inventoryOpen) { renderInventory(); return; }
+    if (cityOpen) { renderCity(); return; }
     if (run.phase === 'map') { renderMap(); return; }
     if (run.phase === 'loot') { renderLoot(); return; }
     if (run.phase === 'complete') {
@@ -154,12 +200,13 @@ async function main(): Promise<void> {
       byId('seal-status').textContent = pouch >= 2 ? 'ПЕЧАТЬ II · Новый поход начнётся с 2 полынными настойками.' : pouch === 1 ? `ПЕЧАТЬ I · Новый поход начнётся с 1 настойкой. До Печати II: ${remaining} ${remaining === 1 ? 'победа' : 'победы'}.` : 'Печать привратника ещё не получена.';
       byId('final-gear').textContent = `${weapon.icon} ${weapon.name} · ${armor.icon} ${armor.name}`;
       byId<HTMLButtonElement>('continue-chapter').hidden = !prologue;
+      byId<HTMLButtonElement>('ending-city').hidden = app.save.data.progress.prologue.victories < 1;
       return;
     }
     const combat = run.combat, enemy = ENEMIES[run.encounterIndex], weapon = WEAPONS[run.gear.weapon], armor = ARMORS[run.gear.armor], move = frontierIntent(combat);
     byId('location').textContent = enemy.optional ? `${enemy.epithet} · Боковая встреча` : `${enemy.epithet} · Бой ${chapterStage(run) + 1} из ${CHAPTERS[run.chapter].stages.length}`; renderRoute(); byId('enemy-name').textContent = enemy.name;
     const enemyHp = byId<HTMLProgressElement>('enemy-hp'); enemyHp.max = enemy.maxHp; enemyHp.value = combat.enemyHp; byId('enemy-text').textContent = `${combat.enemyHp} / ${enemy.maxHp} здоровья · Ярость +${combat.rage}`;
-    const maxHp = armor.maxHp + app.save.data.talents.vitality * 4; const attackDamage = weapon.attack + app.save.data.talents.strength, heavyDamage = weapon.heavy + app.save.data.talents.strength * 2;
+    const talents = effectiveTalents(), maxHp = armor.maxHp + talents.vitality * 4; const attackDamage = weapon.attack + talents.strength, heavyDamage = weapon.heavy + talents.strength * 2;
     const playerHp = byId<HTMLProgressElement>('player-hp'); playerHp.max = maxHp; playerHp.value = combat.playerHp; byId('player-text').textContent = `${combat.playerHp} / ${maxHp} здоровья · Зелий ${combat.potions} · Настоек ${combat.tinctures}${combat.bleed > 0 ? ` · Кровотечение ${combat.bleed}` : ''}`; byId('ap').textContent = combat.stunned ? `${combat.ap} ОД · ОГЛУШЁН` : `${combat.ap} ОД`;
     const heroArt = byId('hero-art'); heroArt.dataset.weapon = run.gear.weapon; heroArt.dataset.armor = run.gear.armor; heroArt.setAttribute('aria-label', `Странник: ${weapon.name}, ${armor.name}`); byId('enemy-art').dataset.enemy = enemy.id;
     const weaponIcon = byId('weapon-icon'); weaponIcon.dataset.item = weapon.id; weaponIcon.setAttribute('aria-label', weapon.name); byId('weapon-name').textContent = weapon.name; const armorIcon = byId('armor-icon'); armorIcon.dataset.item = armor.id; armorIcon.setAttribute('aria-label', armor.name); byId('armor-name').textContent = armor.name;
@@ -174,16 +221,52 @@ async function main(): Promise<void> {
     else if (combat.outcome === 'lost') { byId('result-kicker').textContent = 'ПОРАЖЕНИЕ'; byId('result-title').textContent = 'Измени порядок действий'; byId('result-copy').textContent = `Повтор начнётся с состояния на входе: ${run.checkpointHp} здоровья, зелий ${run.checkpointPotions}, настоек ${run.checkpointTinctures}. Если ресурсов недостаточно, прерви поход и начни заново.`; byId('result-action').textContent = 'Повторить бой'; closeRound('lost'); }
   };
 
-  document.querySelectorAll<HTMLButtonElement>('[data-action]').forEach((button) => button.addEventListener('click', () => { const action = button.dataset.action as FrontierAction; run = { ...run, combat: playFrontierAction(run.combat, run.gear, action, app.save.data.talents) }; app.track('combat_action', { action, chapter: run.chapter, stage: analyticsStage() }); haptic(8); persist(); render(); }));
+  document.querySelectorAll<HTMLButtonElement>('[data-action]').forEach((button) => button.addEventListener('click', () => { const action = button.dataset.action as FrontierAction; run = { ...run, combat: playFrontierAction(run.combat, run.gear, action, effectiveTalents()) }; app.track('combat_action', { action, chapter: run.chapter, stage: analyticsStage() }); haptic(8); persist(); render(); }));
   byId('end-turn').addEventListener('click', () => { run = { ...run, combat: finishFrontierTurn(run.combat, run.gear) }; app.track('turn_end', { chapter: run.chapter, stage: analyticsStage(), turn: run.combat.turn }); persist(); render(); });
-  byId('result-action').addEventListener('click', () => { if (run.combat.outcome === 'lost') { run = retryEncounter(run, app.save.data.talents); beginRound(); app.track('combat_retry', { chapter: run.chapter, stage: analyticsStage() }); } else { const defeated = ENEMIES[run.encounterIndex], earnsMark = run.phase === 'battle' && run.combat.outcome === 'won' && Boolean(defeated.optional); run = claimVictory(run, app.save.data.talents); if (earnsMark) app.save.data.marks++; if (run.phase === 'complete') { app.save.data.progress[run.chapter].victories++; app.track('expedition_complete', { chapter: run.chapter, weapon: run.gear.weapon, armor: run.gear.armor }); } else if (run.phase === 'loot') app.track('loot_open', { chapter: run.chapter, stage: analyticsStage() }); else app.track('beast_complete', { chapter: run.chapter, enemy: defeated.id, marks: app.save.data.marks }); } persist(); render(); });
+  byId('result-action').addEventListener('click', () => { if (run.combat.outcome === 'lost') { run = retryEncounter(run, effectiveTalents()); beginRound(); app.track('combat_retry', { chapter: run.chapter, stage: analyticsStage() }); } else { const defeated = ENEMIES[run.encounterIndex], earnsMark = run.phase === 'battle' && run.combat.outcome === 'won' && Boolean(defeated.optional), keptPotion = run.combat.potions > 0; run = claimVictory(run, effectiveTalents()); if (earnsMark) { app.save.data.marks++; app.save.data.city = progressFrontierContract(app.save.data.city, 'optional-win'); } if (run.phase === 'complete') { app.save.data.progress[run.chapter].victories++; if (keptPotion) app.save.data.city = progressFrontierContract(app.save.data.city, 'chapter-win-with-potion'); app.track('expedition_complete', { chapter: run.chapter, weapon: run.gear.weapon, armor: run.gear.armor }); } else if (run.phase === 'loot') app.track('loot_open', { chapter: run.chapter, stage: analyticsStage() }); else app.track('beast_complete', { chapter: run.chapter, enemy: defeated.id, marks: app.save.data.marks }); } persist(); render(); });
   byId('abandon-run').addEventListener('click', () => { if (run.combat.outcome !== 'lost') return; app.track('expedition_abandon', { chapter: run.chapter, node: run.nodeId, checkpointHp: run.checkpointHp }); run = freshExpedition(run.chapter); roundClosed = true; persist(); render(); });
-  byId('loot-list').addEventListener('click', (event) => { const card = (event.target as HTMLElement).closest<HTMLButtonElement>('[data-loot]'); if (!card) return; const selected = card.dataset.loot as LootId; app.save.data.inventory = unlockFrontierLoot(app.save.data.inventory, selected); run = chooseLoot(run, selected, app.save.data.talents); app.save.data.loadout = { ...run.gear }; app.track('loot_choice', { chapter: run.chapter, item: selected, stage: analyticsStage() }); haptic([12, 30, 12]); persist(); render(); });
-  byId('map-options').addEventListener('click', (event) => { const choice = (event.target as HTMLElement).closest<HTMLButtonElement>('[data-map-node]'); if (!choice) return; const previousPhase = run.phase; run = selectMapNode(run, choice.dataset.mapNode as MapNodeId, app.save.data.talents); if (previousPhase === 'map' && run.phase === 'battle' && roundClosed) beginRound(); app.track('map_choice', { chapter: run.chapter, node: run.nodeId }); persist(); render(); });
+  byId('loot-list').addEventListener('click', (event) => { const card = (event.target as HTMLElement).closest<HTMLButtonElement>('[data-loot]'); if (!card) return; const selected = card.dataset.loot as LootId; app.save.data.inventory = unlockFrontierLoot(app.save.data.inventory, selected); run = chooseLoot(run, selected, effectiveTalents()); app.save.data.loadout = { ...run.gear }; app.track('loot_choice', { chapter: run.chapter, item: selected, stage: analyticsStage() }); haptic([12, 30, 12]); persist(); render(); });
+  byId('map-options').addEventListener('click', (event) => { const choice = (event.target as HTMLElement).closest<HTMLButtonElement>('[data-map-node]'); if (!choice) return; const previousPhase = run.phase, leavingStart = run.nodeId === CHAPTERS[run.chapter].start; run = selectMapNode(run, choice.dataset.mapNode as MapNodeId, effectiveTalents()); if (previousPhase === 'map' && run.phase === 'battle') { if (leavingStart) app.save.data.city = { ...app.save.data.city, extraPotion: false }; if (roundClosed) beginRound(); } app.track('map_choice', { chapter: run.chapter, node: run.nodeId }); persist(); render(); });
   byId('chapter-switcher').addEventListener('click', (event) => { const choice = (event.target as HTMLElement).closest<HTMLButtonElement>('[data-chapter]'); if (!choice || run.phase !== 'map' || run.nodeId !== CHAPTERS[run.chapter].start) return; const chapter = choice.dataset.chapter as ChapterId; if (app.save.data.progress.prologue.victories < CHAPTERS[chapter].requiresPrologueVictories) return; app.save.data.chapter = chapter; run = freshExpedition(chapter); roundClosed = true; app.track('chapter_select', { chapter }); persist(); render(); });
-  const openInventory = (): void => { inventoryOpen = true; app.track('inventory_open', { node: run.nodeId }); render(); };
+  const canVisitCity = (): boolean => app.save.data.progress.prologue.victories >= 1
+    && (run.phase === 'complete' || (run.phase === 'map' && run.nodeId === CHAPTERS[run.chapter].start));
+  const openCity = (): void => { if (!canVisitCity()) return; inventoryOpen = false; inventoryReturnsToCity = false; cityOpen = true; app.track('city_open', { chapter: run.chapter }); render(); };
+  const openInventory = (): void => { inventoryReturnsToCity = false; inventoryOpen = true; app.track('inventory_open', { node: run.nodeId }); render(); };
   byId('map-inventory').addEventListener('click', openInventory); byId('ending-inventory').addEventListener('click', openInventory);
-  byId('inventory-back').addEventListener('click', () => { inventoryOpen = false; render(); });
+  byId('map-city').addEventListener('click', openCity); byId('ending-city').addEventListener('click', openCity);
+  byId('city-back').addEventListener('click', () => { cityOpen = false; render(); });
+  byId('city-inventory').addEventListener('click', () => { cityOpen = false; inventoryOpen = true; inventoryReturnsToCity = true; app.track('inventory_open', { node: run.nodeId, source: 'city' }); render(); });
+  byId('inventory-back').addEventListener('click', () => { inventoryOpen = false; cityOpen = inventoryReturnsToCity; inventoryReturnsToCity = false; render(); });
+  byId('city-forge').addEventListener('click', () => {
+    const result = improveFrontierForge(app.save.data.city, app.save.data.marks);
+    if (result.city === app.save.data.city) return;
+    app.save.data.city = result.city; app.save.data.marks = result.marks;
+    if (run.phase === 'map' && run.nodeId === CHAPTERS[run.chapter].start) run = freshExpedition(run.chapter);
+    app.track('city_purchase', { item: 'forge', marks: result.marks }); haptic([12, 35, 18]); persist(); render();
+  });
+  byId('city-potion').addEventListener('click', () => {
+    const result = buyFrontierPotion(app.save.data.city, app.save.data.marks);
+    if (result.city === app.save.data.city) return;
+    app.save.data.city = result.city; app.save.data.marks = result.marks;
+    if (run.phase === 'map' && run.nodeId === CHAPTERS[run.chapter].start) run = freshExpedition(run.chapter);
+    app.track('city_purchase', { item: 'extra-potion', marks: result.marks }); haptic(12); persist(); render();
+  });
+  byId('contract-actions').addEventListener('click', (event) => {
+    const accept = (event.target as HTMLElement).closest<HTMLButtonElement>('[data-contract]');
+    if (accept) {
+      const id = accept.dataset.contract as FrontierContractId;
+      const next = acceptFrontierContract(app.save.data.city, id);
+      if (next === app.save.data.city) return;
+      app.save.data.city = next; app.track('contract_accept', { contract: id }); persist(); render(); return;
+    }
+    const claim = (event.target as HTMLElement).closest<HTMLButtonElement>('#claim-contract');
+    if (!claim) return;
+    const id = app.save.data.city.contract?.id;
+    const result = claimFrontierContract(app.save.data.city, app.save.data.marks);
+    if (result.city === app.save.data.city) return;
+    app.save.data.city = result.city; app.save.data.marks = result.marks;
+    app.track('contract_claim', { contract: id ?? 'unknown', marks: result.marks }); haptic([12, 35, 12]); persist(); render();
+  });
   byId('inventory-screen').addEventListener('click', (event) => { const card = (event.target as HTMLElement).closest<HTMLButtonElement>('[data-equip]'); if (!card) return; const selected = card.dataset.equip as LootId; const next = equipFrontierLoot(app.save.data.loadout, app.save.data.inventory, selected); if (next === app.save.data.loadout) return; app.save.data.loadout = next; if (run.phase === 'map' && run.nodeId === CHAPTERS[run.chapter].start) run = freshExpedition(run.chapter); app.track('inventory_equip', { item: selected }); haptic(10); persist(); render(); });
   byId('talent-list').addEventListener('click', (event) => { const card = (event.target as HTMLElement).closest<HTMLButtonElement>('[data-talent]'); if (!card || run.phase !== 'map' || run.nodeId !== CHAPTERS[run.chapter].start) return; const id = card.dataset.talent as FrontierTalentId, learned = learnFrontierTalent(app.save.data.talents, app.save.data.marks, id); if (learned.talents === app.save.data.talents) return; app.save.data.talents = learned.talents; app.save.data.marks = learned.marks; run = freshExpedition(run.chapter); app.track('talent_learn', { talent: id, level: learned.talents[id] }); haptic([10, 30, 10]); persist(); render(); });
   byId('new-expedition').addEventListener('click', () => { run = freshExpedition(run.chapter); roundClosed = true; app.track('expedition_start', { chapter: run.chapter, replay: true, tinctures: run.combat.tinctures }); persist(); render(); });

@@ -9,6 +9,48 @@ export type MapNodeKind = 'start' | 'battle' | 'event' | 'finish';
 export type NextBattleEffect = 'supplies' | 'ambush' | null;
 export type FrontierTalentId = 'strength' | 'vitality' | 'supplies';
 export type ChapterId = 'prologue' | 'chapter-1';
+export type FrontierContractId = 'beast-hunt' | 'quartermaster';
+export type FrontierContractEvent = 'optional-win' | 'chapter-win-with-potion';
+
+export interface FrontierContract {
+  id: FrontierContractId;
+  ready: boolean;
+}
+
+export interface FrontierCityState {
+  forgeLevel: number;
+  extraPotion: boolean;
+  contract: FrontierContract | null;
+}
+
+export const DEFAULT_FRONTIER_CITY: FrontierCityState = { forgeLevel: 0, extraPotion: false, contract: null };
+
+export function improveFrontierForge(city: FrontierCityState, marks: number): { city: FrontierCityState; marks: number } {
+  const cost = 3;
+  if (city.forgeLevel >= 1 || marks < cost) return { city, marks };
+  return { city: { ...city, forgeLevel: 1 }, marks: marks - cost };
+}
+
+export function buyFrontierPotion(city: FrontierCityState, marks: number): { city: FrontierCityState; marks: number } {
+  if (city.extraPotion || marks < 1) return { city, marks };
+  return { city: { ...city, extraPotion: true }, marks: marks - 1 };
+}
+
+export function acceptFrontierContract(city: FrontierCityState, id: FrontierContractId): FrontierCityState {
+  return city.contract ? city : { ...city, contract: { id, ready: false } };
+}
+
+export function progressFrontierContract(city: FrontierCityState, event: FrontierContractEvent): FrontierCityState {
+  if (!city.contract || city.contract.ready) return city;
+  const completed = (city.contract.id === 'beast-hunt' && event === 'optional-win')
+    || (city.contract.id === 'quartermaster' && event === 'chapter-win-with-potion');
+  return completed ? { ...city, contract: { ...city.contract, ready: true } } : city;
+}
+
+export function claimFrontierContract(city: FrontierCityState, marks: number): { city: FrontierCityState; marks: number } {
+  if (!city.contract?.ready) return { city, marks };
+  return { city: { ...city, contract: null }, marks: marks + 2 };
+}
 
 export interface FrontierTalents {
   strength: number;
@@ -18,6 +60,10 @@ export interface FrontierTalents {
 
 export const EMPTY_FRONTIER_TALENTS: FrontierTalents = { strength: 0, vitality: 0, supplies: 0 };
 export const FRONTIER_TALENT_CAPS: Readonly<Record<FrontierTalentId, number>> = { strength: 2, vitality: 3, supplies: 1 };
+
+export function applyFrontierForge(talents: FrontierTalents, city: FrontierCityState): FrontierTalents {
+  return city.forgeLevel === 0 ? talents : { ...talents, strength: talents.strength + city.forgeLevel };
+}
 
 export function frontierTalentCost(talents: FrontierTalents, id: FrontierTalentId): number {
   return talents[id] + 1;

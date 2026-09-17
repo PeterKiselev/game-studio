@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
-  ARMORS, CHAPTERS, EMPTY_FRONTIER_TALENTS, ENEMIES, STARTER_INVENTORY, WEAPONS, availableMapNodes, chooseLoot,
+  ARMORS, CHAPTERS, DEFAULT_FRONTIER_CITY, EMPTY_FRONTIER_TALENTS, ENEMIES, STARTER_INVENTORY, WEAPONS, acceptFrontierContract, applyFrontierForge, availableMapNodes, buyFrontierPotion, chooseLoot,
   claimVictory, createFrontierCombat, equipFrontierLoot, finishFrontierTurn, frontierIntent, lootOptions,
-  frontierPouchSize, learnFrontierTalent, playFrontierAction, retryEncounter, selectMapNode, startExpedition, unlockFrontierLoot,
+  frontierPouchSize, improveFrontierForge, learnFrontierTalent, playFrontierAction, progressFrontierContract, claimFrontierContract, retryEncounter, selectMapNode, startExpedition, unlockFrontierLoot,
 } from '../src/pograniche';
 import type { ExpeditionState, FrontierAction } from '../src/pograniche';
 
@@ -484,5 +484,40 @@ describe('Пограничье: экспедиция', () => {
     state = claimVictory(winCurrent(state));
     expect(state.phase, `${state.combat.outcome}: ${state.combat.playerHp}/${state.combat.enemyHp}; ${state.combat.log.join(' | ')}`).toBe('complete');
     expect(state.nodeId).toBe('town-square');
+  });
+
+  it('городские улучшения честно тратят метки и не покупаются повторно', () => {
+    const forged = improveFrontierForge(DEFAULT_FRONTIER_CITY, 3);
+    expect(forged.marks).toBe(0);
+    expect(forged.city.forgeLevel).toBe(1);
+    expect(improveFrontierForge(forged.city, 10).city).toBe(forged.city);
+
+    const supplied = buyFrontierPotion(DEFAULT_FRONTIER_CITY, 1);
+    expect(supplied.marks).toBe(0);
+    expect(supplied.city.extraPotion).toBe(true);
+    expect(buyFrontierPotion(supplied.city, 5).city).toBe(supplied.city);
+  });
+
+  it('закалка действительно усиливает обе атаки в бою', () => {
+    const gear = { weapon: 'road-blade', armor: 'patched-coat' } as const;
+    const city = improveFrontierForge(DEFAULT_FRONTIER_CITY, 3).city;
+    const talents = applyFrontierForge(EMPTY_FRONTIER_TALENTS, city);
+    const combat = createFrontierCombat(0, gear, talents);
+    const quick = playFrontierAction(combat, gear, 'attack', talents);
+    const heavy = playFrontierAction(combat, gear, 'heavy', talents);
+    expect(combat.enemyHp - quick.enemyHp).toBe(WEAPONS['road-blade'].attack + 1);
+    expect(combat.enemyHp - heavy.enemyHp).toBe(WEAPONS['road-blade'].heavy + 2);
+  });
+
+  it('контракт нельзя заменить до завершения и нельзя получить дважды', () => {
+    const accepted = acceptFrontierContract(DEFAULT_FRONTIER_CITY, 'beast-hunt');
+    expect(acceptFrontierContract(accepted, 'quartermaster')).toBe(accepted);
+    expect(progressFrontierContract(accepted, 'chapter-win-with-potion')).toBe(accepted);
+    const ready = progressFrontierContract(accepted, 'optional-win');
+    expect(ready.contract?.ready).toBe(true);
+    const claimed = claimFrontierContract(ready, 4);
+    expect(claimed.marks).toBe(6);
+    expect(claimed.city.contract).toBeNull();
+    expect(claimFrontierContract(claimed.city, claimed.marks)).toEqual(claimed);
   });
 });
