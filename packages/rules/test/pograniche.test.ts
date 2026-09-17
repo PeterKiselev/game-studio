@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   ARMORS, CHAPTERS, DEFAULT_FRONTIER_CITY, EMPTY_FRONTIER_TALENTS, ENEMIES, STARTER_INVENTORY, WEAPONS, acceptFrontierContract, applyFrontierForge, availableMapNodes, buyFrontierPotion, chooseLoot,
-  claimVictory, createFrontierCombat, equipFrontierLoot, finishFrontierTurn, frontierIntent, lootOptions,
+  claimVictory, consumeFrontierDepartureSupply, createFrontierCombat, equipFrontierLoot, finishFrontierTurn, frontierDefeatText, frontierIntent, lootOptions,
   frontierPouchSize, improveFrontierForge, learnFrontierTalent, playFrontierAction, progressFrontierContract, claimFrontierContract, retryEncounter, selectMapNode, startExpedition, unlockFrontierLoot,
 } from '../src/pograniche';
 import type { ExpeditionState, FrontierAction } from '../src/pograniche';
@@ -496,6 +496,25 @@ describe('Пограничье: экспедиция', () => {
     expect(supplied.marks).toBe(0);
     expect(supplied.city.extraPotion).toBe(true);
     expect(buyFrontierPotion(supplied.city, 5).city).toBe(supplied.city);
+  });
+
+  it('походный запас расходуется при любом реальном уходе со старта', () => {
+    const supplied = buyFrontierPotion(DEFAULT_FRONTIER_CITY, 1).city;
+    const start = startExpedition();
+    const battle = selectMapNode(start, 'old-road');
+
+    expect(consumeFrontierDepartureSupply(supplied, start, start)).toBe(supplied);
+    expect(consumeFrontierDepartureSupply(supplied, start, battle).extraPotion).toBe(false);
+
+    const futureEventFirst: ExpeditionState = { ...start, nodeId: 'watchtower', visited: ['trailhead', 'watchtower'] };
+    expect(consumeFrontierDepartureSupply(supplied, start, futureEventFirst).extraPotion).toBe(false);
+    expect(consumeFrontierDepartureSupply(supplied, battle, battle)).toBe(supplied);
+  });
+
+  it('текст победы согласуется с названием противника', () => {
+    expect(frontierDefeatText(ENEMIES[0])).toBe('Ржавый страж повержен');
+    expect(frontierDefeatText(ENEMIES[3])).toBe('Чумная стая повержена');
+    expect(frontierDefeatText(ENEMIES[10])).toBe('Болотная гадюка повержена');
   });
 
   it('закалка действительно усиливает обе атаки в бою', () => {

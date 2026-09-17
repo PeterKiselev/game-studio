@@ -119,6 +119,12 @@ export interface Enemy {
   rend?: number;
 }
 
+/** Согласованная строка победы для журнала и экрана результата. */
+export function frontierDefeatText(enemy: Enemy): string {
+  const feminine = enemy.id === 'plague-rats' || enemy.id === 'bog-viper';
+  return `${enemy.name} ${feminine ? 'повержена' : 'повержен'}`;
+}
+
 export type IntentKind = 'strike' | 'windup' | 'crush' | 'stance' | 'swarm' | 'parry' | 'rend' | 'toll';
 
 export interface EnemyIntent {
@@ -395,6 +401,23 @@ export const CHAPTERS: Readonly<Record<ChapterId, FrontierChapter>> = {
     loot: CHAPTER_ONE_LOOT, requiresPrologueVictories: 1,
   },
 };
+
+/**
+ * Походный запас из города одноразовый: он считается потраченным в момент,
+ * когда игрок действительно покинул стартовый узел главы. Это не должно
+ * зависеть от типа следующего узла — сегодня там бой, но завтра первым может
+ * стать событие или развилка.
+ */
+export function consumeFrontierDepartureSupply(
+  city: FrontierCityState,
+  before: ExpeditionState,
+  after: ExpeditionState,
+): FrontierCityState {
+  const leftStart = before.phase === 'map'
+    && before.nodeId === CHAPTERS[before.chapter].start
+    && (after.nodeId !== before.nodeId || after.phase !== before.phase);
+  return leftStart && city.extraPotion ? { ...city, extraPotion: false } : city;
+}
 
 function toLoot(item: Weapon | Armor): LootOption {
   return {
@@ -790,7 +813,7 @@ function hurtEnemy(state: CombatState, amount: number): void {
   state.damageThisTurn += amount;
   if (state.enemyHp === 0) {
     state.outcome = 'won';
-    state.log.unshift(`${ENEMIES[state.enemyIndex].name} повержен.`);
+    state.log.unshift(`${frontierDefeatText(ENEMIES[state.enemyIndex])}.`);
   }
 }
 
