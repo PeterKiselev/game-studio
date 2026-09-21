@@ -1,0 +1,10 @@
+name = "dachnye-tainy-payments"
+main = "src/index.ts"
+compatibility_date = "2026-09-01"
+# node:crypto (createHash) нужен именно ради md5 — Web Crypto (crypto.subtle)
+# его не поддерживает, MD5 там нет в списке допустимых алгоритмов.
+compatibility_flags = ["nodejs_compat"]
+
+# VK_APP_SECRET — секрет из dev.vk.ru → Приложение → Платежи → Подключение,
+# заводится командой `npx wrangler secret put VK_APP_SECRET`, не хранится
+# в этом файле и не коммитится никуда.
