@@ -121,6 +121,83 @@
   color: var(--ink-3);
 }
 
+/* Достижения — та же плитка, что и участок, но пунктирная рамка вместо
+   сплошной: это не место, а цель, ещё не вещь на участке. */
+.achievements {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(76px, 1fr));
+  gap: var(--gap-2);
+}
+
+.achievement {
+  background: var(--surface);
+  border: 1px dashed var(--line);
+  border-radius: var(--r-sm);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 10px 6px;
+  text-align: center;
+}
+
+.achievement .badge {
+  font-size: 20px;
+}
+
+.achievement .label {
+  font-size: 10px;
+  color: var(--ink-3);
+  line-height: 1.3;
+}
+
+.achievement.unlocked {
+  border-style: solid;
+  border-color: var(--felt);
+}
+
+.achievement.unlocked .label {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.shop-btn {
+  align-self: flex-start;
+}
+
+/* --- магазин --- */
+
+.shop .shop-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--gap-3);
+  padding: 10px 0;
+  border-top: 1px solid var(--line);
+}
+
+.shop .shop-item:first-of-type {
+  border-top: none;
+}
+
+.shop-item-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.shop-item-text b {
+  color: var(--ink);
+  font-size: 14px;
+}
+
+.shop-item-text span {
+  color: var(--ink-3);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
 /* --- экран 2: расследование --- */
 
 .case {

@@ -4,12 +4,12 @@ import type { Case, PlayerMarks, Ref, Solution } from '@studio/rules';
 import { dialog, el, toast } from '@studio/ui';
 import { renderPairGrid } from './grid';
 import { cases, tutorialCase } from './cases';
+import { ACHIEVEMENTS, checkNewAchievements, starsFor } from './achievements';
 import './theme.css';
 import './style.css';
 
 interface Save {
   casesCompleted: string[];
-  plotStage: number;
   /**
    * Незаконченный прогресс по каждому делу отдельно, по caseId. Раньше
    * это было одно поле inProgress на всё сохранение сразу — работало,
@@ -22,6 +22,17 @@ interface Save {
   progress: Record<string, { marks: PlayerMarks; hintsUsed: number }>;
   /** Обучение цели и жесту ✓/✕ показано один раз, не перед каждым делом. */
   onboardingSeen?: boolean;
+  /**
+   * Звёзды за качество раскрытия (1-3, по числу подсказок), по каждому
+   * делу — только за первое раскрытие. Участок растёт по сумме звёзд,
+   * не по числу раскрытых дел: так переигранное без подсказок дело
+   * даёт что-то новое, а не просто повторяет уже полученную награду.
+   */
+  stars: Record<string, 1 | 2 | 3>;
+  /** Открытые достижения — id из ACHIEVEMENTS. */
+  achievements: string[];
+  /** Разовые покупки, per-SKU. VK payments — см. showShop(). */
+  purchases: { noAds?: boolean; unlimitedHints?: boolean };
 }
 
 interface SaveV1 {
@@ -31,7 +42,24 @@ interface SaveV1 {
   onboardingSeen?: boolean;
 }
 
-const DEFAULTS: Save = { casesCompleted: [], plotStage: 0, progress: {} };
+interface SaveV2 {
+  casesCompleted: string[];
+  plotStage: number;
+  progress: Record<string, { marks: PlayerMarks; hintsUsed: number }>;
+  onboardingSeen?: boolean;
+}
+
+/**
+ * Дела, раскрытые до появления звёзд, не могут получить настоящую оценку
+ * задним числом — мы не знаем, сколько подсказок тогда ушло. 2 звезды —
+ * нейтральное предположение: не штрафуем как за худшее прохождение,
+ * не выдумываем идеальное.
+ */
+function backfillStars(casesCompleted: string[]): Save['stars'] {
+  return Object.fromEntries(casesCompleted.map((id) => [id, 2]));
+}
+
+const DEFAULTS: Save = { casesCompleted: [], progress: {}, stars: {}, achievements: [], purchases: {} };
 
 const root = document.getElementById('app')!;
 let app!: GameApp<Save>;
@@ -39,27 +67,46 @@ let app!: GameApp<Save>;
 async function main(): Promise<void> {
   app = await GameApp.boot<Save>({
     gameId: 'dachnye-tainy',
-    saveVersion: 2,
+    saveVersion: 3,
     defaults: DEFAULTS,
     adPolicy: { firstAdAfterRounds: 1, minSecondsBetween: 180 },
-    // v1 хранил ровно одно незаконченное дело в inProgress — переносим его
-    // в progress[caseId] под тем же ключом, остальное копируем как есть.
+    // v1 хранил одно незаконченное дело в inProgress, v2 добавил progress
+    // по caseId, но плоскую награду plotStage вместо звёзд. v3 убирает
+    // plotStage совсем — прогресс участка теперь считается из stars
+    // на лету (см. totalStars() ниже), одного источника правды достаточно.
     migrate: (old, fromVersion) => {
-      if (fromVersion !== 1) return null;
-      const legacy = old as Partial<SaveV1>;
-      const progress: Save['progress'] = {};
-      if (legacy.inProgress) {
-        progress[legacy.inProgress.caseId] = {
-          marks: legacy.inProgress.marks,
-          hintsUsed: legacy.inProgress.hintsUsed,
+      if (fromVersion === 1) {
+        const legacy = old as Partial<SaveV1>;
+        const progress: Save['progress'] = {};
+        if (legacy.inProgress) {
+          progress[legacy.inProgress.caseId] = {
+            marks: legacy.inProgress.marks,
+            hintsUsed: legacy.inProgress.hintsUsed,
+          };
+        }
+        const casesCompleted = legacy.casesCompleted ?? [];
+        return {
+          casesCompleted,
+          progress,
+          onboardingSeen: legacy.onboardingSeen,
+          stars: backfillStars(casesCompleted),
+          achievements: [],
+          purchases: {},
         };
       }
-      return {
-        casesCompleted: legacy.casesCompleted ?? [],
-        plotStage: legacy.plotStage ?? 0,
-        progress,
-        onboardingSeen: legacy.onboardingSeen,
-      };
+      if (fromVersion === 2) {
+        const legacy = old as Partial<SaveV2>;
+        const casesCompleted = legacy.casesCompleted ?? [];
+        return {
+          casesCompleted,
+          progress: legacy.progress ?? {},
+          onboardingSeen: legacy.onboardingSeen,
+          stars: backfillStars(casesCompleted),
+          achievements: [],
+          purchases: {},
+        };
+      }
+      return null;
     },
   });
 
@@ -72,8 +119,23 @@ void main();
 
 // --- экран 1: участок -------------------------------------------------------
 
+/** Сумма звёзд по всем раскрытым делам — единственный источник прогресса участка. */
+function totalStars(s: Save): number {
+  return Object.values(s.stars).reduce((sum, v) => sum + v, 0);
+}
+
+const PLOT_ITEMS: Array<{ icon: string; name: string; stars: number }> = [
+  { icon: '🍓', name: 'Грядка клубники', stars: 0 },
+  { icon: '🐈', name: 'Кот Барсик', stars: 2 },
+  { icon: '🏡', name: 'Беседка', stars: 5 },
+  { icon: '💧', name: 'Пруд', stars: 8 },
+  { icon: '🌻', name: 'Клумба', stars: 12 },
+  { icon: '🐔', name: 'Курятник', stars: 16 },
+];
+
 function showPlot(): void {
   const s = app.save.data;
+  const stars = totalStars(s);
 
   // Порядок важен: расследование должно читаться первым и на первом же
   // экране — это правило записано в CLAUDE.md буквально из-за отказа VK
@@ -82,6 +144,7 @@ function showPlot(): void {
   const cardsBox = el('div', { class: 'case-list' });
   for (const c of cases) {
     const done = s.casesCompleted.includes(c.id);
+    const earned = s.stars[c.id];
     const card = el(
       'button',
       { class: 'case-card', type: 'button' },
@@ -90,42 +153,63 @@ function showPlot(): void {
         'div',
         { class: 'text' },
         el('b', {}, c.title),
-        el('span', {}, done ? 'Раскрыто' : 'Ждёт расследования'),
+        el('span', {}, done ? `Раскрыто · ${'⭐'.repeat(earned ?? 0)}` : 'Ждёт расследования'),
       ),
     ) as HTMLButtonElement;
     card.addEventListener('click', () => void startCase(c));
     cardsBox.append(card);
   }
 
-  const plotItems: Array<{ icon: string; name: string; stage: number }> = [
-    { icon: '🍓', name: 'Грядка клубники', stage: 0 },
-    { icon: '🐈', name: 'Кот Барсик', stage: 1 },
-    { icon: '🏡', name: 'Беседка', stage: 2 },
-    { icon: '💧', name: 'Пруд', stage: 3 },
-  ];
-
+  // Не просто «открыто/заперто по факту дела», а по сумме звёзд за качество
+  // раскрытия — модератор VK просил интересную систему прогресса, не
+  // прямую единицу-за-единицу награду. Запертый элемент показывает, сколько
+  // звёзд не хватает, а не просто замок без объяснений.
   const grid = el('div', { class: 'plot-grid' });
-  for (const item of plotItems) {
-    const locked = s.plotStage < item.stage;
+  for (const item of PLOT_ITEMS) {
+    const locked = stars < item.stars;
     grid.append(
       el(
         'div',
         { class: `plot-cell${locked ? ' locked' : ''}` },
         el('div', { class: 'icon' }, locked ? '🔒' : item.icon),
-        el('div', { class: 'name' }, item.name),
+        el('div', { class: 'name' }, locked ? `Ещё ${item.stars - stars}⭐` : item.name),
       ),
     );
   }
 
-  const screen = el(
-    'div',
-    { class: 'screen plot' },
+  const achievementsBox = el('div', { class: 'achievements' });
+  for (const a of ACHIEVEMENTS) {
+    const unlocked = s.achievements.includes(a.id);
+    achievementsBox.append(
+      el(
+        'div',
+        { class: `achievement${unlocked ? ' unlocked' : ''}` },
+        el('div', { class: 'badge' }, unlocked ? '🏅' : '🔒'),
+        el('div', { class: 'label' }, a.title),
+      ),
+    );
+  }
+
+  const screenChildren: HTMLElement[] = [
     el('h1', {}, 'Дачные тайны'),
     cardsBox,
-    el('div', { class: 'plot-label' }, 'Ваш участок'),
+    el('div', { class: 'plot-label' }, `Ваш участок · ${stars}⭐`),
     grid,
-  );
+    el('div', { class: 'plot-label' }, 'Достижения'),
+    achievementsBox,
+  ];
 
+  // Кнопка магазина — только если площадка реально умеет платежи (правило 2
+  // из CLAUDE.md: скрываем, а не показываем мёртвую кнопку). На web/непроверенном
+  // VK её никто не увидит, и это правильно — рано или поздно caps.payments
+  // станет true, и кнопка появится сама, без правки экрана.
+  if (app.platform.caps.payments) {
+    const shopBtn = el('button', { class: 'btn ghost shop-btn', type: 'button' }, '🛍️ Магазин') as HTMLButtonElement;
+    shopBtn.addEventListener('click', () => void showShop());
+    screenChildren.push(shopBtn);
+  }
+
+  const screen = el('div', { class: 'screen plot' }, ...screenChildren);
   root.replaceChildren(screen);
 }
 
@@ -190,6 +274,10 @@ async function startCase(source: Case): Promise<void> {
   let markCount = Object.keys(marks).length;
   let hintsUsed = saved?.hintsUsed ?? 0;
   let solved = false;
+  // Для достижения «Не с первой попытки» — сама ошибка не хранится
+  // в сохранении (только событие аналитики), а этот флаг нужен только
+  // на момент раскрытия дела в этой же сессии.
+  let hadMistake = false;
   // Клик после того, как игрок уже ушёл с экрана: без этого флага
   // отложенный переход на развязку срабатывает поверх того, куда игрок
   // успел перейти за эти 500 мс (например, уже открыл другое дело).
@@ -266,7 +354,10 @@ async function startCase(source: Case): Promise<void> {
 
       const isTrue = groundTruthYes.has(key);
       const correct = (next === 'yes') === isTrue;
-      if (!correct) app.track('case_mistake', { caseId: source.id, key });
+      if (!correct) {
+        hadMistake = true;
+        app.track('case_mistake', { caseId: source.id, key });
+      }
 
       // Отметка «да» гасит остальную строку и столбец в этой сетке —
       // подсказка интерфейса «одна сущность — одно значение», не вывод движка.
@@ -308,6 +399,8 @@ async function startCase(source: Case): Promise<void> {
   function updateHintButtonLabel(): void {
     if (hintsUsed === 0) {
       hintBtn.textContent = '💡 Подсказка';
+    } else if (app.save.data.purchases.unlimitedHints) {
+      hintBtn.textContent = '💡 Ещё подсказка';
     } else if (app.ads.rewardedAvailable) {
       hintBtn.textContent = '💡 Ещё подсказка за рекламу';
     } else {
@@ -316,7 +409,9 @@ async function startCase(source: Case): Promise<void> {
   }
 
   async function useHint(): Promise<void> {
-    const needsAd = hintsUsed > 0 && app.ads.rewardedAvailable;
+    // Купленные безлимитные подсказки перевешивают обычную политику
+    // рекламы — игрок уже заплатил вперёд, второй раз с него не берём.
+    const needsAd = hintsUsed > 0 && app.ads.rewardedAvailable && !app.save.data.purchases.unlimitedHints;
     if (needsAd) {
       const granted = await app.offerReward('hint');
       if (!granted) {
@@ -370,7 +465,7 @@ async function startCase(source: Case): Promise<void> {
     app.track('case_complete', { caseId: source.id, hintsUsed, markCount });
     setTimeout(() => {
       if (left) return; // игрок уже ушёл с экрана — не выдёргиваем его обратно
-      void finishCase(source, solution);
+      void finishCase(source, solution, hintsUsed, hadMistake);
     }, 500);
   }
 
@@ -410,12 +505,27 @@ function buildGroundTruthYes(source: Case, solution: Solution): Set<string> {
 
 // --- экран 3: развязка --------------------------------------------------------
 
-async function finishCase(source: Case, solution: Solution): Promise<void> {
+async function finishCase(
+  source: Case,
+  solution: Solution,
+  hintsUsed: number,
+  hadMistake: boolean,
+): Promise<void> {
   const s = app.save.data;
   const isNew = !s.casesCompleted.includes(source.id);
+  let newAchievements: ReturnType<typeof checkNewAchievements> = [];
+
   if (isNew) {
     s.casesCompleted.push(source.id);
-    s.plotStage = Math.min(4, s.plotStage + 1);
+    s.stars[source.id] = starsFor(hintsUsed);
+    newAchievements = checkNewAchievements(new Set(s.achievements), {
+      hintsUsed,
+      hadMistake,
+      casesCompletedCount: s.casesCompleted.length,
+      totalCases: cases.length,
+      flawlessCount: Object.values(s.stars).filter((v) => v === 3).length,
+    });
+    s.achievements.push(...newAchievements);
     app.save.markDirty();
   }
   await app.endRound();
@@ -438,7 +548,14 @@ async function finishCase(source: Case, solution: Solution): Promise<void> {
   // при повторном прохождении не должно врать про изменение, которого
   // не произошло: сохранение не меняется, значит и текст не должен.
   if (isNew) {
-    children.push(el('div', { class: 'reward' }, '🌱 Участок пополнился новым уголком'));
+    const stars = s.stars[source.id];
+    children.push(
+      el('div', { class: 'reward stars-reward' }, `${'⭐'.repeat(stars)} Участок пополнился новым уголком`),
+    );
+    for (const id of newAchievements) {
+      const a = ACHIEVEMENTS.find((x) => x.id === id)!;
+      children.push(el('div', { class: 'reward achievement-unlocked' }, `🏅 Новое достижение: «${a.title}»`));
+    }
   }
 
   children.push(continueButton());
@@ -447,8 +564,10 @@ async function finishCase(source: Case, solution: Solution): Promise<void> {
   root.replaceChildren(screen);
 
   // Между делами, не посреди расследования — ровно то место, что разрешает
-  // наша политика рекламы.
-  await app.ads.interstitial();
+  // наша политика рекламы. Купленное «Без рекламы» отменяет именно эту
+  // рекламу — rewarded-подсказки остаются добровольными, их отдельно
+  // выключает purchases.unlimitedHints в useHint().
+  if (!s.purchases.noAds) await app.ads.interstitial();
 }
 
 /**
@@ -476,6 +595,99 @@ function caseFileSummary(source: Case, solution: Solution): HTMLElement {
   });
 
   return box;
+}
+
+// --- магазин: разовые покупки -------------------------------------------------
+
+const SKU_NO_ADS = 'dachnye_tainy_no_ads';
+const SKU_UNLIMITED_HINTS = 'dachnye_tainy_unlimited_hints';
+
+interface ShopItem {
+  sku: string;
+  title: string;
+  description: string;
+  owned: (s: Save) => boolean;
+  apply: (s: Save) => void;
+}
+
+const SHOP_ITEMS: ShopItem[] = [
+  {
+    sku: SKU_NO_ADS,
+    title: 'Без рекламы',
+    description: 'Убирает рекламу между делами навсегда. Подсказки за рекламу остаются по желанию.',
+    owned: (s) => !!s.purchases.noAds,
+    apply: (s) => {
+      s.purchases.noAds = true;
+    },
+  },
+  {
+    sku: SKU_UNLIMITED_HINTS,
+    title: 'Безлимитные подсказки',
+    description: 'Все подсказки, кроме первой, становятся бесплатными — без рекламы.',
+    owned: (s) => !!s.purchases.unlimitedHints,
+    apply: (s) => {
+      s.purchases.unlimitedHints = true;
+    },
+  },
+];
+
+/**
+ * Свой экран, не dialog() из @studio/ui: тому нужен один-единственный
+ * выход из диалога, а тут несколько независимых кнопок «Купить» на одном
+ * экране — под это dialog() не подходит по форме, только переиспользуем
+ * его CSS-классы (.overlay/.dialog), чтобы выглядело единообразно.
+ */
+async function showShop(): Promise<void> {
+  const s = app.save.data;
+  const box = el('div', { class: 'dialog shop' }, el('h2', {}, '🛍️ Магазин'));
+
+  for (const item of SHOP_ITEMS) {
+    const owned = item.owned(s);
+    const btn = el(
+      'button',
+      { class: `btn ${owned ? 'ghost' : 'primary'}`, type: 'button', disabled: owned },
+      owned ? 'Куплено' : 'Купить',
+    ) as HTMLButtonElement;
+    if (!owned) btn.addEventListener('click', () => void buy(item, btn));
+
+    box.append(
+      el(
+        'div',
+        { class: 'shop-item' },
+        el('div', { class: 'shop-item-text' }, el('b', {}, item.title), el('span', {}, item.description)),
+        btn,
+      ),
+    );
+  }
+
+  const closeBtn = el('button', { class: 'btn ghost', type: 'button' }, 'Закрыть') as HTMLButtonElement;
+  box.append(el('div', { class: 'actions' }, closeBtn));
+
+  const overlay = el('div', { class: 'overlay' }, box);
+  closeBtn.addEventListener('click', () => {
+    overlay.remove();
+    showPlot(); // обновить подписи/участок, если что-то куплено
+  });
+  document.body.append(overlay);
+}
+
+async function buy(item: ShopItem, btn: HTMLButtonElement): Promise<void> {
+  if (!app.platform.payments) return; // защита для TypeScript — кнопка «Магазин» уже проверила caps.payments
+  const original = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = '…';
+  try {
+    const result = await app.platform.payments.buy(item.sku);
+    if (!result.ok) throw new Error('not ok');
+    item.apply(app.save.data);
+    app.save.markDirty();
+    app.track('purchase', { sku: item.sku });
+    btn.textContent = 'Куплено';
+  } catch {
+    btn.textContent = original;
+    btn.disabled = false;
+    toast('Покупка не завершилась — попробуйте ещё раз');
+  }
 }
 
 function continueButton(): HTMLElement {
