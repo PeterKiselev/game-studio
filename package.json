@@ -22,6 +22,9 @@
     "build:pograniche:web": "npm run build -w @studio/pograniche -- --mode web",
     "build:pograniche:vk": "npm run build -w @studio/pograniche -- --mode vk",
     "pack:pograniche:vk": "node tools/pack.mjs pograniche vk",
+    "build:sudoku:web": "npm run build -w @studio/sudoku -- --mode web",
+    "build:sudoku:vk": "npm run build -w @studio/sudoku -- --mode vk",
+    "pack:sudoku:vk": "node tools/pack.mjs sudoku vk",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },
