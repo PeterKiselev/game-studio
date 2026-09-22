@@ -165,7 +165,28 @@ describe('Пограничье: миграция сохранения', () => {
     expect(migrated?.chapter).toBe('chapter-1');
     expect(migrated?.run?.nodeId).toBe('gate-yard');
     expect(migrated?.marks).toBe(4);
-    expect(migrated?.city).toEqual({ forgeLevel: 0, extraPotion: false, contract: null });
+    expect(migrated?.city).toEqual({
+      forgeLevel: 0, extraPotion: false, extraTincture: false, pendingTrophy: null, contract: null,
+    });
+  });
+
+  it('добавляет настойку и скупщика в save v10 без потери города', () => {
+    const run = startExpedition();
+    const legacy = {
+      chapter: 'prologue' as const,
+      progress: { prologue: { victories: 1, bestStage: 3 }, 'chapter-1': { victories: 0, bestStage: 0 } },
+      run,
+      inventory: { weapons: ['road-blade'] as const, armors: ['patched-coat'] as const },
+      loadout: { weapon: 'road-blade' as const, armor: 'patched-coat' as const },
+      marks: 2,
+      talents: { strength: 0, vitality: 0, supplies: 0 },
+      city: { forgeLevel: 1, extraPotion: true, contract: { id: 'beast-hunt' as const, ready: true } },
+    };
+    const migrated = migratePogranicheSave(legacy, 10);
+    expect(migrated?.city).toEqual({
+      forgeLevel: 1, extraPotion: true, extraTincture: false, pendingTrophy: null, contract: { id: 'beast-hunt', ready: true },
+    });
+    expect(migrated?.run?.nodeId).toBe('trailhead');
   });
 
   it('отклоняет повреждённый save v9 до запуска интерфейса', () => {

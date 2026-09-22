@@ -85,6 +85,14 @@ describe('handleGetItem', () => {
     expect(body.response.item_id).toBe('dachnye_tainy_unlimited_hints');
   });
 
+  it.each([
+    ['sudoku_no_ads', 'Без рекламы'],
+    ['sudoku_unlimited_hints', 'Безлимитные подсказки'],
+  ])('SKU Sudoku %s существует в каталоге сервера', async (sku, title) => {
+    const body = await readJson(handleGetItem(new URLSearchParams({ item: sku })));
+    expect(body).toEqual({ response: { item_id: sku, title, price: 20 } });
+  });
+
   it('код ошибки 20 для неизвестного товара — как требует документация VK', async () => {
     const res = handleGetItem(new URLSearchParams({ item: 'несуществующий' }));
     const body = await readJson(res);

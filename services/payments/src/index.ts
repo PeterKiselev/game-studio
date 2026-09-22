@@ -1,5 +1,5 @@
 /**
- * Обработчик платёжных уведомлений VK Mini Apps для «Дачных тайн».
+ * Обработчик платёжных уведомлений VK Mini Apps для игр студии.
  *
  * Протокол — по официальной документации VK (dev.vk.ru/ru/games/settings/
  * payments/setting-up → «Обработка платёжных уведомлений ВКонтакте»):
@@ -34,12 +34,16 @@ interface ShopItem {
 }
 
 /**
- * Каталог товаров — те же SKU, что в SHOP_ITEMS в games/dachnye-tainy/src/main.ts.
+ * Каталог товаров — те же SKU, что в SHOP_ITEMS соответствующих игр.
  * Меняешь цену/название здесь — меняешь то, что видит игрок в окне покупки VK.
+ * Один и тот же Worker можно развернуть отдельно для каждого приложения со
+ * своим VK_APP_SECRET. До появления app_id Sudoku его сервер не разворачиваем.
  */
 const ITEMS: Record<string, ShopItem> = {
   dachnye_tainy_no_ads: { title: 'Без рекламы', price: 20 },
   dachnye_tainy_unlimited_hints: { title: 'Безлимитные подсказки', price: 20 },
+  sudoku_no_ads: { title: 'Без рекламы', price: 20 },
+  sudoku_unlimited_hints: { title: 'Безлимитные подсказки', price: 20 },
 };
 
 function json(body: unknown): Response {

@@ -1,0 +1,477 @@
+.boot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--ink-2);
+}
+
+/* --- экран 1: меню --- */
+
+.menu {
+  padding: var(--gap-4) var(--gap-3);
+  gap: var(--gap-4);
+  overflow-y: auto;
+}
+
+.menu h1 {
+  margin: 0;
+  font-size: 26px;
+  letter-spacing: -0.01em;
+}
+
+.daily-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-2);
+  background: var(--felt-soft);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  padding: var(--gap-4);
+  text-align: left;
+  cursor: pointer;
+  appearance: none;
+  font: inherit;
+  color: var(--ink);
+}
+
+.academy-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: var(--gap-4);
+  color: #fff;
+  background: linear-gradient(135deg, var(--felt), #8a6124);
+  border: 0;
+  border-radius: var(--r-lg);
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+}
+
+.academy-card .title {
+  font-size: 19px;
+  font-weight: 750;
+}
+
+.academy-kicker,
+.academy-progress {
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  opacity: 0.82;
+}
+
+.academy {
+  overflow-y: auto;
+}
+
+.academy-intro {
+  padding: var(--gap-4) var(--gap-3) var(--gap-2);
+}
+
+.academy-intro h2,
+.academy-intro p {
+  margin: 0;
+}
+
+.academy-intro p {
+  color: var(--ink-2);
+  margin-top: var(--gap-2);
+}
+
+.lesson-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-2);
+  padding: var(--gap-2) var(--gap-3) var(--gap-4);
+}
+
+.lesson-card {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-3);
+  min-height: 64px;
+  padding: var(--gap-2) var(--gap-3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--ink);
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+
+.lesson-card.done {
+  background: var(--felt-soft);
+}
+
+.lesson-number {
+  width: 32px;
+  text-align: center;
+  color: var(--felt);
+  font-weight: 800;
+}
+
+.lesson-copy {
+  display: flex;
+  flex-direction: column;
+}
+
+.lesson-copy small {
+  color: var(--ink-2);
+}
+
+.lesson-instruction {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: var(--gap-2) var(--gap-3) 0;
+  padding: var(--gap-2) var(--gap-3);
+  background: var(--felt-soft);
+  border-radius: var(--r-md);
+  color: var(--ink-2);
+  font-size: 13px;
+}
+
+.lesson-feedback {
+  display: flex;
+  flex-direction: column;
+}
+
+.lesson-numpad {
+  grid-template-columns: repeat(9, 1fr);
+}
+
+.academy-lesson .btn[hidden] {
+  display: none;
+}
+
+.daily-card .title {
+  font-weight: 700;
+  font-size: 18px;
+}
+
+.daily-card .streak {
+  color: var(--ink-2);
+}
+
+.daily-card .streak b {
+  color: var(--felt);
+}
+
+.section-label {
+  color: var(--ink-2);
+  font-weight: 600;
+  font-size: 14px;
+  margin-top: var(--gap-2);
+}
+
+.difficulty-list {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--gap-2);
+}
+
+.difficulty-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: var(--gap-3) var(--gap-2);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  cursor: pointer;
+  appearance: none;
+  font: inherit;
+  color: var(--ink);
+}
+
+.difficulty-card .name {
+  font-weight: 700;
+}
+
+.difficulty-card .best {
+  font-size: 12px;
+  color: var(--ink-2);
+}
+
+.achievements {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
+  gap: var(--gap-2);
+}
+
+.achievement {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: var(--gap-2);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  opacity: 0.55;
+  text-align: center;
+}
+
+.achievement.unlocked {
+  opacity: 1;
+  background: var(--felt-soft);
+}
+
+.achievement .badge {
+  font-size: 22px;
+}
+
+.achievement .label {
+  font-size: 11px;
+  color: var(--ink-2);
+}
+
+/* --- экран 2: партия --- */
+
+.puzzle {
+  overflow: hidden;
+}
+
+.stats-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-3);
+  padding: var(--gap-2) var(--gap-3);
+  color: var(--ink-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.stats-bar .spacer {
+  flex: 1;
+}
+
+.board-wrap {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--gap-2);
+  min-height: 0;
+}
+
+.sudoku-grid {
+  display: grid;
+  grid-template-columns: repeat(9, 1fr);
+  width: min(94vw, 420px);
+  aspect-ratio: 1;
+  border: 2px solid var(--ink);
+  border-radius: var(--r-sm);
+  overflow: hidden;
+  background: var(--line);
+  gap: 1px;
+}
+
+.sudoku-cell {
+  appearance: none;
+  border: none;
+  background: var(--surface);
+  color: var(--felt);
+  font: inherit;
+  font-size: clamp(14px, 3.4vw, 20px);
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+}
+
+.sudoku-cell.given {
+  color: var(--given);
+  font-weight: 700;
+  cursor: default;
+}
+
+.sudoku-cell.box-left {
+  border-left: 2px solid var(--ink);
+}
+
+.sudoku-cell.box-top {
+  border-top: 2px solid var(--ink);
+}
+
+.sudoku-cell.selected {
+  background: var(--felt-soft);
+}
+
+.sudoku-cell.conflict {
+  color: var(--conflict);
+}
+
+.sudoku-cell.hinted {
+  outline: 2px solid var(--hint);
+  outline-offset: -2px;
+}
+
+.notes-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  width: 100%;
+  height: 100%;
+  padding: 2px;
+}
+
+.notes-grid span {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: clamp(7px, 1.6vw, 10px);
+  font-weight: 500;
+  color: var(--ink-3);
+}
+
+.controls-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-2);
+  padding: var(--gap-2) var(--gap-3) var(--gap-3);
+}
+
+.numpad {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: var(--gap-2);
+}
+
+.digit-btn,
+.tool-btn {
+  min-height: var(--tap);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.tool-btn.active {
+  background: var(--felt);
+  border-color: var(--felt);
+  color: #fff;
+}
+
+.hint-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-2);
+}
+
+.hint-text {
+  font-size: 13px;
+  color: var(--ink-2);
+  flex: 1;
+}
+
+/* --- экран 3: развязка --- */
+
+.reveal .scene {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--gap-2);
+  padding: var(--gap-5) var(--gap-3);
+  flex: 1;
+}
+
+.reveal .stars-big {
+  font-size: 40px;
+}
+
+.reveal .time {
+  color: var(--ink-2);
+}
+
+.reward {
+  margin: 0 var(--gap-3);
+  padding: var(--gap-2) var(--gap-3);
+  background: var(--felt-soft);
+  border-radius: var(--r-md);
+  font-weight: 600;
+  text-align: center;
+}
+
+.controls {
+  padding: var(--gap-3);
+}
+
+.controls .btn {
+  width: 100%;
+}
+
+/* --- магазин: те же классы, что у «Дачных тайн» (.dialog.shop), переиспользуют .overlay/.dialog из ui.css --- */
+
+.shop-item {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-3);
+  justify-content: space-between;
+}
+
+.shop-item-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.shop-item-text span {
+  font-size: 13px;
+  color: var(--ink-2);
+}
+
+.shop-btn {
+  align-self: flex-start;
+}
+
+/* В горизонтальном телефоне поле и управление стоят рядом: иначе панель
+ * цифр уезжает ниже короткого viewport и до неё нельзя дотянуться. */
+@media (orientation: landscape) and (max-height: 650px) {
+  #app {
+    max-width: 100%;
+  }
+
+  .puzzle {
+    display: grid;
+    grid-template-columns: minmax(280px, 1fr) minmax(300px, 0.9fr);
+    grid-template-rows: auto auto 1fr;
+  }
+
+  .puzzle .topbar,
+  .puzzle .stats-bar {
+    grid-column: 1 / -1;
+  }
+
+  .board-wrap {
+    grid-column: 1;
+    grid-row: 3;
+    padding: 4px;
+  }
+
+  .sudoku-grid {
+    width: min(74vh, 420px);
+  }
+
+  .controls-wrap {
+    grid-column: 2;
+    grid-row: 3;
+    justify-content: center;
+    overflow-y: auto;
+  }
+
+  .hint-bar {
+    align-items: stretch;
+    flex-wrap: wrap;
+  }
+
+  .hint-text {
+    flex-basis: 100%;
+  }
+}

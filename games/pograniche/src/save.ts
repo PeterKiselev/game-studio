@@ -70,7 +70,23 @@ export function defaultPogranicheSave(): PogranicheSave {
 }
 
 export function migratePogranicheSave(old: unknown, fromVersion: number): PogranicheSave | null {
-  if (typeof old !== 'object' || old === null || fromVersion < 1 || fromVersion > 9) return null;
+  if (typeof old !== 'object' || old === null || fromVersion < 1 || fromVersion > 10) return null;
+  if (fromVersion === 10) {
+    const saved = old as PogranicheSave;
+    if (!hasV9SaveShape(saved) || !saved.city || typeof saved.city !== 'object') return null;
+    const city = saved.city as Partial<FrontierCityState>;
+    return {
+      ...saved,
+      city: {
+        ...DEFAULT_FRONTIER_CITY,
+        forgeLevel: Number.isFinite(city.forgeLevel) ? Number(city.forgeLevel) : 0,
+        extraPotion: Boolean(city.extraPotion),
+        extraTincture: Boolean(city.extraTincture),
+        pendingTrophy: city.pendingTrophy === 'contraband' ? 'contraband' : null,
+        contract: city.contract ?? null,
+      },
+    };
+  }
   if (fromVersion === 9) {
     const saved = old as LegacyV9Save;
     if (!hasV9SaveShape(saved)) return null;

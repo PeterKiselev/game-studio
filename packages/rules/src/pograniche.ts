@@ -9,8 +9,9 @@ export type MapNodeKind = 'start' | 'battle' | 'event' | 'finish';
 export type NextBattleEffect = 'supplies' | 'ambush' | null;
 export type FrontierTalentId = 'strength' | 'vitality' | 'supplies';
 export type ChapterId = 'prologue' | 'chapter-1';
-export type FrontierContractId = 'beast-hunt' | 'quartermaster';
-export type FrontierContractEvent = 'optional-win' | 'chapter-win-with-potion';
+export type FrontierContractId = 'beast-hunt' | 'quartermaster' | 'smuggler';
+export type FrontierContractEvent = 'optional-win' | 'chapter-win-with-potion' | 'smuggler-win';
+export type FrontierTrophyId = 'contraband';
 
 export interface FrontierContract {
   id: FrontierContractId;
@@ -20,10 +21,35 @@ export interface FrontierContract {
 export interface FrontierCityState {
   forgeLevel: number;
   extraPotion: boolean;
+  extraTincture: boolean;
+  pendingTrophy: FrontierTrophyId | null;
   contract: FrontierContract | null;
 }
 
-export const DEFAULT_FRONTIER_CITY: FrontierCityState = { forgeLevel: 0, extraPotion: false, contract: null };
+export const DEFAULT_FRONTIER_CITY: FrontierCityState = {
+  forgeLevel: 0, extraPotion: false, extraTincture: false, pendingTrophy: null, contract: null,
+};
+
+export const FRONTIER_CONTRACTS: Readonly<Record<FrontierContractId, { title: string; acceptLabel: string; task: string; event: FrontierContractEvent }>> = {
+  'beast-hunt': {
+    title: 'Зверолов',
+    acceptLabel: 'Зверолов · победить любого необязательного зверя',
+    task: 'Победи любого необязательного зверя в любом походе.',
+    event: 'optional-win',
+  },
+  quartermaster: {
+    title: 'Квартирмейстер',
+    acceptLabel: 'Квартирмейстер · завершить главу хотя бы с одним зельем',
+    task: 'Заверши любую главу, сохранив хотя бы одно зелье.',
+    event: 'chapter-win-with-potion',
+  },
+  smuggler: {
+    title: 'Скупщик',
+    acceptLabel: 'Скупщик · волкодав в винных погребах',
+    task: 'В главе «За воротами» спустись в винные погреба и победи Волкодава Мытаря.',
+    event: 'smuggler-win',
+  },
+};
 
 export function improveFrontierForge(city: FrontierCityState, marks: number): { city: FrontierCityState; marks: number } {
   const cost = 3;
@@ -36,15 +62,33 @@ export function buyFrontierPotion(city: FrontierCityState, marks: number): { cit
   return { city: { ...city, extraPotion: true }, marks: marks - 1 };
 }
 
+export function buyFrontierTincture(city: FrontierCityState, marks: number): { city: FrontierCityState; marks: number } {
+  if (city.extraTincture || marks < 1) return { city, marks };
+  return { city: { ...city, extraTincture: true }, marks: marks - 1 };
+}
+
+export function frontierEnemyTrophy(enemy: Enemy): FrontierTrophyId | null {
+  return enemy.id === 'toll-hound' ? 'contraband' : null;
+}
+
+export function collectFrontierTrophy(city: FrontierCityState, trophy: FrontierTrophyId): FrontierCityState {
+  return city.pendingTrophy ? city : { ...city, pendingTrophy: trophy };
+}
+
+export function turnInFrontierTrophy(city: FrontierCityState, marks: number): { city: FrontierCityState; marks: number } {
+  if (!city.pendingTrophy) return { city, marks };
+  return { city: { ...city, pendingTrophy: null }, marks: marks + 2 };
+}
+
 export function acceptFrontierContract(city: FrontierCityState, id: FrontierContractId): FrontierCityState {
   return city.contract ? city : { ...city, contract: { id, ready: false } };
 }
 
 export function progressFrontierContract(city: FrontierCityState, event: FrontierContractEvent): FrontierCityState {
   if (!city.contract || city.contract.ready) return city;
-  const completed = (city.contract.id === 'beast-hunt' && event === 'optional-win')
-    || (city.contract.id === 'quartermaster' && event === 'chapter-win-with-potion');
-  return completed ? { ...city, contract: { ...city.contract, ready: true } } : city;
+  return FRONTIER_CONTRACTS[city.contract.id].event === event
+    ? { ...city, contract: { ...city.contract, ready: true } }
+    : city;
 }
 
 export function claimFrontierContract(city: FrontierCityState, marks: number): { city: FrontierCityState; marks: number } {
@@ -370,8 +414,8 @@ export const EXPEDITION_MAP: readonly FrontierMapNode[] = [
   { id: 'backyards', kind: 'event', name: 'Задворки', description: 'Найти оставленные припасы: +1 зелье в следующем бою.', label: 'ПОДАЧКА', effect: { kind: 'supplies', amount: 1 }, next: ['butcher-row', 'rotten-pond'] },
   { id: 'rotten-pond', kind: 'battle', name: 'Гнилой затон', description: 'Гадюка отбивает поспешные удары и оставляет кровоточащие раны.', enemyIndex: 10, next: ['butcher-row'] },
   { id: 'butcher-row', kind: 'battle', name: 'Мясной ряд', description: 'Мясник закрывает дорогу к площади.', enemyIndex: 8, next: ['chapel', 'wine-cellar'] },
-  { id: 'chapel', kind: 'event', name: 'Часовня', description: 'Перевязать раны и восстановить до 8 здоровья.', label: 'ПЕРЕВЯЗКА', effect: { kind: 'heal', amount: 8 }, next: ['toll-yard'] },
-  { id: 'wine-cellar', kind: 'battle', name: 'Винные погреба', description: 'Волкодав охраняет тайный путь контрабандистов.', enemyIndex: 11, next: ['smuggler-hole'] },
+  { id: 'chapel', kind: 'event', name: 'Часовня', description: 'Безопасный путь: перевязать раны до 8 здоровья. Посылка скупщика останется в погребах.', label: 'ПЕРЕВЯЗКА', effect: { kind: 'heal', amount: 8 }, next: ['toll-yard'] },
+  { id: 'wine-cellar', kind: 'battle', name: 'Винные погреба', description: 'Волкодав сторожит посылку скупщика: метка сразу, товар сдаётся в городе.', enemyIndex: 11, next: ['smuggler-hole'] },
   { id: 'smuggler-hole', kind: 'event', name: 'Лаз контрабандистов', description: 'Зайти Мытарю во фланг: он начнёт бой без 10 здоровья.', label: 'ЗАСАДА', effect: { kind: 'ambush', amount: 10 }, next: ['toll-yard'] },
   { id: 'toll-yard', kind: 'battle', name: 'Мытный двор', description: 'Мытарь назначил цену за проход к Ратушной площади.', enemyIndex: 9, next: ['town-square'] },
   { id: 'town-square', kind: 'finish', name: 'Ратушная площадь', description: 'Первая улица Пограничья пройдена.', next: [] },
@@ -408,6 +452,27 @@ export const CHAPTERS: Readonly<Record<ChapterId, FrontierChapter>> = {
  * зависеть от типа следующего узла — сегодня там бой, но завтра первым может
  * стать событие или развилка.
  */
+export function applyFrontierCitySupplies(expedition: ExpeditionState, city: FrontierCityState): ExpeditionState {
+  let potions = expedition.combat.potions;
+  let tinctures = expedition.combat.tinctures;
+  const log = [...expedition.combat.log];
+  if (city.extraPotion) {
+    potions++;
+    log.unshift('Лавка снарядила героя дополнительным зельем.');
+  }
+  if (city.extraTincture) {
+    tinctures++;
+    log.unshift('Зельянка уложила полынную настойку.');
+  }
+  if (potions === expedition.combat.potions && tinctures === expedition.combat.tinctures) return expedition;
+  return {
+    ...expedition,
+    combat: { ...expedition.combat, potions, tinctures, log },
+    checkpointPotions: potions,
+    checkpointTinctures: tinctures,
+  };
+}
+
 export function consumeFrontierDepartureSupply(
   city: FrontierCityState,
   before: ExpeditionState,
@@ -416,7 +481,8 @@ export function consumeFrontierDepartureSupply(
   const leftStart = before.phase === 'map'
     && before.nodeId === CHAPTERS[before.chapter].start
     && (after.nodeId !== before.nodeId || after.phase !== before.phase);
-  return leftStart && city.extraPotion ? { ...city, extraPotion: false } : city;
+  if (!leftStart || (!city.extraPotion && !city.extraTincture)) return city;
+  return { ...city, extraPotion: false, extraTincture: false };
 }
 
 function toLoot(item: Weapon | Armor): LootOption {

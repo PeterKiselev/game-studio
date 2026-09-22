@@ -1,9 +1,9 @@
 import { GameApp } from '@studio/game-kit';
 import {
-  ARMORS, CHAPTERS, ENEMIES, EXPEDITION_MAP, FRONTIER_TALENT_CAPS, WEAPONS, acceptFrontierContract, applyFrontierForge, availableMapNodes,
-  buyFrontierPotion, chooseLoot, claimFrontierContract, claimVictory, consumeFrontierDepartureSupply, equipFrontierLoot, finishFrontierTurn, frontierIntent,
-  chapterStage, frontierDefeatText, frontierPouchSize, frontierTalentCost, isFinalStage, learnFrontierTalent, lootOptions, playFrontierAction,
-  improveFrontierForge, progressFrontierContract, retryEncounter, selectMapNode, startExpedition, unlockFrontierLoot,
+  ARMORS, CHAPTERS, ENEMIES, EXPEDITION_MAP, FRONTIER_CONTRACTS, FRONTIER_TALENT_CAPS, WEAPONS, acceptFrontierContract, applyFrontierCitySupplies, applyFrontierForge, availableMapNodes,
+  buyFrontierPotion, buyFrontierTincture, chooseLoot, claimFrontierContract, claimVictory, collectFrontierTrophy, consumeFrontierDepartureSupply, equipFrontierLoot, finishFrontierTurn, frontierIntent,
+  chapterStage, frontierDefeatText, frontierEnemyTrophy, frontierPouchSize, frontierTalentCost, isFinalStage, learnFrontierTalent, lootOptions, playFrontierAction,
+  improveFrontierForge, progressFrontierContract, retryEncounter, selectMapNode, startExpedition, turnInFrontierTrophy, unlockFrontierLoot,
 } from '@studio/rules';
 import type { ChapterId, FrontierAction, FrontierContractId, FrontierTalentId, LootId, MapNodeId } from '@studio/rules';
 import { haptic } from '@studio/ui';
@@ -16,7 +16,7 @@ const root = document.getElementById('app')!;
 
 async function main(): Promise<void> {
   const app = await GameApp.boot<PogranicheSave>({
-    gameId: 'pograniche', saveVersion: 10,
+    gameId: 'pograniche', saveVersion: 11,
     defaults: defaultPogranicheSave(),
     migrate: migratePogranicheSave,
     adPolicy: { firstAdAfterRounds: 2, minSecondsBetween: 180 },
@@ -24,9 +24,10 @@ async function main(): Promise<void> {
 
   const effectiveTalents = (): typeof app.save.data.talents => applyFrontierForge(app.save.data.talents, app.save.data.city);
   const freshExpedition = (chapter: ChapterId = app.save.data.chapter): ReturnType<typeof startExpedition> => {
-    const expedition = startExpedition(app.save.data.loadout, effectiveTalents(), frontierPouchSize(app.save.data.progress.prologue.victories), chapter);
-    if (!app.save.data.city.extraPotion) return expedition;
-    return { ...expedition, combat: { ...expedition.combat, potions: expedition.combat.potions + 1, log: ['Лавка снарядила героя дополнительным зельем.', ...expedition.combat.log] }, checkpointPotions: expedition.checkpointPotions + 1 };
+    return applyFrontierCitySupplies(
+      startExpedition(app.save.data.loadout, effectiveTalents(), frontierPouchSize(app.save.data.progress.prologue.victories), chapter),
+      app.save.data.city,
+    );
   };
   let run = app.save.data.run ?? freshExpedition();
   let inventoryOpen = false;
@@ -67,6 +68,8 @@ async function main(): Promise<void> {
         <div class="city-places">
           <article><small>КУЗНИЦА</small><h2>Закалка клинка</h2><p>Постоянно: +1 к быстрой и +2 к тяжёлой атаке для любого оружия.</p><button type="button" class="btn secondary" id="city-forge"></button></article>
           <article><small>ЛАВКА ЗЕЛЬЯРКИ</small><h2>Походный запас</h2><p>Одно дополнительное зелье в начале следующего похода. Расходуется при выходе.</p><button type="button" class="btn secondary" id="city-potion"></button></article>
+          <article><small>ЛАВКА ЗЕЛЬЯРКИ</small><h2>Полынная настойка</h2><p>Одна настойка в кисете следующего похода. Как зелье, сгорает при выходе.</p><button type="button" class="btn secondary" id="city-tincture"></button></article>
+          <article><small>СКУПЩИК</small><h2>Посылка из погребов</h2><p id="fence-copy">В главе «За воротами» спустись в винные погреба вместо часовни.</p><button type="button" class="btn secondary" id="city-fence"></button></article>
           <article class="contract-place"><small>ДОСКА ПОРУЧЕНИЙ</small><h2 id="contract-title">Выбери поручение</h2><p id="contract-copy"></p><div id="contract-actions"></div></article>
         </div>
         <div class="city-actions"><button type="button" class="btn secondary" id="city-inventory">Сменить снаряжение</button><button type="button" class="btn primary" id="city-back">Вернуться к походу</button></div>
@@ -171,16 +174,18 @@ async function main(): Promise<void> {
     const armorArt = byId('city-armor-art'); armorArt.dataset.item = armor.id; armorArt.setAttribute('aria-label', armor.name); byId('city-armor-name').textContent = armor.name;
     const forge = byId<HTMLButtonElement>('city-forge'); forge.disabled = city.forgeLevel >= 1 || app.save.data.marks < 3; forge.textContent = city.forgeLevel >= 1 ? 'Закалка выполнена' : app.save.data.marks < 3 ? `Нужно 3 метки · у вас ${app.save.data.marks}` : 'Закалить за 3 метки';
     const potion = byId<HTMLButtonElement>('city-potion'); potion.disabled = city.extraPotion || app.save.data.marks < 1; potion.textContent = city.extraPotion ? 'Зелье уже уложено' : app.save.data.marks < 1 ? 'Нужна 1 метка' : 'Купить за 1 метку';
+    const tincture = byId<HTMLButtonElement>('city-tincture'); tincture.disabled = city.extraTincture || app.save.data.marks < 1; tincture.textContent = city.extraTincture ? 'Настойка уже уложена' : app.save.data.marks < 1 ? 'Нужна 1 метка' : 'Купить за 1 метку';
+    const fence = byId<HTMLButtonElement>('city-fence');
+    byId('fence-copy').textContent = city.pendingTrophy ? 'Посылка на руках. Скупщик отдаст две звериные метки сразу.' : 'В главе «За воротами» спустись в винные погреба вместо часовни.';
+    fence.disabled = !city.pendingTrophy; fence.textContent = city.pendingTrophy ? 'Сдать посылку · 2 метки' : 'Посылки нет';
     const contractTitle = byId('contract-title'), contractCopy = byId('contract-copy'), actions = byId('contract-actions');
     if (!city.contract) {
       contractTitle.textContent = 'Выбери поручение'; contractCopy.textContent = 'Одновременно можно выполнять только одно поручение. Награда выдаётся в городе.';
-      actions.replaceChildren(...([
-        ['beast-hunt', 'Зверолов · победить любого необязательного зверя'],
-        ['quartermaster', 'Квартирмейстер · завершить главу хотя бы с одним зельем'],
-      ] as const).map(([id, label]) => { const button = document.createElement('button'); button.type = 'button'; button.className = 'btn secondary'; button.dataset.contract = id; button.textContent = label; return button; }));
+      actions.replaceChildren(...(Object.keys(FRONTIER_CONTRACTS) as FrontierContractId[]).map((id) => { const button = document.createElement('button'); button.type = 'button'; button.className = 'btn secondary'; button.dataset.contract = id; button.textContent = FRONTIER_CONTRACTS[id].acceptLabel; return button; }));
     } else {
-      const beast = city.contract.id === 'beast-hunt'; contractTitle.textContent = beast ? 'Поручение: Зверолов' : 'Поручение: Квартирмейстер';
-      contractCopy.textContent = city.contract.ready ? 'Условие выполнено. Забери две звериные метки.' : beast ? 'Победи любого необязательного зверя в любом походе.' : 'Заверши любую главу, сохранив хотя бы одно зелье.';
+      const meta = FRONTIER_CONTRACTS[city.contract.id];
+      contractTitle.textContent = `Поручение: ${meta.title}`;
+      contractCopy.textContent = city.contract.ready ? 'Условие выполнено. Забери две звериные метки.' : meta.task;
       const button = document.createElement('button'); button.type = 'button'; button.className = 'btn primary'; button.id = 'claim-contract'; button.disabled = !city.contract.ready; button.textContent = city.contract.ready ? 'Получить 2 метки' : 'Поручение выполняется'; actions.replaceChildren(button);
     }
   };
@@ -217,13 +222,13 @@ async function main(): Promise<void> {
     byId<HTMLButtonElement>('end-turn').disabled = combat.outcome !== null; byId('combat-log').replaceChildren(...combat.log.slice(0, 5).map((line) => { const item = document.createElement('li'); item.textContent = line; return item; }));
     const result = byId('battle-result'); result.hidden = combat.outcome === null;
     const abandonButton = byId<HTMLButtonElement>('abandon-run'); abandonButton.hidden = combat.outcome !== 'lost';
-    if (combat.outcome === 'won') { const finalStage = isFinalStage(run), recovery = enemy.optional || finalStage ? 0 : Math.min(8, maxHp - combat.playerHp); const quartermaster = finalStage && app.save.data.city.contract?.id === 'quartermaster' && !app.save.data.city.contract.ready; const finalCopy = quartermaster ? combat.potions > 0 ? `Поручение квартирмейстера выполнено: сохранено зелий — ${combat.potions}. Награда ждёт в городе.` : 'Поручение квартирмейстера не выполнено: к концу похода не осталось зелий.' : 'За воротами начинается настоящее Пограничье.'; byId('result-kicker').textContent = enemy.optional ? 'ЗВЕРЬ ПОВЕРЖЕН' : finalStage ? 'ПОХОД ЗАВЕРШЁН' : 'ПОБЕДА'; byId('result-title').textContent = frontierDefeatText(enemy); byId('result-copy').textContent = enemy.optional ? `Получена звериная метка. Дальше пойдёшь с ${combat.playerHp} здоровья и ${combat.potions} зельями.` : finalStage ? finalCopy : recovery > 0 ? `Передышка вернёт ${recovery} здоровья: будет ${combat.playerHp + recovery}/${maxHp}. Зелий останется ${combat.potions}.` : `Здоровье уже полное — ${combat.playerHp}/${maxHp}. Зелий останется ${combat.potions}.`; byId('result-action').textContent = enemy.optional ? 'Забрать метку и вернуться' : finalStage ? 'Войти в ворота' : 'Выбрать добычу'; closeRound('won'); }
+    if (combat.outcome === 'won') { const finalStage = isFinalStage(run), recovery = enemy.optional || finalStage ? 0 : Math.min(8, maxHp - combat.playerHp); const trophy = frontierEnemyTrophy(enemy); const quartermaster = finalStage && app.save.data.city.contract?.id === 'quartermaster' && !app.save.data.city.contract.ready; const smuggler = trophy && app.save.data.city.contract?.id === 'smuggler' && !app.save.data.city.contract.ready; const finalCopy = quartermaster ? combat.potions > 0 ? `Поручение квартирмейстера выполнено: сохранено зелий — ${combat.potions}. Награда ждёт в городе.` : 'Поручение квартирмейстера не выполнено: к концу похода не осталось зелий.' : 'За воротами начинается настоящее Пограничье.'; const optionalCopy = trophy ? smuggler ? 'Поручение скупщика выполнено. Метка получена, посылка ждёт сдачи в городе.' : 'Получена звериная метка. Посылка скупщика ждёт сдачи в городе.' : `Получена звериная метка. Дальше пойдёшь с ${combat.playerHp} здоровья и ${combat.potions} зельями.`; byId('result-kicker').textContent = enemy.optional ? 'ЗВЕРЬ ПОВЕРЖЕН' : finalStage ? 'ПОХОД ЗАВЕРШЁН' : 'ПОБЕДА'; byId('result-title').textContent = frontierDefeatText(enemy); byId('result-copy').textContent = enemy.optional ? optionalCopy : finalStage ? finalCopy : recovery > 0 ? `Передышка вернёт ${recovery} здоровья: будет ${combat.playerHp + recovery}/${maxHp}. Зелий останется ${combat.potions}.` : `Здоровье уже полное — ${combat.playerHp}/${maxHp}. Зелий останется ${combat.potions}.`; byId('result-action').textContent = enemy.optional ? trophy ? 'Забрать посылку и вернуться' : 'Забрать метку и вернуться' : finalStage ? 'Войти в ворота' : 'Выбрать добычу'; closeRound('won'); }
     else if (combat.outcome === 'lost') { byId('result-kicker').textContent = 'ПОРАЖЕНИЕ'; byId('result-title').textContent = 'Измени порядок действий'; byId('result-copy').textContent = `Повтор начнётся с состояния на входе: ${run.checkpointHp} здоровья, зелий ${run.checkpointPotions}, настоек ${run.checkpointTinctures}. Если ресурсов недостаточно, прерви поход и начни заново.`; byId('result-action').textContent = 'Повторить бой'; closeRound('lost'); }
   };
 
   document.querySelectorAll<HTMLButtonElement>('[data-action]').forEach((button) => button.addEventListener('click', () => { const action = button.dataset.action as FrontierAction; run = { ...run, combat: playFrontierAction(run.combat, run.gear, action, effectiveTalents()) }; app.track('combat_action', { action, chapter: run.chapter, stage: analyticsStage() }); haptic(8); persist(); render(); }));
   byId('end-turn').addEventListener('click', () => { run = { ...run, combat: finishFrontierTurn(run.combat, run.gear) }; app.track('turn_end', { chapter: run.chapter, stage: analyticsStage(), turn: run.combat.turn }); persist(); render(); });
-  byId('result-action').addEventListener('click', () => { if (run.combat.outcome === 'lost') { run = retryEncounter(run, effectiveTalents()); beginRound(); app.track('combat_retry', { chapter: run.chapter, stage: analyticsStage() }); } else { const defeated = ENEMIES[run.encounterIndex], earnsMark = run.phase === 'battle' && run.combat.outcome === 'won' && Boolean(defeated.optional), keptPotion = run.combat.potions > 0; run = claimVictory(run, effectiveTalents()); if (earnsMark) { app.save.data.marks++; app.save.data.city = progressFrontierContract(app.save.data.city, 'optional-win'); } if (run.phase === 'complete') { app.save.data.progress[run.chapter].victories++; if (keptPotion) app.save.data.city = progressFrontierContract(app.save.data.city, 'chapter-win-with-potion'); app.track('expedition_complete', { chapter: run.chapter, weapon: run.gear.weapon, armor: run.gear.armor }); } else if (run.phase === 'loot') app.track('loot_open', { chapter: run.chapter, stage: analyticsStage() }); else app.track('beast_complete', { chapter: run.chapter, enemy: defeated.id, marks: app.save.data.marks }); } persist(); render(); });
+  byId('result-action').addEventListener('click', () => { if (run.combat.outcome === 'lost') { run = retryEncounter(run, effectiveTalents()); beginRound(); app.track('combat_retry', { chapter: run.chapter, stage: analyticsStage() }); } else { const defeated = ENEMIES[run.encounterIndex], earnsMark = run.phase === 'battle' && run.combat.outcome === 'won' && Boolean(defeated.optional), keptPotion = run.combat.potions > 0, trophy = frontierEnemyTrophy(defeated); run = claimVictory(run, effectiveTalents()); if (earnsMark) { app.save.data.marks++; app.save.data.city = progressFrontierContract(app.save.data.city, 'optional-win'); } if (trophy) { app.save.data.city = collectFrontierTrophy(app.save.data.city, trophy); app.save.data.city = progressFrontierContract(app.save.data.city, 'smuggler-win'); } if (run.phase === 'complete') { app.save.data.progress[run.chapter].victories++; if (keptPotion) app.save.data.city = progressFrontierContract(app.save.data.city, 'chapter-win-with-potion'); app.track('expedition_complete', { chapter: run.chapter, weapon: run.gear.weapon, armor: run.gear.armor }); } else if (run.phase === 'loot') app.track('loot_open', { chapter: run.chapter, stage: analyticsStage() }); else app.track('beast_complete', { chapter: run.chapter, enemy: defeated.id, marks: app.save.data.marks }); } persist(); render(); });
   byId('abandon-run').addEventListener('click', () => { if (run.combat.outcome !== 'lost') return; app.track('expedition_abandon', { chapter: run.chapter, node: run.nodeId, checkpointHp: run.checkpointHp }); run = freshExpedition(run.chapter); roundClosed = true; persist(); render(); });
   byId('loot-list').addEventListener('click', (event) => { const card = (event.target as HTMLElement).closest<HTMLButtonElement>('[data-loot]'); if (!card) return; const selected = card.dataset.loot as LootId; app.save.data.inventory = unlockFrontierLoot(app.save.data.inventory, selected); run = chooseLoot(run, selected, effectiveTalents()); app.save.data.loadout = { ...run.gear }; app.track('loot_choice', { chapter: run.chapter, item: selected, stage: analyticsStage() }); haptic([12, 30, 12]); persist(); render(); });
   byId('map-options').addEventListener('click', (event) => { const choice = (event.target as HTMLElement).closest<HTMLButtonElement>('[data-map-node]'); if (!choice) return; const previous = run; run = selectMapNode(run, choice.dataset.mapNode as MapNodeId, effectiveTalents()); app.save.data.city = consumeFrontierDepartureSupply(app.save.data.city, previous, run); if (previous.phase === 'map' && run.phase === 'battle' && roundClosed) beginRound(); app.track('map_choice', { chapter: run.chapter, node: run.nodeId }); persist(); render(); });
@@ -250,6 +255,19 @@ async function main(): Promise<void> {
     app.save.data.city = result.city; app.save.data.marks = result.marks;
     if (run.phase === 'map' && run.nodeId === CHAPTERS[run.chapter].start) run = freshExpedition(run.chapter);
     app.track('city_purchase', { item: 'extra-potion', marks: result.marks }); haptic(12); persist(); render();
+  });
+  byId('city-tincture').addEventListener('click', () => {
+    const result = buyFrontierTincture(app.save.data.city, app.save.data.marks);
+    if (result.city === app.save.data.city) return;
+    app.save.data.city = result.city; app.save.data.marks = result.marks;
+    if (run.phase === 'map' && run.nodeId === CHAPTERS[run.chapter].start) run = freshExpedition(run.chapter);
+    app.track('city_purchase', { item: 'extra-tincture', marks: result.marks }); haptic(12); persist(); render();
+  });
+  byId('city-fence').addEventListener('click', () => {
+    const result = turnInFrontierTrophy(app.save.data.city, app.save.data.marks);
+    if (result.city === app.save.data.city) return;
+    app.save.data.city = result.city; app.save.data.marks = result.marks;
+    app.track('city_turn_in', { item: 'contraband', marks: result.marks }); haptic([12, 35, 12]); persist(); render();
   });
   byId('contract-actions').addEventListener('click', (event) => {
     const accept = (event.target as HTMLElement).closest<HTMLButtonElement>('[data-contract]');

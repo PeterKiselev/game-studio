@@ -1,0 +1,61 @@
+/*
+ * Спокойная сине-графитовая палитра поверх общих токенов студии — тот же
+ * приём, что у «Дачных тайн»: меняются только значения токенов, имена
+ * (--paper, --ink, --felt...) остаются теми же, поэтому все общие
+ * компоненты (кнопки, диалог, тост из ui.css) перекрашиваются сами,
+ * без единой правки в самом ui.css.
+ *
+ * Три новых токена — специфика этой игры, не системы: --given (цвет
+ * цифр-подсказок в сетке), --conflict (подсветка нарушенного правила),
+ * --hint (подсветка клетки подсказки).
+ */
+
+:root {
+  --paper: #eef2f4;
+  --surface: #ffffff;
+  --surface-2: #e2e9ec;
+  --ink: #16232b;
+  --ink-2: #4d6472;
+  --ink-3: #7c93a0;
+  --line: #ccd8de;
+  --felt: #2c5f6f;
+  --felt-soft: #dbe9ec;
+
+  --given: #16232b;
+  --conflict: #b3332b;
+  --hint: #c98a2f;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #0b1a1f;
+    --surface: #12242b;
+    --surface-2: #1a2e36;
+    --ink: #e4edf0;
+    --ink-2: #a7bcc5;
+    --ink-3: #74909d;
+    --line: #26404a;
+    --felt: #4fa3b8;
+    --felt-soft: #17323a;
+
+    --given: #eef2f4;
+    --conflict: #e0776a;
+    --hint: #e0aa5a;
+  }
+}
+
+:root[data-theme="dark"] {
+  --paper: #0b1a1f;
+  --surface: #12242b;
+  --surface-2: #1a2e36;
+  --ink: #e4edf0;
+  --ink-2: #a7bcc5;
+  --ink-3: #74909d;
+  --line: #26404a;
+  --felt: #4fa3b8;
+  --felt-soft: #17323a;
+
+  --given: #eef2f4;
+  --conflict: #e0776a;
+  --hint: #e0aa5a;
+}

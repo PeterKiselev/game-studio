@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
-  ARMORS, CHAPTERS, DEFAULT_FRONTIER_CITY, EMPTY_FRONTIER_TALENTS, ENEMIES, STARTER_INVENTORY, WEAPONS, acceptFrontierContract, applyFrontierForge, availableMapNodes, buyFrontierPotion, chooseLoot,
-  claimVictory, consumeFrontierDepartureSupply, createFrontierCombat, equipFrontierLoot, finishFrontierTurn, frontierDefeatText, frontierIntent, lootOptions,
-  frontierPouchSize, improveFrontierForge, learnFrontierTalent, playFrontierAction, progressFrontierContract, claimFrontierContract, retryEncounter, selectMapNode, startExpedition, unlockFrontierLoot,
+  ARMORS, CHAPTERS, DEFAULT_FRONTIER_CITY, EMPTY_FRONTIER_TALENTS, ENEMIES, STARTER_INVENTORY, WEAPONS, acceptFrontierContract, applyFrontierCitySupplies, applyFrontierForge, availableMapNodes, buyFrontierPotion, buyFrontierTincture, chooseLoot,
+  claimVictory, collectFrontierTrophy, consumeFrontierDepartureSupply, createFrontierCombat, equipFrontierLoot, finishFrontierTurn, frontierDefeatText, frontierEnemyTrophy, frontierIntent, lootOptions,
+  frontierPouchSize, improveFrontierForge, learnFrontierTalent, playFrontierAction, progressFrontierContract, claimFrontierContract, retryEncounter, selectMapNode, startExpedition, turnInFrontierTrophy, unlockFrontierLoot,
 } from '../src/pograniche';
 import type { ExpeditionState, FrontierAction } from '../src/pograniche';
 
@@ -496,6 +496,11 @@ describe('Пограничье: экспедиция', () => {
     expect(supplied.marks).toBe(0);
     expect(supplied.city.extraPotion).toBe(true);
     expect(buyFrontierPotion(supplied.city, 5).city).toBe(supplied.city);
+
+    const tincture = buyFrontierTincture(DEFAULT_FRONTIER_CITY, 1);
+    expect(tincture.marks).toBe(0);
+    expect(tincture.city.extraTincture).toBe(true);
+    expect(buyFrontierTincture(tincture.city, 5).city).toBe(tincture.city);
   });
 
   it('походный запас расходуется при любом реальном уходе со старта', () => {
@@ -509,6 +514,37 @@ describe('Пограничье: экспедиция', () => {
     const futureEventFirst: ExpeditionState = { ...start, nodeId: 'watchtower', visited: ['trailhead', 'watchtower'] };
     expect(consumeFrontierDepartureSupply(supplied, start, futureEventFirst).extraPotion).toBe(false);
     expect(consumeFrontierDepartureSupply(supplied, battle, battle)).toBe(supplied);
+  });
+
+  it('городская настойка попадает в кисет и списывается вместе с зельем', () => {
+    const city = buyFrontierTincture(buyFrontierPotion(DEFAULT_FRONTIER_CITY, 1).city, 1).city;
+    const packed = applyFrontierCitySupplies(startExpedition(), city);
+    expect(packed.combat.potions).toBe(3);
+    expect(packed.combat.tinctures).toBe(1);
+    expect(packed.checkpointPotions).toBe(3);
+    expect(packed.checkpointTinctures).toBe(1);
+
+    const after = consumeFrontierDepartureSupply(city, packed, selectMapNode(packed, 'old-road'));
+    expect(after.extraPotion).toBe(false);
+    expect(after.extraTincture).toBe(false);
+  });
+
+  it('посылка из погребов сдаётся один раз и закрывает поручение скупщика', () => {
+    const hound = ENEMIES.find((enemy) => enemy.id === 'toll-hound')!;
+    expect(frontierEnemyTrophy(hound)).toBe('contraband');
+    expect(frontierEnemyTrophy(ENEMIES[3])).toBeNull();
+
+    const accepted = acceptFrontierContract(DEFAULT_FRONTIER_CITY, 'smuggler');
+    expect(progressFrontierContract(accepted, 'optional-win')).toBe(accepted);
+    const ready = progressFrontierContract(collectFrontierTrophy(accepted, 'contraband'), 'smuggler-win');
+    expect(ready.pendingTrophy).toBe('contraband');
+    expect(ready.contract?.ready).toBe(true);
+    expect(collectFrontierTrophy(ready, 'contraband')).toBe(ready);
+
+    const sold = turnInFrontierTrophy(ready, 1);
+    expect(sold.marks).toBe(3);
+    expect(sold.city.pendingTrophy).toBeNull();
+    expect(turnInFrontierTrophy(sold.city, sold.marks)).toEqual(sold);
   });
 
   it('текст победы согласуется с названием противника', () => {
