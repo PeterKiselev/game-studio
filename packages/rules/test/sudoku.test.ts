@@ -161,6 +161,40 @@ describe('nextHint', () => {
     }
   });
 
+  it('находит голую пару и выводит из неё верную цифру', () => {
+    const puzzle = generatePuzzle('academy:naked-pair:19', 'medium');
+    const grid = [...puzzle.givens];
+    let pairHint: ReturnType<typeof nextHint> = null;
+    for (let guard = 0; guard < 81; guard += 1) {
+      const hint = nextHint(grid);
+      if (!hint) break;
+      if (hint.technique === 'naked-pair') {
+        pairHint = hint;
+        break;
+      }
+      grid[hint.index] = hint.value;
+    }
+    expect(pairHint?.technique).toBe('naked-pair');
+    expect(pairHint!.value).toBe(puzzle.solution[pairHint!.index]);
+    expect(pairHint!.text).toContain('образуют пару');
+  });
+
+  it('не делает ложных выводов через пару на серии разных пазлов', () => {
+    let pairSteps = 0;
+    for (let seed = 0; seed < 80; seed += 1) {
+      const puzzle = generatePuzzle(`pair-fuzz-${seed}`, seed % 2 === 0 ? 'medium' : 'hard');
+      const grid = [...puzzle.givens];
+      for (let guard = 0; guard < 81; guard += 1) {
+        const hint = nextHint(grid);
+        if (!hint) break;
+        expect(hint.value).toBe(puzzle.solution[hint.index]);
+        if (hint.technique === 'naked-pair') pairSteps += 1;
+        grid[hint.index] = hint.value;
+      }
+    }
+    expect(pairSteps).toBeGreaterThan(0);
+  });
+
   it('игнорирует ошибочные цифры игрока при подготовке сетки для подсказки', () => {
     const grid = [...SOLVED];
     grid[0] = 4; // локально такая ошибка может не сразу образовать видимый дубль

@@ -54,6 +54,7 @@ interface Save {
   achievements: string[];
   purchases: { noAds?: boolean; unlimitedHints?: boolean };
   academy: { completed: string[] };
+  mastery: sudoku.TechniqueCounts;
 }
 
 const DEFAULTS: Save = {
@@ -63,6 +64,13 @@ const DEFAULTS: Save = {
   achievements: [],
   purchases: {},
   academy: { completed: [] },
+  mastery: { 'naked-single': 0, 'hidden-single': 0, 'naked-pair': 0 },
+};
+
+const TECHNIQUE_LABEL: Record<sudoku.HintTechnique, string> = {
+  'naked-single': 'Единственный кандидат',
+  'hidden-single': 'Скрытая единственная',
+  'naked-pair': 'Голая пара',
 };
 
 const root = document.getElementById('app')!;
@@ -91,6 +99,13 @@ function formatTime(ms: number): string {
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
   return `${minutes}:${String(seconds).padStart(2, '0')}`;
+}
+
+function logicStepsLabel(count: number): string {
+  const mod100 = count % 100;
+  const mod10 = count % 10;
+  const noun = mod100 >= 11 && mod100 <= 14 ? 'шагов' : mod10 === 1 ? 'шаг' : mod10 >= 2 && mod10 <= 4 ? 'шага' : 'шагов';
+  return `${count} логических ${noun}`;
 }
 
 function freshPracticeSeed(): string {
@@ -530,7 +545,15 @@ async function startPuzzle(mode: Mode, difficulty: Difficulty, dateIso?: string)
     app.track('puzzle_complete', { mode, difficulty, mistakes, hintsUsed, timeMs });
     setTimeout(() => {
       if (left) return;
-      void finishPuzzle(mode, difficulty, dateIso, mistakes, hintsUsed, timeMs);
+      void finishPuzzle(
+        mode,
+        difficulty,
+        dateIso,
+        mistakes,
+        hintsUsed,
+        timeMs,
+        sudoku.analyzeTechniques(puzzle.givens),
+      );
     }, 400);
   }
 
@@ -556,6 +579,7 @@ async function finishPuzzle(
   mistakes: number,
   hintsUsed: number,
   timeMs: number,
+  techniqueAnalysis: ReturnType<typeof sudoku.analyzeTechniques>,
 ): Promise<void> {
   const s = app.save.data;
   const stars = starsFor(mistakes, hintsUsed);
@@ -592,6 +616,9 @@ async function finishPuzzle(
     difficultiesSeen: difficultiesSeen(s),
   });
   s.achievements.push(...newAchievements);
+  for (const technique of Object.keys(techniqueAnalysis.counts) as sudoku.HintTechnique[]) {
+    if (techniqueAnalysis.counts[technique] > 0) s.mastery[technique] += 1;
+  }
   app.save.markDirty();
 
   await app.endRound();
@@ -609,6 +636,29 @@ async function finishPuzzle(
   if (mode === 'daily') {
     children.push(el('div', { class: 'reward' }, `Серия: ${newStreak} ${newStreak === 1 ? 'день' : 'дней'} подряд`));
   }
+
+  const masteryCards = el('div', { class: 'mastery-cards' });
+  for (const technique of Object.keys(TECHNIQUE_LABEL) as sudoku.HintTechnique[]) {
+    const steps = techniqueAnalysis.counts[technique];
+    masteryCards.append(
+      el(
+        'div',
+        { class: `mastery-card${steps > 0 ? ' used' : ''}` },
+        el('b', {}, TECHNIQUE_LABEL[technique]),
+        el('span', {}, steps > 0 ? `${logicStepsLabel(steps)} в этой задаче` : 'В этой задаче не понадобился'),
+        el('small', {}, `Задач с приёмом: ${s.mastery[technique]}`),
+      ),
+    );
+  }
+  children.push(
+    el(
+      'section',
+      { class: 'mastery-summary' },
+      el('h2', {}, 'Логический профиль задачи'),
+      el('p', {}, techniqueAnalysis.solved ? 'Задача полностью объясняется изучаемыми приёмами.' : 'Показаны приёмы из объяснимой части решения.'),
+      masteryCards,
+    ),
+  );
   for (const id of newAchievements) {
     const a = ACHIEVEMENTS.find((x) => x.id === id)!;
     children.push(el('div', { class: 'reward achievement-unlocked' }, `🏅 Новое достижение: «${a.title}»`));

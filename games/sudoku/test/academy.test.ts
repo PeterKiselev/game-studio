@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { ACADEMY_LESSONS, prepareAcademyLesson } from '../src/academy';
 
 describe('академия Sudoku', () => {
-  it('содержит восемь последовательных уроков с уникальными id', () => {
-    expect(ACADEMY_LESSONS).toHaveLength(8);
-    expect(new Set(ACADEMY_LESSONS.map((lesson) => lesson.id)).size).toBe(8);
+  it('содержит двенадцать последовательных уроков с уникальными id', () => {
+    expect(ACADEMY_LESSONS).toHaveLength(12);
+    expect(new Set(ACADEMY_LESSONS.map((lesson) => lesson.id)).size).toBe(12);
   });
 
   it.each(ACADEMY_LESSONS.map((lesson) => [lesson.id, lesson] as const))(

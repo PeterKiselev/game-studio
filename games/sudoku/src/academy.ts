@@ -6,6 +6,7 @@ export interface AcademyLesson {
   short: string;
   technique: sudoku.HintTechnique;
   seed: string;
+  difficulty?: sudoku.Difficulty;
 }
 
 export interface PreparedLesson {
@@ -24,11 +25,15 @@ export const ACADEMY_LESSONS: readonly AcademyLesson[] = [
   { id: 'hidden-2', title: 'Скрытая в строке', short: 'Проверь не клетку, а все места одной цифры.', technique: 'hidden-single', seed: 'academy:hidden-single:29' },
   { id: 'hidden-3', title: 'Скрытая в столбце', short: 'Отсеки занятые позиции сверху вниз.', technique: 'hidden-single', seed: 'academy:hidden-single:41' },
   { id: 'hidden-4', title: 'Скрытая в квадрате', short: 'Найди единственную позицию внутри блока 3×3.', technique: 'hidden-single', seed: 'academy:hidden-single:57' },
+  { id: 'pair-1', title: 'Голая пара', short: 'Две клетки забирают две цифры у всей области.', technique: 'naked-pair', seed: 'academy:naked-pair:19', difficulty: 'medium' },
+  { id: 'pair-2', title: 'Пара в строке', short: 'Исключи две занятые парой цифры из соседних клеток.', technique: 'naked-pair', seed: 'academy:naked-pair:288', difficulty: 'medium' },
+  { id: 'pair-3', title: 'Пара в столбце', short: 'Найди одинаковые пары кандидатов сверху вниз.', technique: 'naked-pair', seed: 'academy:naked-pair:322', difficulty: 'medium' },
+  { id: 'pair-4', title: 'Пара в квадрате', short: 'Используй пару внутри блока 3×3.', technique: 'naked-pair', seed: 'academy:naked-pair:444', difficulty: 'medium' },
 ];
 
 /** Подготавливает ровно тот момент решения, где нужен приём урока. */
 export function prepareAcademyLesson(lesson: AcademyLesson): PreparedLesson {
-  const puzzle = sudoku.generatePuzzle(lesson.seed, 'easy');
+  const puzzle = sudoku.generatePuzzle(lesson.seed, lesson.difficulty ?? 'easy');
   const grid = [...puzzle.givens];
   for (let guard = 0; guard < 81; guard += 1) {
     const hint = sudoku.nextHint(grid);

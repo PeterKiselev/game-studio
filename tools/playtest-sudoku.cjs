@@ -66,7 +66,7 @@ async function solveViaHints(page, maxSteps = 120) {
     await page.goto(BASE, { waitUntil: 'networkidle' });
     assert(await page.locator('.academy-card').isVisible(), 'академия — главный акцент первого экрана');
     await page.locator('.academy-card').click();
-    assert((await page.locator('.lesson-card').count()) === 8, 'курс содержит 8 уроков');
+    assert((await page.locator('.lesson-card').count()) === 12, 'курс содержит 12 уроков');
     assert((await page.locator('.lesson-card:enabled').count()) === 1, 'сначала открыт только первый урок');
     await page.locator('.lesson-card').first().click();
 
@@ -96,6 +96,8 @@ async function solveViaHints(page, maxSteps = 120) {
     await page.waitForSelector('.puzzle');
     assert(await solveViaHints(page), 'пазл решается до конца через подсказки');
     assert(await page.locator('.stars-big').isVisible(), 'экран развязки показывает звёзды');
+    assert(await page.locator('.mastery-summary').isVisible(), 'развязка показывает логический профиль задачи');
+    assert((await page.locator('.mastery-card').count()) === 3, 'профиль различает три изучаемых приёма');
     assert(
       logs.some((l) => l.includes('puzzle_complete')),
       'событие puzzle_complete отправлено',

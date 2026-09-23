@@ -2,7 +2,7 @@ import { boxOf, colOf, rowOf } from './solver';
 import { UNITS } from './units';
 import type { Grid } from './types';
 
-export type HintTechnique = 'naked-single' | 'hidden-single';
+export type HintTechnique = 'naked-single' | 'hidden-single' | 'naked-pair';
 
 export interface Hint {
   index: number;
@@ -79,18 +79,88 @@ function findHiddenSingle(grid: Grid): Hint | null {
 }
 
 /**
+ * Ищет «голую пару», которая сразу доказывает цифру в третьей клетке.
+ * Две клетки одной области с одинаковыми двумя кандидатами забирают эти
+ * цифры себе. Если после их исключения в другой клетке остаётся ровно один
+ * кандидат, его уже можно поставить — поэтому Hint по-прежнему описывает
+ * один проверяемый ход, а не молча редактирует карандашные заметки игрока.
+ */
+function findNakedPairPlacement(grid: Grid): Hint | null {
+  for (const unit of UNITS) {
+    const candidates = new Map<number, Set<number>>();
+    for (const index of unit) {
+      if (grid[index] === 0) candidates.set(index, candidatesFor(grid, index));
+    }
+
+    const empty = [...candidates.keys()];
+    for (let a = 0; a < empty.length; a += 1) {
+      const firstIndex = empty[a];
+      const first = candidates.get(firstIndex)!;
+      if (first.size !== 2) continue;
+      const pairDigits = [...first].sort((x, y) => x - y);
+
+      for (let b = a + 1; b < empty.length; b += 1) {
+        const secondIndex = empty[b];
+        const second = candidates.get(secondIndex)!;
+        if (second.size !== 2 || pairDigits.some((digit) => !second.has(digit))) continue;
+        const samePairCount = empty.filter((index) => {
+          const set = candidates.get(index)!;
+          return set.size === 2 && pairDigits.every((digit) => set.has(digit));
+        }).length;
+        if (samePairCount !== 2) continue;
+
+        for (const index of empty) {
+          if (index === firstIndex || index === secondIndex) continue;
+          const original = candidates.get(index)!;
+          if (original.size < 2 || !pairDigits.some((digit) => original.has(digit))) continue;
+          const reduced = [...original].filter((digit) => !first.has(digit));
+          if (reduced.length !== 1) continue;
+
+          const value = reduced[0];
+          return {
+            index,
+            value,
+            technique: 'naked-pair',
+            text:
+              `Клетки (${describeCell(firstIndex)}) и (${describeCell(secondIndex)}) образуют пару ` +
+              `${pairDigits[0]}/${pairDigits[1]}. Эти цифры заняты парой, поэтому в клетке ` +
+              `(${describeCell(index)}) остаётся только ${value}.`,
+          };
+        }
+      }
+    }
+  }
+  return null;
+}
+
+/**
  * Следующий объяснимый шаг: сперва голая единственная (у клетки ровно один
  * кандидат), затем скрытая единственная (цифра умещается только в одну
- * клетку внутри строки/столбца/квадрата) — по духу того же паттерна, что
+ * клетку внутри строки/столбца/квадрата), затем голая пара — по духу того же паттерна, что
  * nextHint() в packages/rules/src/deduction/board.ts: подсказка объясняет
  * ход, а не просто сверяется с готовым решением.
  *
- * Возвращает null, если ни одна из двух техник шаг не находит — это
- * ожидаемо на Сложном уровне, не все пазлы там решаются этими двумя
+ * Возвращает null, если ни одна из трёх техник шаг не находит — это
+ * ожидаемо на Сложном уровне, не все пазлы там решаются этими тремя
  * приёмами. Кнопка подсказки в игре в этом случае прячется, а не
  * подсовывает игроку ответ напрямую сверкой с решением: то было бы не
  * подсказкой, а сливом.
  */
 export function nextHint(grid: Grid): Hint | null {
-  return findNakedSingle(grid) ?? findHiddenSingle(grid);
+  return findNakedSingle(grid) ?? findHiddenSingle(grid) ?? findNakedPairPlacement(grid);
+}
+
+export type TechniqueCounts = Record<HintTechnique, number>;
+
+/** Разбирает объяснимый путь от исходной сетки без обращения к решению. */
+export function analyzeTechniques(givens: Grid): { counts: TechniqueCounts; solved: boolean } {
+  const grid = [...givens];
+  const counts: TechniqueCounts = { 'naked-single': 0, 'hidden-single': 0, 'naked-pair': 0 };
+  for (let guard = 0; guard < 81; guard += 1) {
+    const hint = nextHint(grid);
+    if (!hint) break;
+    counts[hint.technique] += 1;
+    grid[hint.index] = hint.value;
+  }
+  return { counts, solved: grid.every((value) => value !== 0) };
 }

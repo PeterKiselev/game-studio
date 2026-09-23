@@ -399,6 +399,56 @@
   text-align: center;
 }
 
+.mastery-summary {
+  margin: 0 var(--gap-3);
+  padding: var(--gap-3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+}
+
+.mastery-summary h2,
+.mastery-summary p {
+  margin: 0;
+}
+
+.mastery-summary h2 {
+  font-size: 17px;
+}
+
+.mastery-summary p {
+  margin-top: 4px;
+  color: var(--ink-2);
+  font-size: 13px;
+}
+
+.mastery-cards {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--gap-2);
+  margin-top: var(--gap-3);
+}
+
+.mastery-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: var(--gap-2);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  color: var(--ink-2);
+  font-size: 12px;
+}
+
+.mastery-card.used {
+  background: var(--felt-soft);
+  color: var(--ink);
+}
+
+.mastery-card small {
+  color: var(--ink-3);
+}
+
 .controls {
   padding: var(--gap-3);
 }

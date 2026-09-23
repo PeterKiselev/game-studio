@@ -13,11 +13,12 @@ function firstStateFor(seed: string, difficulty: Difficulty, technique: HintTech
   return null;
 }
 
-for (const technique of ['naked-single', 'hidden-single'] as const) {
+for (const technique of ['naked-single', 'hidden-single', 'naked-pair'] as const) {
   let found = 0;
-  for (let i = 1; i <= 500 && found < 4; i += 1) {
+  for (let i = 1; i <= 5000 && found < 4; i += 1) {
     const seed = `academy:${technique}:${i}`;
-    if (!firstStateFor(seed, 'easy', technique)) continue;
+    const difficulty = technique === 'naked-pair' ? 'medium' : 'easy';
+    if (!firstStateFor(seed, difficulty, technique)) continue;
     console.log(`${technique}\t${seed}`);
     found += 1;
   }
