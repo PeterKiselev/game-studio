@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Промо-баннер — Академия Sudoku</title>
+<style>
+  * { box-sizing: border-box; margin: 0; }
+  html, body { width: 100%; height: 100%; overflow: hidden; }
+  body {
+    position: relative;
+    display: flex;
+    align-items: center;
+    padding: 0 7%;
+    color: #173a38;
+    font-family: "Segoe UI", system-ui, sans-serif;
+    background: #f4ead2 url("../games/sudoku/store/promo/key-art.png") center / cover no-repeat;
+  }
+  body::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, rgba(250,246,235,.98) 0%, rgba(250,246,235,.94) 34%, rgba(250,246,235,.28) 58%, rgba(250,246,235,0) 78%);
+  }
+  .copy { position: relative; z-index: 1; width: 47%; }
+  .kicker {
+    display: inline-block;
+    padding: .45em .8em;
+    border: 1px solid rgba(29,79,74,.3);
+    border-radius: 999px;
+    color: #936523;
+    font-size: clamp(11px, 1.25vw, 20px);
+    font-weight: 750;
+    letter-spacing: .11em;
+  }
+  h1 {
+    margin-top: 4%;
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: clamp(38px, 5.6vw, 88px);
+    line-height: .98;
+    letter-spacing: -.035em;
+  }
+  .slogan {
+    margin-top: 4%;
+    color: #4f655f;
+    font-size: clamp(16px, 2vw, 31px);
+    line-height: 1.28;
+  }
+  .features {
+    display: flex;
+    gap: 1.6em;
+    margin-top: 6%;
+    color: #6f796f;
+    font-size: clamp(11px, 1.35vw, 20px);
+    font-weight: 650;
+  }
+  .features span::before { content: "◆"; margin-right: .55em; color: #bd8230; }
+</style>
+</head>
+<body>
+  <main class="copy">
+    <div class="kicker">12 ИНТЕРАКТИВНЫХ УРОКОВ</div>
+    <h1>Академия<br>Sudoku</h1>
+    <div class="slogan">Не угадывай — доказывай каждый ход</div>
+    <div class="features"><span>Объяснимые приёмы</span><span>Ежедневная практика</span></div>
+  </main>
+</body>
+</html>

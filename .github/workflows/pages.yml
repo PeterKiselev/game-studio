@@ -9,6 +9,7 @@ name: Deploy to GitHub Pages
 #                           вписывается в форму «Размещение» в dev.vk.ru)
 #   /pograniche/           — «Пограничье», веб-версия вертикального среза
 #   /sudoku/               — «Академия Sudoku», веб-версия для плейтеста
+#   /sudoku/vk/            — «Академия Sudoku» под VK Mini Apps
 # Гомоку занимает корень, потому что его адрес уже вписан в формы VK
 # и Яндекса — переносить рискованно без пользы. Следующие игры получают
 # свой путь по имени, а не делят корень с первой.
@@ -53,10 +54,11 @@ jobs:
 
       - run: npm run build:pograniche:web
       - run: npm run build:sudoku:web
+      - run: npm run build:sudoku:vk
 
       - name: Собрать сайт из сборок игр
         run: |
-          mkdir -p site/vk site/yandex site/dachnye-tainy site/dachnye-tainy/vk site/pograniche site/sudoku
+          mkdir -p site/vk site/yandex site/dachnye-tainy site/dachnye-tainy/vk site/pograniche site/sudoku site/sudoku/vk
           cp -r games/gomoku/dist/web/. site/
           cp -r games/gomoku/dist/vk/. site/vk/
           cp -r games/gomoku/dist/yandex/. site/yandex/
@@ -64,6 +66,7 @@ jobs:
           cp -r games/dachnye-tainy/dist/vk/. site/dachnye-tainy/vk/
           cp -r games/pograniche/dist/web/. site/pograniche/
           cp -r games/sudoku/dist/web/. site/sudoku/
+          cp -r games/sudoku/dist/vk/. site/sudoku/vk/
           # Правовые документы, иконки и скриншоты — площадки требуют
           # постоянные адреса на них, поэтому едут вместе с игрой
           cp -r static/. site/

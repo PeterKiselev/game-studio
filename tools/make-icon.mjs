@@ -132,9 +132,54 @@ function makeDachnyeTainyShader() {
   };
 }
 
+// --- «Академия Sudoku»: академическая медаль с сеткой 3×3. На малых
+// размерах читается как герб курса, на больших — как Sudoku благодаря
+// девяти отдельным клеткам. Цвета связывают зелёно-латунный ключевой арт
+// со сине-графитовым интерфейсом игры. ------------------------------------
+
+function makeSudokuShader() {
+  const PAPER_TOP = [0xf8, 0xf1, 0xdf];
+  const PAPER_BOTTOM = [0xe6, 0xd5, 0xad];
+  const GREEN = [0x1d, 0x4f, 0x4a];
+  const GREEN_DARK = [0x12, 0x38, 0x36];
+  const BRASS = [0xc4, 0x8a, 0x35];
+  const IVORY = [0xff, 0xfa, 0xec];
+
+  return function shade(x, y) {
+    const t = y;
+    let color = PAPER_TOP.map((v, i) => v + (PAPER_BOTTOM[i] - v) * t);
+    const dx = x - 0.5;
+    const dy = y - 0.5;
+    const radius = Math.hypot(dx, dy);
+    if (radius < 0.43) color = GREEN;
+    if (radius > 0.365 && radius < 0.405) color = BRASS;
+    if (radius < 0.34) color = GREEN_DARK;
+
+    const left = 0.255;
+    const top = 0.255;
+    const span = 0.49;
+    const cell = span / 3;
+    const inside = x >= left && x <= left + span && y >= top && y <= top + span;
+    if (inside) {
+      const gx = (x - left) / cell;
+      const gy = (y - top) / cell;
+      const edge = Math.min(gx % 1, 1 - (gx % 1), gy % 1, 1 - (gy % 1));
+      if (edge > 0.09) color = IVORY;
+
+      const col = Math.min(2, Math.floor(gx));
+      const row = Math.min(2, Math.floor(gy));
+      if ((row === 0 && col === 2) || (row === 1 && col === 0) || (row === 2 && col === 1)) {
+        if (edge > 0.14) color = BRASS;
+      }
+    }
+    return color;
+  };
+}
+
 const SHADERS = {
   gomoku: makeGomokuShader,
   'dachnye-tainy': makeDachnyeTainyShader,
+  sudoku: makeSudokuShader,
 };
 
 const makeShader = SHADERS[GAME];

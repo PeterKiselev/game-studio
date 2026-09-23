@@ -238,6 +238,8 @@ dev.vk.ru → «Монетизация» показывает «Регистра
 | Гомоку, для Яндекс Игр | `https://peterkiselev.github.io/game-studio/yandex/` |
 | «Дачные тайны», веб-версия (для плейтеста) | `https://peterkiselev.github.io/game-studio/dachnye-tainy/` |
 | «Дачные тайны», для VK/OK | `https://peterkiselev.github.io/game-studio/dachnye-tainy/vk/` |
+| «Академия Sudoku», веб-превью | `https://peterkiselev.github.io/game-studio/sudoku/` |
+| «Академия Sudoku», для VK/OK | `https://peterkiselev.github.io/game-studio/sudoku/vk/` |
 
 **Чего не делать (проверено на своей шкуре):**
 
