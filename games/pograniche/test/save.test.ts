@@ -144,6 +144,7 @@ describe('Пограничье: миграция сохранения', () => {
     expect(migrated?.progress).toEqual({
       prologue: { victories: 5, bestStage: 3 },
       'chapter-1': { victories: 0, bestStage: 0 },
+      'chapter-2': { victories: 0, bestStage: 0 },
     });
     expect(migrated?.run?.chapter).toBe('prologue');
     expect(migrated?.run?.combat.bleed).toBe(0);
@@ -187,6 +188,24 @@ describe('Пограничье: миграция сохранения', () => {
       forgeLevel: 1, extraPotion: true, extraTincture: false, pendingTrophy: null, contract: { id: 'beast-hunt', ready: true },
     });
     expect(migrated?.run?.nodeId).toBe('trailhead');
+  });
+
+  it('добавляет главу II в save v11 без потери текущей главы', () => {
+    const legacy = {
+      chapter: 'chapter-1' as const,
+      progress: { prologue: { victories: 2, bestStage: 3 }, 'chapter-1': { victories: 1, bestStage: 3 } },
+      run: startExpedition({ weapon: 'outpost-mace', armor: 'aventail-mail' }, undefined, 1, 'chapter-1'),
+      inventory: { weapons: ['road-blade', 'outpost-mace'] as const, armors: ['patched-coat', 'aventail-mail'] as const },
+      loadout: { weapon: 'outpost-mace' as const, armor: 'aventail-mail' as const },
+      marks: 3,
+      talents: { strength: 1, vitality: 1, supplies: 0 },
+      city: { forgeLevel: 1, extraPotion: false, extraTincture: false, pendingTrophy: null, contract: null },
+    };
+    const migrated = migratePogranicheSave(legacy, 11);
+    expect(migrated?.chapter).toBe('chapter-1');
+    expect(migrated?.progress['chapter-1']).toEqual({ victories: 1, bestStage: 3 });
+    expect(migrated?.progress['chapter-2']).toEqual({ victories: 0, bestStage: 0 });
+    expect(migrated?.loadout).toEqual(legacy.loadout);
   });
 
   it('отклоняет повреждённый save v9 до запуска интерфейса', () => {

@@ -3,7 +3,7 @@ import {
   ARMORS, CHAPTERS, ENEMIES, EXPEDITION_MAP, FRONTIER_CONTRACTS, FRONTIER_TALENT_CAPS, WEAPONS, acceptFrontierContract, applyFrontierCitySupplies, applyFrontierForge, availableMapNodes,
   buyFrontierPotion, buyFrontierTincture, chooseLoot, claimFrontierContract, claimVictory, collectFrontierTrophy, consumeFrontierDepartureSupply, equipFrontierLoot, finishFrontierTurn, frontierIntent,
   chapterStage, frontierDefeatText, frontierEnemyTrophy, frontierPouchSize, frontierTalentCost, isFinalStage, learnFrontierTalent, lootOptions, playFrontierAction,
-  improveFrontierForge, progressFrontierContract, retryEncounter, selectMapNode, startExpedition, turnInFrontierTrophy, unlockFrontierLoot,
+  frontierChapterUnlocked, improveFrontierForge, progressFrontierContract, retryEncounter, selectMapNode, startExpedition, turnInFrontierTrophy, unlockFrontierLoot,
 } from '@studio/rules';
 import type { ChapterId, FrontierAction, FrontierContractId, FrontierTalentId, LootId, MapNodeId } from '@studio/rules';
 import { haptic } from '@studio/ui';
@@ -16,7 +16,7 @@ const root = document.getElementById('app')!;
 
 async function main(): Promise<void> {
   const app = await GameApp.boot<PogranicheSave>({
-    gameId: 'pograniche', saveVersion: 11,
+    gameId: 'pograniche', saveVersion: 12,
     defaults: defaultPogranicheSave(),
     migrate: migratePogranicheSave,
     adPolicy: { firstAdAfterRounds: 2, minSecondsBetween: 180 },
@@ -109,6 +109,9 @@ async function main(): Promise<void> {
       backyards: `Припасы найдены. В следующем бою будет дополнительное зелье.`,
       chapel: `Раны перевязаны: ${run.combat.playerHp}/${maxHp} здоровья.`,
       'smuggler-hole': `Тайный ход разведан. Мытарь начнёт бой раненым.`,
+      'tanner-yard': `Припасы найдены. В следующем бою будет дополнительное зелье.`,
+      'physic-garden': `Полынная настойка собрана. Теперь в запасе: ${run.combat.tinctures}.`,
+      'bell-stairs': `Раны перевязаны: ${run.combat.playerHp}/${maxHp} здоровья.`,
     };
     byId('map-copy').textContent = eventCopy[current.id] ?? current.description;
     byId('expedition-resources').textContent = `СОСТОЯНИЕ ПОХОДА · ${run.combat.playerHp}/${maxHp} ЗДОРОВЬЯ · ЗЕЛИЙ ${run.combat.potions} · НАСТОЕК ${run.combat.tinctures}`;
@@ -129,7 +132,7 @@ async function main(): Promise<void> {
     const atStart = run.nodeId === chapter.start;
     byId<HTMLButtonElement>('map-inventory').hidden = !atStart;
     byId<HTMLButtonElement>('map-city').hidden = !atStart || app.save.data.progress.prologue.victories < 1;
-    const availableChapters = (Object.values(CHAPTERS)).filter((candidate) => app.save.data.progress.prologue.victories >= candidate.requiresPrologueVictories);
+    const availableChapters = (Object.values(CHAPTERS)).filter((candidate) => frontierChapterUnlocked(candidate, app.save.data.progress));
     byId('chapter-switcher').replaceChildren(...(atStart ? availableChapters.map((candidate) => { const button = document.createElement('button'); button.type = 'button'; button.className = `chapter-choice${candidate.id === run.chapter ? ' active' : ''}`; button.dataset.chapter = candidate.id; button.disabled = candidate.id === run.chapter; button.textContent = candidate.title; return button; }) : []));
   };
 
@@ -198,13 +201,21 @@ async function main(): Promise<void> {
     if (run.phase === 'map') { renderMap(); return; }
     if (run.phase === 'loot') { renderLoot(); return; }
     if (run.phase === 'complete') {
-      const weapon = WEAPONS[run.gear.weapon], armor = ARMORS[run.gear.armor], prologueVictories = app.save.data.progress.prologue.victories, pouch = frontierPouchSize(prologueVictories), remaining = Math.max(0, 3 - prologueVictories), prologue = run.chapter === 'prologue';
-      byId('ending-kicker').textContent = prologue ? 'ПРОЛОГ ЗАВЕРШЁН' : 'ГЛАВА I ЗАВЕРШЕНА';
-      byId('ending-title').textContent = prologue ? 'Ворота открыты' : 'Первая улица пройдена';
-      byId('ending-copy').textContent = prologue ? 'Странник вошёл в Пограничье. Теперь открой карту новой главы и пройди через опасный посад.' : 'Мытарь повержен, путь к Ратушной площади свободен. Но город только начал показывать своё настоящее лицо.';
+      const weapon = WEAPONS[run.gear.weapon], armor = ARMORS[run.gear.armor], prologueVictories = app.save.data.progress.prologue.victories, pouch = frontierPouchSize(prologueVictories), remaining = Math.max(0, 3 - prologueVictories), nextChapter = run.chapter === 'prologue' ? 'chapter-1' : run.chapter === 'chapter-1' ? 'chapter-2' : null;
+      const endingCopy: Record<ChapterId, { kicker: string; title: string; copy: string }> = {
+        prologue: { kicker: 'ПРОЛОГ ЗАВЕРШЁН', title: 'Ворота открыты', copy: 'Странник вошёл в Пограничье. Теперь открой карту новой главы и пройди через опасный посад.' },
+        'chapter-1': { kicker: 'ГЛАВА I ЗАВЕРШЕНА', title: 'Первая улица пройдена', copy: 'Мытарь повержен, путь к Ратушной площади свободен. Ночью над городом загудел Чёрный колокол.' },
+        'chapter-2': { kicker: 'ГЛАВА II ЗАВЕРШЕНА', title: 'Колокол умолк', copy: 'Моровой лекарь повержен, но под колоколом найден знак тех, кто разбудил заразу. История Пограничья продолжится.' },
+      };
+      const ending = endingCopy[run.chapter];
+      byId('ending-kicker').textContent = ending.kicker;
+      byId('ending-title').textContent = ending.title;
+      byId('ending-copy').textContent = ending.copy;
       byId('seal-status').textContent = pouch >= 2 ? 'ПЕЧАТЬ II · Новый поход начнётся с 2 полынными настойками.' : pouch === 1 ? `ПЕЧАТЬ I · Новый поход начнётся с 1 настойкой. До Печати II: ${remaining} ${remaining === 1 ? 'победа' : 'победы'}.` : 'Печать привратника ещё не получена.';
       byId('final-gear').textContent = `${weapon.icon} ${weapon.name} · ${armor.icon} ${armor.name}`;
-      byId<HTMLButtonElement>('continue-chapter').hidden = !prologue;
+      const continueButton = byId<HTMLButtonElement>('continue-chapter');
+      continueButton.hidden = nextChapter === null;
+      if (nextChapter) { continueButton.dataset.chapter = nextChapter; continueButton.textContent = `Начать главу «${CHAPTERS[nextChapter].title}»`; }
       byId<HTMLButtonElement>('ending-city').hidden = app.save.data.progress.prologue.victories < 1;
       return;
     }
@@ -222,7 +233,7 @@ async function main(): Promise<void> {
     byId<HTMLButtonElement>('end-turn').disabled = combat.outcome !== null; byId('combat-log').replaceChildren(...combat.log.slice(0, 5).map((line) => { const item = document.createElement('li'); item.textContent = line; return item; }));
     const result = byId('battle-result'); result.hidden = combat.outcome === null;
     const abandonButton = byId<HTMLButtonElement>('abandon-run'); abandonButton.hidden = combat.outcome !== 'lost';
-    if (combat.outcome === 'won') { const finalStage = isFinalStage(run), recovery = enemy.optional || finalStage ? 0 : Math.min(8, maxHp - combat.playerHp); const trophy = frontierEnemyTrophy(enemy); const quartermaster = finalStage && app.save.data.city.contract?.id === 'quartermaster' && !app.save.data.city.contract.ready; const smuggler = trophy && app.save.data.city.contract?.id === 'smuggler' && !app.save.data.city.contract.ready; const finalCopy = quartermaster ? combat.potions > 0 ? `Поручение квартирмейстера выполнено: сохранено зелий — ${combat.potions}. Награда ждёт в городе.` : 'Поручение квартирмейстера не выполнено: к концу похода не осталось зелий.' : 'За воротами начинается настоящее Пограничье.'; const optionalCopy = trophy ? smuggler ? 'Поручение скупщика выполнено. Метка получена, посылка ждёт сдачи в городе.' : 'Получена звериная метка. Посылка скупщика ждёт сдачи в городе.' : `Получена звериная метка. Дальше пойдёшь с ${combat.playerHp} здоровья и ${combat.potions} зельями.`; byId('result-kicker').textContent = enemy.optional ? 'ЗВЕРЬ ПОВЕРЖЕН' : finalStage ? 'ПОХОД ЗАВЕРШЁН' : 'ПОБЕДА'; byId('result-title').textContent = frontierDefeatText(enemy); byId('result-copy').textContent = enemy.optional ? optionalCopy : finalStage ? finalCopy : recovery > 0 ? `Передышка вернёт ${recovery} здоровья: будет ${combat.playerHp + recovery}/${maxHp}. Зелий останется ${combat.potions}.` : `Здоровье уже полное — ${combat.playerHp}/${maxHp}. Зелий останется ${combat.potions}.`; byId('result-action').textContent = enemy.optional ? trophy ? 'Забрать посылку и вернуться' : 'Забрать метку и вернуться' : finalStage ? 'Войти в ворота' : 'Выбрать добычу'; closeRound('won'); }
+    if (combat.outcome === 'won') { const finalStage = isFinalStage(run), recovery = enemy.optional || finalStage ? 0 : Math.min(8, maxHp - combat.playerHp); const trophy = frontierEnemyTrophy(enemy); const quartermaster = finalStage && app.save.data.city.contract?.id === 'quartermaster' && !app.save.data.city.contract.ready; const smuggler = trophy && app.save.data.city.contract?.id === 'smuggler' && !app.save.data.city.contract.ready; const chapterFinalCopy: Record<ChapterId, string> = { prologue: 'За воротами начинается настоящее Пограничье.', 'chapter-1': 'Путь к Ратушной площади свободен. Над городом гудит Чёрный колокол.', 'chapter-2': 'Чёрный колокол умолкает. Под ним остался знак тех, кто разбудил заразу.' }; const finalCopy = quartermaster ? combat.potions > 0 ? `Поручение квартирмейстера выполнено: сохранено зелий — ${combat.potions}. Награда ждёт в городе.` : 'Поручение квартирмейстера не выполнено: к концу похода не осталось зелий.' : chapterFinalCopy[run.chapter]; const optionalCopy = trophy ? smuggler ? 'Поручение скупщика выполнено. Метка получена, посылка ждёт сдачи в городе.' : 'Получена звериная метка. Посылка скупщика ждёт сдачи в городе.' : `Получена звериная метка. Дальше пойдёшь с ${combat.playerHp} здоровья и ${combat.potions} зельями.`; const finalAction: Record<ChapterId, string> = { prologue: 'Войти в ворота', 'chapter-1': 'Выйти на площадь', 'chapter-2': 'Подойти к колоколу' }; byId('result-kicker').textContent = enemy.optional ? 'ЗВЕРЬ ПОВЕРЖЕН' : finalStage ? 'ПОХОД ЗАВЕРШЁН' : 'ПОБЕДА'; byId('result-title').textContent = frontierDefeatText(enemy); byId('result-copy').textContent = enemy.optional ? optionalCopy : finalStage ? finalCopy : recovery > 0 ? `Передышка вернёт ${recovery} здоровья: будет ${combat.playerHp + recovery}/${maxHp}. Зелий останется ${combat.potions}.` : `Здоровье уже полное — ${combat.playerHp}/${maxHp}. Зелий останется ${combat.potions}.`; byId('result-action').textContent = enemy.optional ? trophy ? 'Забрать посылку и вернуться' : 'Забрать метку и вернуться' : finalStage ? finalAction[run.chapter] : 'Выбрать добычу'; closeRound('won'); }
     else if (combat.outcome === 'lost') { byId('result-kicker').textContent = 'ПОРАЖЕНИЕ'; byId('result-title').textContent = 'Измени порядок действий'; byId('result-copy').textContent = `Повтор начнётся с состояния на входе: ${run.checkpointHp} здоровья, зелий ${run.checkpointPotions}, настоек ${run.checkpointTinctures}. Если ресурсов недостаточно, прерви поход и начни заново.`; byId('result-action').textContent = 'Повторить бой'; closeRound('lost'); }
   };
 
@@ -232,7 +243,7 @@ async function main(): Promise<void> {
   byId('abandon-run').addEventListener('click', () => { if (run.combat.outcome !== 'lost') return; app.track('expedition_abandon', { chapter: run.chapter, node: run.nodeId, checkpointHp: run.checkpointHp }); run = freshExpedition(run.chapter); roundClosed = true; persist(); render(); });
   byId('loot-list').addEventListener('click', (event) => { const card = (event.target as HTMLElement).closest<HTMLButtonElement>('[data-loot]'); if (!card) return; const selected = card.dataset.loot as LootId; app.save.data.inventory = unlockFrontierLoot(app.save.data.inventory, selected); run = chooseLoot(run, selected, effectiveTalents()); app.save.data.loadout = { ...run.gear }; app.track('loot_choice', { chapter: run.chapter, item: selected, stage: analyticsStage() }); haptic([12, 30, 12]); persist(); render(); });
   byId('map-options').addEventListener('click', (event) => { const choice = (event.target as HTMLElement).closest<HTMLButtonElement>('[data-map-node]'); if (!choice) return; const previous = run; run = selectMapNode(run, choice.dataset.mapNode as MapNodeId, effectiveTalents()); app.save.data.city = consumeFrontierDepartureSupply(app.save.data.city, previous, run); if (previous.phase === 'map' && run.phase === 'battle' && roundClosed) beginRound(); app.track('map_choice', { chapter: run.chapter, node: run.nodeId }); persist(); render(); });
-  byId('chapter-switcher').addEventListener('click', (event) => { const choice = (event.target as HTMLElement).closest<HTMLButtonElement>('[data-chapter]'); if (!choice || run.phase !== 'map' || run.nodeId !== CHAPTERS[run.chapter].start) return; const chapter = choice.dataset.chapter as ChapterId; if (app.save.data.progress.prologue.victories < CHAPTERS[chapter].requiresPrologueVictories) return; app.save.data.chapter = chapter; run = freshExpedition(chapter); roundClosed = true; app.track('chapter_select', { chapter }); persist(); render(); });
+  byId('chapter-switcher').addEventListener('click', (event) => { const choice = (event.target as HTMLElement).closest<HTMLButtonElement>('[data-chapter]'); if (!choice || run.phase !== 'map' || run.nodeId !== CHAPTERS[run.chapter].start) return; const chapter = choice.dataset.chapter as ChapterId; if (!frontierChapterUnlocked(CHAPTERS[chapter], app.save.data.progress)) return; app.save.data.chapter = chapter; run = freshExpedition(chapter); roundClosed = true; app.track('chapter_select', { chapter }); persist(); render(); });
   const canVisitCity = (): boolean => app.save.data.progress.prologue.victories >= 1
     && (run.phase === 'complete' || (run.phase === 'map' && run.nodeId === CHAPTERS[run.chapter].start));
   const openCity = (): void => { if (!canVisitCity()) return; inventoryOpen = false; inventoryReturnsToCity = false; cityOpen = true; app.track('city_open', { chapter: run.chapter }); render(); };
@@ -288,7 +299,7 @@ async function main(): Promise<void> {
   byId('inventory-screen').addEventListener('click', (event) => { const card = (event.target as HTMLElement).closest<HTMLButtonElement>('[data-equip]'); if (!card) return; const selected = card.dataset.equip as LootId; const next = equipFrontierLoot(app.save.data.loadout, app.save.data.inventory, selected); if (next === app.save.data.loadout) return; app.save.data.loadout = next; if (run.phase === 'map' && run.nodeId === CHAPTERS[run.chapter].start) run = freshExpedition(run.chapter); app.track('inventory_equip', { item: selected }); haptic(10); persist(); render(); });
   byId('talent-list').addEventListener('click', (event) => { const card = (event.target as HTMLElement).closest<HTMLButtonElement>('[data-talent]'); if (!card || run.phase !== 'map' || run.nodeId !== CHAPTERS[run.chapter].start) return; const id = card.dataset.talent as FrontierTalentId, learned = learnFrontierTalent(app.save.data.talents, app.save.data.marks, id); if (learned.talents === app.save.data.talents) return; app.save.data.talents = learned.talents; app.save.data.marks = learned.marks; run = freshExpedition(run.chapter); app.track('talent_learn', { talent: id, level: learned.talents[id] }); haptic([10, 30, 10]); persist(); render(); });
   byId('new-expedition').addEventListener('click', () => { run = freshExpedition(run.chapter); roundClosed = true; app.track('expedition_start', { chapter: run.chapter, replay: true, tinctures: run.combat.tinctures }); persist(); render(); });
-  byId('continue-chapter').addEventListener('click', () => { app.save.data.chapter = 'chapter-1'; run = freshExpedition('chapter-1'); roundClosed = true; app.track('chapter_select', { chapter: 'chapter-1', source: 'ending' }); persist(); render(); });
+  byId('continue-chapter').addEventListener('click', (event) => { const chapter = (event.currentTarget as HTMLButtonElement).dataset.chapter as ChapterId | undefined; if (!chapter || !frontierChapterUnlocked(CHAPTERS[chapter], app.save.data.progress)) return; app.save.data.chapter = chapter; run = freshExpedition(chapter); roundClosed = true; app.track('chapter_select', { chapter, source: 'ending' }); persist(); render(); });
   if (run.phase === 'battle' && !roundClosed) app.startRound(); app.track('app_start', { resumed: app.save.data.run !== null }); persist(); render(); app.ready();
 }
 

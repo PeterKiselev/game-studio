@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   ARMORS, CHAPTERS, DEFAULT_FRONTIER_CITY, EMPTY_FRONTIER_TALENTS, ENEMIES, STARTER_INVENTORY, WEAPONS, acceptFrontierContract, applyFrontierCitySupplies, applyFrontierForge, availableMapNodes, buyFrontierPotion, buyFrontierTincture, chooseLoot,
   claimVictory, collectFrontierTrophy, consumeFrontierDepartureSupply, createFrontierCombat, equipFrontierLoot, finishFrontierTurn, frontierDefeatText, frontierEnemyTrophy, frontierIntent, lootOptions,
-  frontierPouchSize, improveFrontierForge, learnFrontierTalent, playFrontierAction, progressFrontierContract, claimFrontierContract, retryEncounter, selectMapNode, startExpedition, turnInFrontierTrophy, unlockFrontierLoot,
+  frontierChapterUnlocked, frontierPouchSize, improveFrontierForge, learnFrontierTalent, playFrontierAction, progressFrontierContract, claimFrontierContract, retryEncounter, selectMapNode, startExpedition, turnInFrontierTrophy, unlockFrontierLoot,
 } from '../src/pograniche';
 import type { ExpeditionState, FrontierAction } from '../src/pograniche';
 
@@ -398,6 +398,41 @@ describe('Пограничье: экспедиция', () => {
     expect(state.encounterIndex).toBe(7);
     expect(availableMapNodes(state).map((node) => node.id)).toEqual(['outpost']);
     expect(CHAPTERS['chapter-1'].stages).toEqual(['outpost', 'butcher-row', 'toll-yard']);
+  });
+
+  it('глава II открывается только после победы в главе I', () => {
+    const progress = {
+      prologue: { victories: 1, bestStage: 3 },
+      'chapter-1': { victories: 0, bestStage: 0 },
+      'chapter-2': { victories: 0, bestStage: 0 },
+    };
+    expect(frontierChapterUnlocked(CHAPTERS['chapter-1'], progress)).toBe(true);
+    expect(frontierChapterUnlocked(CHAPTERS['chapter-2'], progress)).toBe(false);
+    expect(frontierChapterUnlocked(CHAPTERS['chapter-2'], { ...progress, 'chapter-1': { victories: 1, bestStage: 3 } })).toBe(true);
+  });
+
+  it.each([
+    ['bandit-sabre', 'outpost-mace', 'tanner-yard', 'physic-garden'],
+    ['bandit-sabre', 'aventail-mail', 'boar-pens', 'physic-garden'],
+    ['watch-cuirass', 'outpost-mace', 'tanner-yard', 'raven-belfry'],
+    ['watch-cuirass', 'aventail-mail', 'boar-pens', 'raven-belfry'],
+  ] as const)('глава II проходится с выбором %s + %s через маршрут %s / %s', (firstLoot, secondLoot, firstRoute, secondRoute) => {
+    const completedChapterOneGear = { weapon: 'outpost-mace', armor: 'aventail-mail' } as const;
+    let state = selectMapNode(startExpedition(completedChapterOneGear, EMPTY_FRONTIER_TALENTS, 2, 'chapter-2'), 'lantern-alley');
+    state = chooseLoot(claimVictory(winCurrent(state)), firstLoot);
+    state = selectMapNode(state, firstRoute);
+    if (state.phase === 'battle') state = claimVictory(winCurrent(state));
+    state = selectMapNode(state, 'execution-yard');
+    state = chooseLoot(claimVictory(winCurrent(state)), secondLoot);
+    state = selectMapNode(state, secondRoute);
+    if (state.phase === 'battle') {
+      state = claimVictory(winCurrent(state));
+      state = selectMapNode(state, 'bell-stairs');
+    }
+    state = selectMapNode(state, 'plague-house');
+    state = claimVictory(winCurrent(state));
+    expect(state.phase, `${state.combat.outcome}: ${state.combat.playerHp}/${state.combat.enemyHp}; ${state.combat.log.join(' | ')}`).toBe('complete');
+    expect(state.nodeId).toBe('black-bell');
   });
 
   it('карта главы даёт честный выбор между обменом и припасами со зверем', () => {

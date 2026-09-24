@@ -4,11 +4,11 @@ export type WeaponId = 'road-blade' | 'watch-cleaver' | 'warden-spear' | 'bandit
 export type ArmorId = 'patched-coat' | 'chain-jacket' | 'warden-shell' | 'watch-cuirass' | 'aventail-mail';
 export type LootId = WeaponId | ArmorId;
 export type ExpeditionPhase = 'map' | 'battle' | 'loot' | 'complete';
-export type MapNodeId = 'trailhead' | 'old-road' | 'watchtower' | 'hidden-path' | 'rat-den' | 'bear-cave' | 'wolf-woods' | 'hollow-grove' | 'burned-road' | 'wormwood-ravine' | 'forester-lodge' | 'gate' | 'city' | 'gate-yard' | 'outpost' | 'market-rows' | 'backyards' | 'rotten-pond' | 'butcher-row' | 'chapel' | 'wine-cellar' | 'smuggler-hole' | 'toll-yard' | 'town-square';
+export type MapNodeId = 'trailhead' | 'old-road' | 'watchtower' | 'hidden-path' | 'rat-den' | 'bear-cave' | 'wolf-woods' | 'hollow-grove' | 'burned-road' | 'wormwood-ravine' | 'forester-lodge' | 'gate' | 'city' | 'gate-yard' | 'outpost' | 'market-rows' | 'backyards' | 'rotten-pond' | 'butcher-row' | 'chapel' | 'wine-cellar' | 'smuggler-hole' | 'toll-yard' | 'town-square' | 'guild-street' | 'lantern-alley' | 'tanner-yard' | 'boar-pens' | 'execution-yard' | 'physic-garden' | 'raven-belfry' | 'bell-stairs' | 'plague-house' | 'black-bell';
 export type MapNodeKind = 'start' | 'battle' | 'event' | 'finish';
 export type NextBattleEffect = 'supplies' | 'ambush' | null;
 export type FrontierTalentId = 'strength' | 'vitality' | 'supplies';
-export type ChapterId = 'prologue' | 'chapter-1';
+export type ChapterId = 'prologue' | 'chapter-1' | 'chapter-2';
 export type FrontierContractId = 'beast-hunt' | 'quartermaster' | 'smuggler';
 export type FrontierContractEvent = 'optional-win' | 'chapter-win-with-potion' | 'smuggler-win';
 export type FrontierTrophyId = 'contraband';
@@ -165,8 +165,11 @@ export interface Enemy {
 
 /** Согласованная строка победы для журнала и экрана результата. */
 export function frontierDefeatText(enemy: Enemy): string {
-  const feminine = enemy.id === 'plague-rats' || enemy.id === 'bog-viper';
-  return `${enemy.name} ${feminine ? 'повержена' : 'повержен'}`;
+  return `${enemy.name} ${isFeminineEnemy(enemy) ? 'повержена' : 'повержен'}`;
+}
+
+function isFeminineEnemy(enemy: Enemy): boolean {
+  return enemy.id === 'plague-rats' || enemy.id === 'bog-viper' || enemy.id === 'black-ravens';
 }
 
 export type IntentKind = 'strike' | 'windup' | 'crush' | 'stance' | 'swarm' | 'parry' | 'rend' | 'toll';
@@ -263,7 +266,13 @@ export interface FrontierChapter {
   stages: readonly MapNodeId[];
   nodes: readonly MapNodeId[];
   loot: readonly (readonly [LootOption, LootOption])[];
-  requiresPrologueVictories: number;
+  requirements: readonly { chapter: ChapterId; victories: number }[];
+}
+
+export type FrontierProgress = Record<ChapterId, { victories: number; bestStage: number }>;
+
+export function frontierChapterUnlocked(chapter: FrontierChapter, progress: FrontierProgress): boolean {
+  return chapter.requirements.every((requirement) => progress[requirement.chapter].victories >= requirement.victories);
 }
 
 export const WEAPONS: Record<WeaponId, Weapon> = {
@@ -392,6 +401,31 @@ export const ENEMIES: readonly Enemy[] = [
     maxHp: 58, strike: 6, crush: 0, reflect: 3, rend: 2, swarmHits: 2,
     pattern: ['swarm', 'rend', 'stance', 'swarm'],
   },
+  {
+    id: 'lantern-reaper', name: 'Фонарщик-косарь', epithet: 'Фонарный переулок', icon: '☾',
+    maxHp: 72, strike: 8, crush: 17, reflect: 4, rend: 2,
+    pattern: ['rend', 'strike', 'stance', 'windup', 'crush'],
+  },
+  {
+    id: 'iron-executioner', name: 'Железный палач', epithet: 'Двор казней', icon: '♜',
+    maxHp: 76, strike: 8, crush: 18, reflect: 4, riposte: 9,
+    pattern: ['parry', 'strike', 'windup', 'crush', 'stance'],
+  },
+  {
+    id: 'plague-doctor', name: 'Моровой лекарь', epithet: 'Чумной дом', icon: '⚗',
+    maxHp: 70, strike: 8, crush: 0, reflect: 4, rend: 3, potionRetaliation: 5,
+    pattern: ['parry', 'rend', 'stance', 'strike', 'rend'],
+  },
+  {
+    id: 'iron-boar', name: 'Кованый вепрь', epithet: 'Скотный загон', icon: '♞', optional: true,
+    maxHp: 60, strike: 7, crush: 17, reflect: 3, crushIgnoresGuard: true,
+    pattern: ['strike', 'windup', 'crush', 'stance'],
+  },
+  {
+    id: 'black-ravens', name: 'Воронья стая', epithet: 'Звонница', icon: '♟', optional: true,
+    maxHp: 42, strike: 2, crush: 0, reflect: 2, swarmHits: 3,
+    pattern: ['swarm', 'stance', 'swarm', 'strike'],
+  },
 ] as const;
 
 export const EXPEDITION_MAP: readonly FrontierMapNode[] = [
@@ -419,6 +453,16 @@ export const EXPEDITION_MAP: readonly FrontierMapNode[] = [
   { id: 'smuggler-hole', kind: 'event', name: 'Лаз контрабандистов', description: 'Зайти Мытарю во фланг: он начнёт бой без 10 здоровья.', label: 'ЗАСАДА', effect: { kind: 'ambush', amount: 10 }, next: ['toll-yard'] },
   { id: 'toll-yard', kind: 'battle', name: 'Мытный двор', description: 'Мытарь назначил цену за проход к Ратушной площади.', enemyIndex: 9, next: ['town-square'] },
   { id: 'town-square', kind: 'finish', name: 'Ратушная площадь', description: 'Первая улица Пограничья пройдена.', next: [] },
+  { id: 'guild-street', kind: 'start', name: 'Улица цехов', description: 'За площадью город темнеет, а над крышами гудит Чёрный колокол.', next: ['lantern-alley'] },
+  { id: 'lantern-alley', kind: 'battle', name: 'Фонарный переулок', description: 'Старый косарь гасит огни и оставляет кровоточащие раны.', enemyIndex: 12, next: ['tanner-yard', 'boar-pens'] },
+  { id: 'tanner-yard', kind: 'event', name: 'Двор кожевника', description: 'В нетронутом сундуке осталось дополнительное зелье.', label: 'ПРИПАСЫ', effect: { kind: 'supplies', amount: 1 }, next: ['execution-yard'] },
+  { id: 'boar-pens', kind: 'battle', name: 'Скотный загон', description: 'Кованый вепрь пробивает блок разогнавшимся ударом.', enemyIndex: 15, next: ['execution-yard'] },
+  { id: 'execution-yard', kind: 'battle', name: 'Двор казней', description: 'Железный палач встречает прямые удары отводом и готовит сокрушение.', enemyIndex: 13, next: ['physic-garden', 'raven-belfry'] },
+  { id: 'physic-garden', kind: 'event', name: 'Аптекарский сад', description: 'Среди горьких трав уцелела полынь для одной настойки.', label: 'ПОЛЫНЬ', effect: { kind: 'tincture', amount: 1 }, next: ['plague-house'] },
+  { id: 'raven-belfry', kind: 'battle', name: 'Звонница', description: 'Воронья стая бьёт трижды за ход, но целиком промахивается по уклонившемуся.', enemyIndex: 16, next: ['bell-stairs'] },
+  { id: 'bell-stairs', kind: 'event', name: 'Колокольная лестница', description: 'На закрытой площадке можно перевязать раны перед чумным домом.', label: 'ПЕРЕДЫШКА', effect: { kind: 'heal', amount: 12 }, next: ['plague-house'] },
+  { id: 'plague-house', kind: 'battle', name: 'Чумной дом', description: 'Моровой лекарь отвечает на запах зелий и рвёт незакрытые раны.', enemyIndex: 14, next: ['black-bell'] },
+  { id: 'black-bell', kind: 'finish', name: 'Чёрный колокол', description: 'Источник ночного звона найден.', next: [] },
 ] as const;
 
 const LOOT: readonly (readonly [LootOption, LootOption])[] = [
@@ -436,13 +480,19 @@ export const CHAPTERS: Readonly<Record<ChapterId, FrontierChapter>> = {
     id: 'prologue', title: 'Первый поход', intro: 'Дорога к воротам Пограничья.',
     start: 'trailhead', finish: 'city', stages: ['old-road', 'burned-road', 'gate'],
     nodes: ['trailhead', 'old-road', 'watchtower', 'hidden-path', 'rat-den', 'bear-cave', 'wolf-woods', 'hollow-grove', 'burned-road', 'wormwood-ravine', 'forester-lodge', 'gate', 'city'],
-    loot: LOOT, requiresPrologueVictories: 0,
+    loot: LOOT, requirements: [],
   },
   'chapter-1': {
     id: 'chapter-1', title: 'За воротами', intro: 'Путь через посад к Ратушной площади.',
     start: 'gate-yard', finish: 'town-square', stages: ['outpost', 'butcher-row', 'toll-yard'],
     nodes: ['gate-yard', 'outpost', 'market-rows', 'backyards', 'rotten-pond', 'butcher-row', 'chapel', 'wine-cellar', 'smuggler-hole', 'toll-yard', 'town-square'],
-    loot: CHAPTER_ONE_LOOT, requiresPrologueVictories: 1,
+    loot: CHAPTER_ONE_LOOT, requirements: [{ chapter: 'prologue', victories: 1 }],
+  },
+  'chapter-2': {
+    id: 'chapter-2', title: 'Чёрный колокол', intro: 'Ночная дорога через ремесленные дворы к чумному дому.',
+    start: 'guild-street', finish: 'black-bell', stages: ['lantern-alley', 'execution-yard', 'plague-house'],
+    nodes: ['guild-street', 'lantern-alley', 'tanner-yard', 'boar-pens', 'execution-yard', 'physic-garden', 'raven-belfry', 'bell-stairs', 'plague-house', 'black-bell'],
+    loot: CHAPTER_ONE_LOOT, requirements: [{ chapter: 'chapter-1', victories: 1 }],
   },
 };
 
@@ -587,7 +637,7 @@ export function createFrontierCombat(enemyIndex: number, gear: FrontierGear, tal
     feintUsed: false, dodgeCooldown: 0, heavyCooldown: 0, scentBonus: 0,
     rage: 0, blood: false, damageThisTurn: 0, heavyThisTurn: false,
     charged: false, stunned: false, outcome: null,
-    log: [`${enemy.name} преградил дорогу. Его следующий ход виден заранее.`],
+    log: [`${enemy.name} ${isFeminineEnemy(enemy) ? 'преградила' : 'преградил'} дорогу. Следующий ход врага виден заранее.`],
   };
 }
 

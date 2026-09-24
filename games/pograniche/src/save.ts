@@ -29,7 +29,12 @@ export interface PogranicheSave {
   city: FrontierCityState;
 }
 
-type LegacyV9Save = Omit<PogranicheSave, 'city'>;
+type LegacyChapterId = Exclude<ChapterId, 'chapter-2'>;
+type LegacyV11Save = Omit<PogranicheSave, 'chapter' | 'progress'> & {
+  chapter: LegacyChapterId;
+  progress: Record<LegacyChapterId, { victories: number; bestStage: number }>;
+};
+type LegacyV9Save = Omit<LegacyV11Save, 'city'>;
 
 interface LegacyV8Save {
   victories: number;
@@ -59,7 +64,7 @@ export const DEFAULT_LOADOUT: FrontierGear = { weapon: 'road-blade', armor: 'pat
 export function defaultPogranicheSave(): PogranicheSave {
   return {
     chapter: 'prologue',
-    progress: { prologue: { victories: 0, bestStage: 0 }, 'chapter-1': { victories: 0, bestStage: 0 } },
+    progress: { prologue: { victories: 0, bestStage: 0 }, 'chapter-1': { victories: 0, bestStage: 0 }, 'chapter-2': { victories: 0, bestStage: 0 } },
     run: null,
     inventory: { weapons: [...STARTER_INVENTORY.weapons], armors: [...STARTER_INVENTORY.armors] },
     loadout: { ...DEFAULT_LOADOUT },
@@ -70,12 +75,17 @@ export function defaultPogranicheSave(): PogranicheSave {
 }
 
 export function migratePogranicheSave(old: unknown, fromVersion: number): PogranicheSave | null {
-  if (typeof old !== 'object' || old === null || fromVersion < 1 || fromVersion > 10) return null;
+  if (typeof old !== 'object' || old === null || fromVersion < 1 || fromVersion > 11) return null;
+  if (fromVersion === 11) {
+    const saved = old as LegacyV11Save;
+    if (!hasV11SaveShape(saved)) return null;
+    return addChapterTwo(saved);
+  }
   if (fromVersion === 10) {
-    const saved = old as PogranicheSave;
+    const saved = old as LegacyV11Save;
     if (!hasV9SaveShape(saved) || !saved.city || typeof saved.city !== 'object') return null;
     const city = saved.city as Partial<FrontierCityState>;
-    return {
+    return addChapterTwo({
       ...saved,
       city: {
         ...DEFAULT_FRONTIER_CITY,
@@ -85,12 +95,12 @@ export function migratePogranicheSave(old: unknown, fromVersion: number): Pogran
         pendingTrophy: city.pendingTrophy === 'contraband' ? 'contraband' : null,
         contract: city.contract ?? null,
       },
-    };
+    });
   }
   if (fromVersion === 9) {
     const saved = old as LegacyV9Save;
     if (!hasV9SaveShape(saved)) return null;
-    return { ...saved, city: { ...DEFAULT_FRONTIER_CITY } };
+    return addChapterTwo({ ...saved, city: { ...DEFAULT_FRONTIER_CITY } });
   }
   if (fromVersion === 8) {
     const saved = old as LegacyV8Save;
@@ -169,6 +179,7 @@ function upgradeV8Save(saved: LegacyV8Save): PogranicheSave {
     progress: {
       prologue: { victories: numberOrZero(saved.victories), bestStage: numberOrZero(saved.bestStage) },
       'chapter-1': { victories: 0, bestStage: 0 },
+      'chapter-2': { victories: 0, bestStage: 0 },
     },
     run: saved.run ? withChapterFields(saved.run) : null,
     inventory: saved.inventory,
@@ -244,8 +255,8 @@ function hasV9SaveShape(saved: Partial<LegacyV9Save>): saved is LegacyV9Save {
   if (!hasCurrentSaveShape(saved)) return false;
   if (saved.chapter !== 'prologue' && saved.chapter !== 'chapter-1') return false;
   if (!saved.progress || typeof saved.progress !== 'object') return false;
-  const progress = saved.progress as Partial<Record<ChapterId, { victories?: unknown; bestStage?: unknown }>>;
-  const validProgress = (chapter: ChapterId): boolean => {
+  const progress = saved.progress as Partial<Record<LegacyChapterId, { victories?: unknown; bestStage?: unknown }>>;
+  const validProgress = (chapter: LegacyChapterId): boolean => {
     const value = progress[chapter];
     return Boolean(value) && Number.isFinite(value?.victories) && Number.isFinite(value?.bestStage);
   };
@@ -254,6 +265,17 @@ function hasV9SaveShape(saved: Partial<LegacyV9Save>): saved is LegacyV9Save {
   return Number.isFinite(saved.talents.strength)
     && Number.isFinite(saved.talents.vitality)
     && Number.isFinite(saved.talents.supplies);
+}
+
+function hasV11SaveShape(saved: Partial<LegacyV11Save>): saved is LegacyV11Save {
+  return hasV9SaveShape(saved) && Boolean((saved as Partial<LegacyV11Save>).city) && typeof (saved as Partial<LegacyV11Save>).city === 'object';
+}
+
+function addChapterTwo(saved: LegacyV11Save): PogranicheSave {
+  return {
+    ...saved,
+    progress: { ...saved.progress, 'chapter-2': { victories: 0, bestStage: 0 } },
+  };
 }
 
 function visitedForLegacyRun(run: LegacyRun): MapNodeId[] {
