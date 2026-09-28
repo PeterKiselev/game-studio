@@ -54,6 +54,14 @@
   font-weight: 750;
 }
 
+/* Вторичное действие под главной кнопкой: список уроков нужен тем, кто
+   хочет вернуться к пройденному, но он не должен спорить за внимание с
+   кнопкой «начать следующий урок». */
+.all-lessons {
+  align-self: flex-start;
+  margin-top: calc(-1 * var(--gap-3));
+}
+
 .academy-kicker,
 .academy-progress {
   font-size: 12px;

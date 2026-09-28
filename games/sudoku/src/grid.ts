@@ -1,4 +1,5 @@
 import { el } from '@studio/ui';
+import { t } from './i18n';
 
 export interface GridHandle {
   root: HTMLElement;
@@ -34,7 +35,7 @@ export function renderSudokuGrid(givens: readonly number[], getState: () => Grid
     const row = Math.floor(i / 9);
     const col = i % 9;
     const btn = el('button', { class: 'sudoku-cell', type: 'button' }) as HTMLButtonElement;
-    btn.setAttribute('aria-label', `строка ${row + 1}, столбец ${col + 1}`);
+    btn.setAttribute('aria-label', t().grid.cellLabel(row + 1, col + 1));
     if (givens[i] !== 0) btn.classList.add('given');
     if (col % 3 === 0) btn.classList.add('box-left');
     if (row % 3 === 0) btn.classList.add('box-top');

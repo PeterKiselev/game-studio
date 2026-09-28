@@ -19,6 +19,15 @@ const { chromium } = require('playwright');
 
 const BASE = process.argv[2] || 'http://127.0.0.1:4176/';
 
+/**
+ * Язык в сценарии всегда задаётся явно. Без ?lang= игра берёт локаль
+ * площадки (в headless-браузере это en-US), и проверка русской строки
+ * начинает зависеть от настроек машины — то есть перестаёт быть проверкой.
+ */
+function url(lang, base = BASE) {
+  return `${base}${base.includes('?') ? '&' : '?'}lang=${lang}`;
+}
+
 function assert(cond, message) {
   if (!cond) throw new Error('ПРОВАЛ: ' + message);
   console.log('  ok —', message);
@@ -63,9 +72,15 @@ async function solveViaHints(page, maxSteps = 120) {
   console.log('\n=== 0. Академия логики ===');
   {
     const page = await newPage(browser);
-    await page.goto(BASE, { waitUntil: 'networkidle' });
+    await page.goto(url('ru'), { waitUntil: 'networkidle' });
     assert(await page.locator('.academy-card').isVisible(), 'академия — главный акцент первого экрана');
+
+    // Главная кнопка ведёт СРАЗУ в урок, без промежуточного списка: на
+    // портале первые секунды решают, попробует игрок игру или закроет.
     await page.locator('.academy-card').click();
+    assert(await page.locator('.academy-lesson').isVisible(), 'первый урок открывается одним кликом с главного экрана');
+    await page.locator('.academy-lesson .topbar .btn').click();
+
     assert((await page.locator('.lesson-card').count()) === 12, 'курс содержит 12 уроков');
     assert((await page.locator('.lesson-card:enabled').count()) === 1, 'сначала открыт только первый урок');
     await page.locator('.lesson-card').first().click();
@@ -88,7 +103,7 @@ async function solveViaHints(page, maxSteps = 120) {
     const page = await newPage(browser);
     const logs = [];
     attachLogger(page, logs);
-    await page.goto(BASE, { waitUntil: 'networkidle' });
+    await page.goto(url('ru'), { waitUntil: 'networkidle' });
     assert(await page.locator('.menu h1').isVisible(), 'меню открывается');
     assert((await page.locator('.shop-btn').count()) === 0, 'кнопка магазина скрыта — caps.payments нет на web');
 
@@ -121,7 +136,7 @@ async function solveViaHints(page, maxSteps = 120) {
   console.log('\n=== 2. Конфликт двух одинаковых цифр не даёт ложной победы ===');
   {
     const page = await newPage(browser);
-    await page.goto(BASE, { waitUntil: 'networkidle' });
+    await page.goto(url('ru'), { waitUntil: 'networkidle' });
     await page.locator('.difficulty-card').first().click();
     await page.waitForSelector('.puzzle');
 
@@ -144,7 +159,7 @@ async function solveViaHints(page, maxSteps = 120) {
   console.log('\n=== 3. Прогресс и заметки переживают reload ===');
   {
     const page = await newPage(browser);
-    await page.goto(BASE, { waitUntil: 'networkidle' });
+    await page.goto(url('ru'), { waitUntil: 'networkidle' });
     await page.locator('.difficulty-card').nth(1).click(); // Средний
     await page.waitForSelector('.puzzle');
 
@@ -176,7 +191,7 @@ async function solveViaHints(page, maxSteps = 120) {
     async function fingerprint(isoDateTime) {
       const page = await newPage(browser);
       await page.clock.install({ time: new Date(isoDateTime) });
-      await page.goto(BASE, { waitUntil: 'networkidle' });
+      await page.goto(url('ru'), { waitUntil: 'networkidle' });
       await page.locator('.daily-card').click();
       await page.waitForSelector('.puzzle');
       const values = (await page.locator('.sudoku-cell').allTextContents()).join('');
@@ -196,7 +211,7 @@ async function solveViaHints(page, maxSteps = 120) {
   console.log('\n=== 5. Горизонтальный мобильный экран ===');
   {
     const page = await newPage(browser, { viewport: { width: 800, height: 420 } });
-    await page.goto(BASE, { waitUntil: 'networkidle' });
+    await page.goto(url('ru'), { waitUntil: 'networkidle' });
     await page.locator('.difficulty-card').first().click();
     await page.waitForSelector('.puzzle');
 
@@ -206,6 +221,101 @@ async function solveViaHints(page, maxSteps = 120) {
     assert(!!gridBox && gridBox.y >= 0 && gridBox.y + gridBox.height <= 420, 'поле целиком видно в landscape');
     assert(!!digitBox && digitBox.y >= 0 && digitBox.y + digitBox.height <= 420, 'цифровая панель доступна в landscape');
     assert(!!hintBox && hintBox.y >= 0 && hintBox.y + hintBox.height <= 420, 'кнопка подсказки доступна в landscape');
+    assert(page.errors.length === 0, 'без ошибок в консоли: ' + page.errors.join('; '));
+    await page.close();
+  }
+
+  // --- сценарий 6: русская версия по ?lang=ru не изменилась по смыслу ---
+  console.log('\n=== 6. Русская локаль (?lang=ru) ===');
+  {
+    const page = await newPage(browser);
+    await page.goto(url('ru'), { waitUntil: 'networkidle' });
+
+    assert((await page.locator('html').getAttribute('lang')) === 'ru', '<html lang> равен ru');
+    assert((await page.title()) === 'Академия Sudoku', 'заголовок вкладки на русском');
+    const menuText = await page.locator('.menu').innerText();
+    assert(/Практика/.test(menuText), 'меню на русском: раздел «Практика»');
+    assert(/Достижения/.test(menuText), 'меню на русском: раздел «Достижения»');
+
+    await page.locator('.academy-card').click();
+    await page.waitForSelector('.academy-lesson');
+    const lessonText = await page.locator('.lesson-instruction').innerText();
+    assert(/[А-Яа-яЁё]/.test(lessonText), 'объяснение урока на русском');
+
+    const cellLabel = await page.locator('.sudoku-cell').first().getAttribute('aria-label');
+    assert(/строка 1, столбец 1/.test(cellLabel), 'aria-label клетки на русском: ' + cellLabel);
+    assert(page.errors.length === 0, 'без ошибок в консоли: ' + page.errors.join('; '));
+    await page.close();
+  }
+
+  // --- сценарий 7: английская версия играбельна и не содержит кириллицы ---
+  console.log('\n=== 7. Английская локаль (?lang=en) ===');
+  {
+    const page = await newPage(browser);
+    await page.goto(url('en'), { waitUntil: 'networkidle' });
+
+    assert((await page.locator('html').getAttribute('lang')) === 'en', '<html lang> равен en');
+    assert((await page.title()) === 'Sudoku Academy', 'заголовок вкладки на английском');
+
+    const menuText = await page.locator('.menu').innerText();
+    assert(/Practice/.test(menuText), 'меню на английском: раздел Practice');
+    assert(/Achievements/.test(menuText), 'меню на английском: раздел Achievements');
+    assert(!/[А-Яа-яЁё]/.test(menuText), 'на первом экране нет кириллицы: ' + menuText.replace(/\n/g, ' | '));
+
+    // Один клик от первого экрана до интерактивного урока — требование карточки.
+    await page.locator('.academy-card').click();
+    assert(await page.locator('.academy-lesson').isVisible(), 'урок открывается одним кликом');
+
+    const cellLabel = await page.locator('.sudoku-cell').first().getAttribute('aria-label');
+    assert(/row 1, column 1/.test(cellLabel), 'aria-label клетки на английском: ' + cellLabel);
+
+    const explanation = await page.locator('.lesson-feedback').innerText();
+    assert(!/[А-Яа-яЁё]/.test(explanation), 'объяснение приёма на английском: ' + explanation);
+
+    // Берём ПОСЛЕДНЮЮ названную клетку и доказанную цифру: у голой пары
+    // первыми в тексте идут клетки самой пары, а ход делается в третью.
+    const cells = [...explanation.matchAll(/row (\d+), column (\d+)\)/g)];
+    const value = explanation.match(/can only be (\d+)/);
+    assert(cells.length > 0 && !!value, 'английское объяснение называет клетку и цифру: ' + explanation);
+    const targetCell = cells[cells.length - 1];
+
+    // Делаем требуемый ход и доводим урок до конца — проверяем, что
+    // английская версия не просто переведена, а действительно играется.
+    const index = (Number(targetCell[1]) - 1) * 9 + Number(targetCell[2]) - 1;
+    await page.locator('.sudoku-cell').nth(index).click();
+    await page.locator('.digit-btn', { hasText: String(value[1]) }).click();
+    assert(await page.locator('.academy-lesson .btn.primary').isVisible(), 'урок завершается и открывает переход дальше');
+
+    const doneText = await page.locator('.lesson-feedback').innerText();
+    assert(/Correct/.test(doneText), 'подтверждение урока на английском: ' + doneText);
+
+    const screenText = await page.locator('.screen').innerText();
+    assert(!/[А-Яа-яЁё]/.test(screenText), 'на экране урока не осталось кириллицы: ' + screenText.replace(/\n/g, ' | '));
+    assert(page.errors.length === 0, 'без ошибок в консоли: ' + page.errors.join('; '));
+    await page.close();
+  }
+
+  // --- сценарий 8: официальный размер iframe CrazyGames 907×510 ---
+  console.log('\n=== 8. Размер витрины CrazyGames 907×510 ===');
+  {
+    const page = await newPage(browser, { viewport: { width: 907, height: 510 } });
+    await page.goto(url('en'), { waitUntil: 'networkidle' });
+
+    const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+    assert(overflow <= 0, `нет горизонтального переполнения на первом экране (запас ${-overflow}px)`);
+
+    await page.locator('.academy-card').click();
+    await page.waitForSelector('.academy-lesson');
+    const lessonOverflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+    assert(lessonOverflow <= 0, `нет горизонтального переполнения в уроке (запас ${-lessonOverflow}px)`);
+
+    // Кнопки должны быть не просто отрисованы, а доступны внутри окна:
+    // «видно, но нельзя нажать» — самый обидный класс дефекта на портале.
+    for (const selector of ['.sudoku-grid', '.numpad', '.digit-btn']) {
+      const box = await page.locator(selector).first().boundingBox();
+      assert(!!box && box.x >= 0 && box.x + box.width <= 907, `${selector} помещается по ширине`);
+      assert(!!box && box.y >= 0 && box.y + box.height <= 510, `${selector} помещается по высоте`);
+    }
     assert(page.errors.length === 0, 'без ошибок в консоли: ' + page.errors.join('; '));
     await page.close();
   }

@@ -1,15 +1,41 @@
 import { boxOf, colOf, rowOf } from './solver';
-import { UNITS } from './units';
+import { UNITS, unitKindAt } from './units';
+import type { UnitKind } from './units';
 import type { Grid } from './types';
 
 export type HintTechnique = 'naked-single' | 'hidden-single' | 'naked-pair';
 
-export interface Hint {
+/**
+ * Подсказка отдаёт разбор хода данными, а не готовой фразой.
+ *
+ * Раньше здесь лежало поле `text` с русским предложением, и из-за него
+ * слой правил знал язык интерфейса — а по правилу 3 в CLAUDE.md правила
+ * обязаны быть чистыми и переиспользуемыми (в том числе на сервере, где
+ * никакого языка игрока вообще нет). Теперь формулировкой занимается
+ * игра: она одна знает, какая локаль выбрана.
+ *
+ * Union по `technique` не косметика: у каждого приёма своя доказательная
+ * база, и разный набор полей не даёт случайно объяснить голую пару так,
+ * будто это единственный кандидат.
+ */
+export interface HintBase {
+  /** Клетка, в которую ход доказан. */
   index: number;
+  /** Доказанная цифра. */
   value: number;
-  technique: HintTechnique;
-  text: string;
 }
+
+export type Hint =
+  | (HintBase & { technique: 'naked-single' })
+  | (HintBase & { technique: 'hidden-single'; unit: UnitKind })
+  | (HintBase & {
+      technique: 'naked-pair';
+      unit: UnitKind;
+      /** Две клетки, забравшие пару цифр себе. */
+      pairCells: readonly [number, number];
+      /** Сами цифры пары, по возрастанию. */
+      pairDigits: readonly [number, number];
+    });
 
 /**
  * Подсказка должна рассуждать только от уже верных посылок. Ошибочная
@@ -37,40 +63,28 @@ function candidatesFor(grid: Grid, index: number): Set<number> {
   return out;
 }
 
-function describeCell(index: number): string {
-  return `строка ${rowOf(index) + 1}, столбец ${colOf(index) + 1}`;
-}
-
 function findNakedSingle(grid: Grid): Hint | null {
   for (let i = 0; i < 81; i += 1) {
     if (grid[i] !== 0) continue;
     const candidates = candidatesFor(grid, i);
     if (candidates.size === 1) {
-      const value = [...candidates][0];
-      return {
-        index: i,
-        value,
-        technique: 'naked-single',
-        text:
-          `В клетке (${describeCell(i)}) может стоять только ${value} — все остальные цифры ` +
-          'уже заняты в этой строке, столбце или квадрате.',
-      };
+      return { index: i, value: [...candidates][0], technique: 'naked-single' };
     }
   }
   return null;
 }
 
 function findHiddenSingle(grid: Grid): Hint | null {
-  for (const unit of UNITS) {
+  for (let unitIndex = 0; unitIndex < UNITS.length; unitIndex += 1) {
+    const unit = UNITS[unitIndex];
     for (let digit = 1; digit <= 9; digit += 1) {
       const spots = unit.filter((i) => grid[i] === 0 && candidatesFor(grid, i).has(digit));
       if (spots.length === 1) {
-        const index = spots[0];
         return {
-          index,
+          index: spots[0],
           value: digit,
           technique: 'hidden-single',
-          text: `В этой области цифра ${digit} может стоять только в клетке (${describeCell(index)}).`,
+          unit: unitKindAt(unitIndex),
         };
       }
     }
@@ -86,7 +100,8 @@ function findHiddenSingle(grid: Grid): Hint | null {
  * один проверяемый ход, а не молча редактирует карандашные заметки игрока.
  */
 function findNakedPairPlacement(grid: Grid): Hint | null {
-  for (const unit of UNITS) {
+  for (let unitIndex = 0; unitIndex < UNITS.length; unitIndex += 1) {
+    const unit = UNITS[unitIndex];
     const candidates = new Map<number, Set<number>>();
     for (const index of unit) {
       if (grid[index] === 0) candidates.set(index, candidatesFor(grid, index));
@@ -116,15 +131,13 @@ function findNakedPairPlacement(grid: Grid): Hint | null {
           const reduced = [...original].filter((digit) => !first.has(digit));
           if (reduced.length !== 1) continue;
 
-          const value = reduced[0];
           return {
             index,
-            value,
+            value: reduced[0],
             technique: 'naked-pair',
-            text:
-              `Клетки (${describeCell(firstIndex)}) и (${describeCell(secondIndex)}) образуют пару ` +
-              `${pairDigits[0]}/${pairDigits[1]}. Эти цифры заняты парой, поэтому в клетке ` +
-              `(${describeCell(index)}) остаётся только ${value}.`,
+            unit: unitKindAt(unitIndex),
+            pairCells: [firstIndex, secondIndex] as const,
+            pairDigits: [pairDigits[0], pairDigits[1]] as const,
           };
         }
       }

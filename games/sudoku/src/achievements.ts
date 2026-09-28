@@ -15,31 +15,19 @@ type Difficulty = sudoku.Difficulty;
  * Проверяются только на завершении партии (в main.ts), не задним числом.
  */
 
-export interface Achievement {
-  id: string;
-  title: string;
-  description: string;
-}
-
-export const ACHIEVEMENTS: Achievement[] = [
-  { id: 'first_puzzle', title: 'Первое судоку', description: 'Решили свой первый пазл.' },
-  { id: 'flawless', title: 'Без единой ошибки', description: 'Решили пазл без ошибок и без подсказок.' },
-  {
-    id: 'three_flawless',
-    title: 'Твёрдая рука',
-    description: 'Решили три пазла без ошибок и подсказок (не обязательно подряд).',
-  },
-  { id: 'streak_7', title: 'Неделя подряд', description: 'Решали ежедневное судоку семь дней подряд.' },
-  {
-    id: 'all_difficulties',
-    title: 'Все три уровня',
-    description: 'Решили хотя бы один пазл каждой сложности — лёгкой, средней и сложной.',
-  },
-  {
-    id: 'comeback',
-    title: 'Не с первой попытки',
-    description: 'Решили пазл после того, как сами ошиблись хотя бы раз.',
-  },
+/**
+ * Только идентификаторы и порядок показа. Названия и описания — в
+ * `i18n.ts` по этому же id: id лежит в сохранении (`save.achievements`),
+ * а переведённый текст туда попадать не должен, иначе смена языка
+ * «закрывала» бы уже открытые достижения.
+ */
+export const ACHIEVEMENT_IDS: readonly string[] = [
+  'first_puzzle',
+  'flawless',
+  'three_flawless',
+  'streak_7',
+  'all_difficulties',
+  'comeback',
 ];
 
 export interface CompletionContext {

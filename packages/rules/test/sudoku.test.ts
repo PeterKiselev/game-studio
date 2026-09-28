@@ -176,7 +176,22 @@ describe('nextHint', () => {
     }
     expect(pairHint?.technique).toBe('naked-pair');
     expect(pairHint!.value).toBe(puzzle.solution[pairHint!.index]);
-    expect(pairHint!.text).toContain('образуют пару');
+
+    // Проверяем смысл разбора, а не формулировку: раньше здесь стояло
+    // `text.toContain('образуют пару')`, и тест ломался бы от любой правки
+    // текста, при этом ничего не говоря о верности самого рассуждения.
+    if (pairHint!.technique !== 'naked-pair') throw new Error('ожидалась голая пара');
+    const { pairCells, pairDigits, unit } = pairHint!;
+    expect(['row', 'col', 'box']).toContain(unit);
+    expect(pairCells[0]).not.toBe(pairCells[1]);
+    expect(pairDigits[0]).toBeLessThan(pairDigits[1]);
+    // Обе клетки пары — пустые, обе отличны от клетки хода, и доказанная
+    // цифра не входит в саму пару: иначе это был бы не вывод из пары.
+    for (const cell of pairCells) {
+      expect(grid[cell]).toBe(0);
+      expect(cell).not.toBe(pairHint!.index);
+    }
+    expect(pairDigits).not.toContain(pairHint!.value);
   });
 
   it('не делает ложных выводов через пару на серии разных пазлов', () => {

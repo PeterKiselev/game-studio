@@ -2,8 +2,9 @@ import { GameApp } from '@studio/game-kit';
 import { sudoku } from '@studio/rules';
 import { el, toast } from '@studio/ui';
 import { renderSudokuGrid } from './grid';
-import { ACHIEVEMENTS, checkNewAchievements, starsFor } from './achievements';
-import { ACADEMY_LESSONS, prepareAcademyLesson } from './academy';
+import { ACHIEVEMENT_IDS, checkNewAchievements, starsFor } from './achievements';
+import { ACADEMY_LESSONS, nextLesson, prepareAcademyLesson } from './academy';
+import { detectLocale, setLocale, t } from './i18n';
 import './theme.css';
 import './style.css';
 
@@ -67,11 +68,7 @@ const DEFAULTS: Save = {
   mastery: { 'naked-single': 0, 'hidden-single': 0, 'naked-pair': 0 },
 };
 
-const TECHNIQUE_LABEL: Record<sudoku.HintTechnique, string> = {
-  'naked-single': 'Единственный кандидат',
-  'hidden-single': 'Скрытая единственная',
-  'naked-pair': 'Голая пара',
-};
+const TECHNIQUE_ORDER: sudoku.HintTechnique[] = ['naked-single', 'hidden-single', 'naked-pair'];
 
 const root = document.getElementById('app')!;
 let app!: GameApp<Save>;
@@ -84,14 +81,19 @@ async function main(): Promise<void> {
     adPolicy: { firstAdAfterRounds: 2, minSecondsBetween: 180 },
   });
 
-  app.track('app_start');
+  // Язык выбирается до первой отрисовки: setLocale заодно проставляет
+  // <html lang> и заголовок вкладки, а они должны быть верными уже на
+  // первом кадре — их читают и скринридер, и витрина площадки.
+  const chosen = detectLocale(app.platform.locale);
+  setLocale(chosen);
+
+  app.track('app_start', { locale: chosen });
   showMenu();
   app.ready();
 }
 
 void main();
 
-const DIFFICULTY_LABEL: Record<Difficulty, string> = { easy: 'Лёгкий', medium: 'Средний', hard: 'Сложный' };
 const DIFFICULTIES: Difficulty[] = ['easy', 'medium', 'hard'];
 
 function formatTime(ms: number): string {
@@ -99,13 +101,6 @@ function formatTime(ms: number): string {
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
   return `${minutes}:${String(seconds).padStart(2, '0')}`;
-}
-
-function logicStepsLabel(count: number): string {
-  const mod100 = count % 100;
-  const mod10 = count % 10;
-  const noun = mod100 >= 11 && mod100 <= 14 ? 'шагов' : mod10 === 1 ? 'шаг' : mod10 >= 2 && mod10 <= 4 ? 'шага' : 'шагов';
-  return `${count} логических ${noun}`;
 }
 
 function freshPracticeSeed(): string {
@@ -140,18 +135,16 @@ function showMenu(): void {
   // а не тихо предложить «начать» то, что на деле продолжит её же
   // (resumableProgress здесь и внутри startPuzzle — одна и та же проверка).
   const dailyTitle = dailyResult
-    ? `☀️ Сегодняшнее судоку · ${'⭐'.repeat(dailyResult.stars)}`
+    ? t().menu.dailyDone(dailyResult.stars)
     : dailyInProgress
-      ? '☀️ Продолжить сегодняшнее судоку'
-      : '☀️ Сегодняшнее судоку';
+      ? t().menu.dailyResume
+      : t().menu.dailyFresh;
 
   const dailyCard = el(
     'button',
     { class: 'daily-card', type: 'button', disabled: !!dailyResult },
     el('div', { class: 'title' }, dailyTitle),
-    s.streak > 0
-      ? el('div', { class: 'streak' }, 'Серия: ', el('b', {}, String(s.streak)), ' дней подряд')
-      : el('div', { class: 'streak' }, 'Решайте каждый день, чтобы набрать серию'),
+    el('div', { class: 'streak' }, s.streak > 0 ? t().menu.streak(s.streak) : t().menu.streakEmpty),
   ) as HTMLButtonElement;
   dailyCard.addEventListener('click', () => void startPuzzle('daily', sudoku.difficultyForDate(today), today));
 
@@ -160,14 +153,14 @@ function showMenu(): void {
     const stats = s.practice[d];
     const inProgress = resumableProgress('practice', d);
     const statusLine = inProgress
-      ? 'Продолжить'
+      ? t().menu.resume
       : stats.best
         ? `${'⭐'.repeat(stats.best.stars)} · ${formatTime(stats.best.timeMs)}`
-        : `${stats.played} партий`;
+        : t().menu.playedGames(stats.played);
     const card = el(
       'button',
       { class: 'difficulty-card', type: 'button' },
-      el('div', { class: 'name' }, DIFFICULTY_LABEL[d]),
+      el('div', { class: 'name' }, t().difficulties[d]),
       el('div', { class: 'best' }, statusLine),
     ) as HTMLButtonElement;
     card.addEventListener('click', () => void startPuzzle('practice', d));
@@ -175,32 +168,33 @@ function showMenu(): void {
   }
 
   const achievementsBox = el('div', { class: 'achievements' });
-  for (const a of ACHIEVEMENTS) {
-    const unlocked = s.achievements.includes(a.id);
+  for (const id of ACHIEVEMENT_IDS) {
+    const unlocked = s.achievements.includes(id);
     achievementsBox.append(
       el(
         'div',
         { class: `achievement${unlocked ? ' unlocked' : ''}` },
         el('div', { class: 'badge' }, unlocked ? '🏅' : '🔒'),
-        el('div', { class: 'label' }, a.title),
+        el('div', { class: 'label' }, t().achievements[id].title),
       ),
     );
   }
 
   const screenChildren: HTMLElement[] = [
-    el('h1', {}, 'Академия Sudoku'),
-    academyCard(s.academy.completed.length),
+    el('h1', {}, t().appTitle),
+    academyCard(s.academy.completed),
+    allLessonsButton(),
     dailyCard,
-    el('div', { class: 'section-label' }, 'Практика'),
+    el('div', { class: 'section-label' }, t().menu.practice),
     diffList,
-    el('div', { class: 'section-label' }, 'Достижения'),
+    el('div', { class: 'section-label' }, t().menu.achievements),
     achievementsBox,
   ];
 
   // Кнопка магазина — только если площадка реально умеет платежи (правило 2
   // из CLAUDE.md: скрываем, а не показываем мёртвую кнопку).
   if (app.platform.caps.payments) {
-    const shopBtn = el('button', { class: 'btn ghost shop-btn', type: 'button' }, '🛍️ Магазин') as HTMLButtonElement;
+    const shopBtn = el('button', { class: 'btn ghost shop-btn', type: 'button' }, t().menu.shop) as HTMLButtonElement;
     shopBtn.addEventListener('click', () => void showShop());
     screenChildren.push(shopBtn);
   }
@@ -209,18 +203,37 @@ function showMenu(): void {
   root.replaceChildren(screen);
 }
 
-function academyCard(completed: number): HTMLElement {
-  const next = ACADEMY_LESSONS[Math.min(completed, ACADEMY_LESSONS.length - 1)];
-  const done = completed >= ACADEMY_LESSONS.length;
+/**
+ * Главная кнопка первого экрана. Один клик — и игрок уже внутри
+ * следующего непройденного урока, без промежуточного списка: у теста на
+ * портале первые секунды решают, а лишний экран между «открыл» и «играю»
+ * теряет как раз тех, кто пришёл посмотреть.
+ *
+ * Список уроков никуда не делся — он под кнопкой, вторичным действием.
+ */
+function academyCard(completed: readonly string[]): HTMLElement {
+  const lesson = nextLesson(completed);
+  const done = completed.length >= ACADEMY_LESSONS.length;
+  const position = ACADEMY_LESSONS.findIndex((item) => item.id === lesson.id) + 1;
   const card = el(
     'button',
     { class: 'academy-card', type: 'button' },
-    el('div', { class: 'academy-kicker' }, '🎓 КУРС ЛОГИКИ'),
-    el('div', { class: 'title' }, done ? 'Курс пройден' : `Урок ${completed + 1}: ${next.title}`),
-    el('div', { class: 'academy-progress' }, `${completed} из ${ACADEMY_LESSONS.length} уроков`),
+    el('div', { class: 'academy-kicker' }, t().menu.academyKicker),
+    el(
+      'div',
+      { class: 'title' },
+      done ? t().menu.academyDone : t().menu.academyLessonTitle(position, t().lessons[lesson.id].title),
+    ),
+    el('div', { class: 'academy-progress' }, t().menu.academyProgress(completed.length, ACADEMY_LESSONS.length)),
   ) as HTMLButtonElement;
-  card.addEventListener('click', showAcademy);
+  card.addEventListener('click', () => showLesson(lesson));
   return card;
+}
+
+function allLessonsButton(): HTMLElement {
+  const btn = el('button', { class: 'btn ghost all-lessons', type: 'button' }, t().menu.allLessons) as HTMLButtonElement;
+  btn.addEventListener('click', showAcademy);
+  return btn;
 }
 
 function showAcademy(): void {
@@ -233,20 +246,36 @@ function showAcademy(): void {
       'button',
       { class: `lesson-card${done ? ' done' : ''}`, type: 'button', disabled: !unlocked },
       el('span', { class: 'lesson-number' }, done ? '✓' : unlocked ? String(index + 1) : '🔒'),
-      el('span', { class: 'lesson-copy' }, el('b', {}, lesson.title), el('small', {}, lesson.short)),
+      el(
+        'span',
+        { class: 'lesson-copy' },
+        el('b', {}, t().lessons[lesson.id].title),
+        el('small', {}, t().lessons[lesson.id].short),
+      ),
     ) as HTMLButtonElement;
     if (unlocked) button.addEventListener('click', () => showLesson(lesson));
     list.append(button);
   });
 
-  const back = el('button', { class: 'btn ghost', type: 'button' }, 'Меню') as HTMLButtonElement;
+  const back = el('button', { class: 'btn ghost', type: 'button' }, t().common.menu) as HTMLButtonElement;
   back.addEventListener('click', showMenu);
   root.replaceChildren(
     el(
       'div',
       { class: 'screen academy' },
-      el('div', { class: 'topbar' }, el('span', { class: 'title' }, 'Академия логики'), el('span', { class: 'spacer' }), back),
-      el('div', { class: 'academy-intro' }, el('h2', {}, 'Не угадывай — доказывай'), el('p', {}, 'Каждый урок учит одному приёму на настоящей сетке. Обучение всегда бесплатно.')),
+      el(
+        'div',
+        { class: 'topbar' },
+        el('span', { class: 'title' }, t().academy.screenTitle),
+        el('span', { class: 'spacer' }),
+        back,
+      ),
+      el(
+        'div',
+        { class: 'academy-intro' },
+        el('h2', {}, t().academy.introTitle),
+        el('p', {}, t().academy.introText),
+      ),
       list,
     ),
   );
@@ -264,18 +293,18 @@ function showLesson(lesson: (typeof ACADEMY_LESSONS)[number]): void {
     () => ({ grid, notes, conflicts: new Set<number>(), hintedIndex: prepared.hint.index, selected }),
     (index) => { selected = index; gridHandle.refresh(); },
   );
-  const feedback = el('div', { class: 'lesson-feedback' }, prepared.hint.text);
+  const feedback = el('div', { class: 'lesson-feedback' }, t().hintText(prepared.hint));
   const numpad = el('div', { class: 'numpad lesson-numpad' });
   for (let digit = 1; digit <= 9; digit += 1) {
     const button = el('button', { class: 'digit-btn', type: 'button' }, String(digit)) as HTMLButtonElement;
     button.addEventListener('click', () => {
       if (complete) return;
       if (selected !== prepared.hint.index) {
-        toast('Сначала выберите подсвеченную клетку');
+        toast(t().academy.pickHighlighted);
         return;
       }
       if (digit !== prepared.hint.value) {
-        toast('Проверьте объяснение: эта цифра ещё не доказана');
+        toast(t().academy.notProven);
         return;
       }
       complete = true;
@@ -289,8 +318,8 @@ function showLesson(lesson: (typeof ACADEMY_LESSONS)[number]): void {
       const nextIndex = ACADEMY_LESSONS.findIndex((item) => item.id === lesson.id) + 1;
       const next = ACADEMY_LESSONS[nextIndex];
       feedback.replaceChildren(
-        el('b', {}, 'Верно. Приём освоен.'),
-        el('span', {}, next ? ` Следующий урок: «${next.title}».` : ' Вы прошли базовый курс.'),
+        el('b', {}, t().academy.correct),
+        el('span', {}, next ? t().academy.nextIs(t().lessons[next.id].title) : t().academy.courseFinished),
       );
       nextButton.hidden = false;
     });
@@ -298,22 +327,32 @@ function showLesson(lesson: (typeof ACADEMY_LESSONS)[number]): void {
   }
 
   const nextIndex = ACADEMY_LESSONS.findIndex((item) => item.id === lesson.id) + 1;
-  const nextButton = el('button', { class: 'btn primary', type: 'button' }, nextIndex < ACADEMY_LESSONS.length ? 'Следующий урок' : 'К списку уроков') as HTMLButtonElement;
+  const nextButton = el(
+    'button',
+    { class: 'btn primary', type: 'button' },
+    nextIndex < ACADEMY_LESSONS.length ? t().academy.nextLesson : t().academy.toLessonList,
+  ) as HTMLButtonElement;
   nextButton.hidden = true;
   nextButton.addEventListener('click', () => {
     const next = ACADEMY_LESSONS[nextIndex];
     if (next) showLesson(next);
     else showAcademy();
   });
-  const back = el('button', { class: 'btn ghost', type: 'button' }, 'К урокам') as HTMLButtonElement;
+  const back = el('button', { class: 'btn ghost', type: 'button' }, t().academy.backToLessons) as HTMLButtonElement;
   back.addEventListener('click', showAcademy);
 
   root.replaceChildren(
     el(
       'div',
       { class: 'screen academy-lesson' },
-      el('div', { class: 'topbar' }, el('span', { class: 'title' }, lesson.title), el('span', { class: 'spacer' }), back),
-      el('div', { class: 'lesson-instruction' }, el('span', {}, 'ПРИЁМ'), feedback),
+      el(
+        'div',
+        { class: 'topbar' },
+        el('span', { class: 'title' }, t().lessons[lesson.id].title),
+        el('span', { class: 'spacer' }),
+        back,
+      ),
+      el('div', { class: 'lesson-instruction' }, el('span', {}, t().academy.techniqueLabel), feedback),
       el('div', { class: 'board-wrap' }, gridHandle.root),
       el('div', { class: 'controls-wrap' }, numpad, nextButton),
     ),
@@ -344,7 +383,7 @@ async function startPuzzle(mode: Mode, difficulty: Difficulty, dateIso?: string)
   } catch {
     // Предохранитель генератора сработал — не должно случаться на этих
     // диапазонах сложности, но честная деградация лучше зависшей вкладки.
-    toast('Не удалось собрать пазл — попробуйте ещё раз');
+    toast(t().puzzle.generatorFailed);
     void app.abandonRound();
     showMenu();
     return;
@@ -387,9 +426,9 @@ async function startPuzzle(mode: Mode, difficulty: Difficulty, dateIso?: string)
   const statsBar = el(
     'div',
     { class: 'stats-bar' },
-    el('span', { class: 'diff-label' }, DIFFICULTY_LABEL[difficulty]),
+    el('span', { class: 'diff-label' }, t().difficulties[difficulty]),
     el('span', { class: 'spacer' }),
-    el('span', { class: 'mistakes' }, `Ошибки: ${mistakes}`),
+    el('span', { class: 'mistakes' }, t().puzzle.mistakes(mistakes)),
     el('span', { class: 'timer' }, formatTime(elapsed())),
   );
   const mistakesLabel = statsBar.querySelector('.mistakes')!;
@@ -414,14 +453,14 @@ async function startPuzzle(mode: Mode, difficulty: Difficulty, dateIso?: string)
   eraseBtn.addEventListener('click', () => enterDigit(0));
   numpad.append(eraseBtn);
 
-  const notesToggle = el('button', { class: 'tool-btn', type: 'button' }, '✏️ Заметки') as HTMLButtonElement;
+  const notesToggle = el('button', { class: 'tool-btn', type: 'button' }, t().puzzle.notes) as HTMLButtonElement;
   notesToggle.addEventListener('click', () => {
     notesMode = !notesMode;
     notesToggle.classList.toggle('active', notesMode);
   });
 
   const hintText = el('div', { class: 'hint-text', hidden: true });
-  const hintBtn = el('button', { class: 'btn hint-btn', type: 'button' }, '💡 Подсказка') as HTMLButtonElement;
+  const hintBtn = el('button', { class: 'btn hint-btn', type: 'button' }, t().puzzle.hint) as HTMLButtonElement;
   hintBtn.addEventListener('click', () => void useHint());
   updateHintButtonLabel();
 
@@ -438,7 +477,7 @@ async function startPuzzle(mode: Mode, difficulty: Difficulty, dateIso?: string)
     el(
       'div',
       { class: 'topbar' },
-      el('span', { class: 'title' }, mode === 'daily' ? 'Ежедневное судоку' : 'Практика'),
+      el('span', { class: 'title' }, mode === 'daily' ? t().puzzle.daily : t().puzzle.practice),
       el('span', { class: 'spacer' }),
       backButton(),
     ),
@@ -479,7 +518,7 @@ async function startPuzzle(mode: Mode, difficulty: Difficulty, dateIso?: string)
 
     if (digit !== 0 && digit !== puzzle.solution[index]) {
       mistakes += 1;
-      mistakesLabel.textContent = `Ошибки: ${mistakes}`;
+      mistakesLabel.textContent = t().puzzle.mistakes(mistakes);
       app.track('puzzle_mistake', { mode, difficulty });
     }
 
@@ -490,13 +529,13 @@ async function startPuzzle(mode: Mode, difficulty: Difficulty, dateIso?: string)
 
   function updateHintButtonLabel(): void {
     if (hintsUsed === 0) {
-      hintBtn.textContent = '💡 Подсказка';
+      hintBtn.textContent = t().puzzle.hint;
     } else if (app.save.data.purchases.unlimitedHints) {
-      hintBtn.textContent = '💡 Ещё подсказка';
+      hintBtn.textContent = t().puzzle.hintMore;
     } else if (app.ads.rewardedAvailable) {
-      hintBtn.textContent = '💡 Ещё подсказка за рекламу';
+      hintBtn.textContent = t().puzzle.hintMoreForAd;
     } else {
-      hintBtn.textContent = '💡 Ещё подсказка';
+      hintBtn.textContent = t().puzzle.hintMore;
     }
   }
 
@@ -504,7 +543,7 @@ async function startPuzzle(mode: Mode, difficulty: Difficulty, dateIso?: string)
     if (solved) return; // экран уже сменился на развязку (переход идёт с задержкой в checkSolved())
     const hint = sudoku.nextHint(sudoku.gridForHint(grid, puzzle.solution));
     if (!hint) {
-      toast('Больше подсказок нет — дальше только своим умом');
+      toast(t().puzzle.noMoreHints);
       return;
     }
 
@@ -512,7 +551,7 @@ async function startPuzzle(mode: Mode, difficulty: Difficulty, dateIso?: string)
     if (needsAd) {
       const granted = await app.offerReward('hint');
       if (!granted) {
-        toast('Реклама не загрузилась — попробуйте ещё раз');
+        toast(t().puzzle.adFailed);
         return;
       }
     }
@@ -522,7 +561,7 @@ async function startPuzzle(mode: Mode, difficulty: Difficulty, dateIso?: string)
     grid[hint.index] = hint.value;
     notes[hint.index] = [];
     hintedIndex = hint.index;
-    hintText.textContent = hint.text;
+    hintText.textContent = t().hintText(hint);
     hintText.hidden = false;
     updateHintButtonLabel();
     gridHandle.refresh();
@@ -558,7 +597,7 @@ async function startPuzzle(mode: Mode, difficulty: Difficulty, dateIso?: string)
   }
 
   function backButton(): HTMLButtonElement {
-    const btn = el('button', { class: 'btn ghost', type: 'button' }, 'Меню') as HTMLButtonElement;
+    const btn = el('button', { class: 'btn ghost', type: 'button' }, t().common.menu) as HTMLButtonElement;
     btn.addEventListener('click', () => {
       left = true;
       stopTimer();
@@ -624,29 +663,29 @@ async function finishPuzzle(
   await app.endRound();
 
   const children: HTMLElement[] = [
-    el('div', { class: 'topbar' }, el('span', { class: 'title' }, 'Пазл решён')),
+    el('div', { class: 'topbar' }, el('span', { class: 'title' }, t().reveal.title)),
     el(
       'div',
       { class: 'scene' },
       el('div', { class: 'stars-big' }, '⭐'.repeat(stars)),
-      el('div', { class: 'time' }, `Время: ${formatTime(timeMs)} · Ошибки: ${mistakes} · Подсказки: ${hintsUsed}`),
+      el('div', { class: 'time' }, t().reveal.summary(formatTime(timeMs), mistakes, hintsUsed)),
     ),
   ];
 
   if (mode === 'daily') {
-    children.push(el('div', { class: 'reward' }, `Серия: ${newStreak} ${newStreak === 1 ? 'день' : 'дней'} подряд`));
+    children.push(el('div', { class: 'reward' }, t().reveal.streak(newStreak)));
   }
 
   const masteryCards = el('div', { class: 'mastery-cards' });
-  for (const technique of Object.keys(TECHNIQUE_LABEL) as sudoku.HintTechnique[]) {
+  for (const technique of TECHNIQUE_ORDER) {
     const steps = techniqueAnalysis.counts[technique];
     masteryCards.append(
       el(
         'div',
         { class: `mastery-card${steps > 0 ? ' used' : ''}` },
-        el('b', {}, TECHNIQUE_LABEL[technique]),
-        el('span', {}, steps > 0 ? `${logicStepsLabel(steps)} в этой задаче` : 'В этой задаче не понадобился'),
-        el('small', {}, `Задач с приёмом: ${s.mastery[technique]}`),
+        el('b', {}, t().techniques[technique]),
+        el('span', {}, steps > 0 ? t().reveal.stepsInTask(steps) : t().reveal.notNeeded),
+        el('small', {}, t().reveal.tasksWithTechnique(s.mastery[technique])),
       ),
     );
   }
@@ -654,14 +693,15 @@ async function finishPuzzle(
     el(
       'section',
       { class: 'mastery-summary' },
-      el('h2', {}, 'Логический профиль задачи'),
-      el('p', {}, techniqueAnalysis.solved ? 'Задача полностью объясняется изучаемыми приёмами.' : 'Показаны приёмы из объяснимой части решения.'),
+      el('h2', {}, t().reveal.profileTitle),
+      el('p', {}, techniqueAnalysis.solved ? t().reveal.profileFull : t().reveal.profilePartial),
       masteryCards,
     ),
   );
   for (const id of newAchievements) {
-    const a = ACHIEVEMENTS.find((x) => x.id === id)!;
-    children.push(el('div', { class: 'reward achievement-unlocked' }, `🏅 Новое достижение: «${a.title}»`));
+    children.push(
+      el('div', { class: 'reward achievement-unlocked' }, t().reveal.achievementUnlocked(t().achievements[id].title)),
+    );
   }
 
   children.push(continueButton());
@@ -685,7 +725,7 @@ function isConsecutiveDay(previous: string | undefined, current: string): boolea
 
 function continueButton(): HTMLElement {
   const wrap = el('div', { class: 'controls' });
-  const btn = el('button', { class: 'btn primary', type: 'button' }, 'В меню') as HTMLButtonElement;
+  const btn = el('button', { class: 'btn primary', type: 'button' }, t().common.toMenu) as HTMLButtonElement;
   btn.addEventListener('click', () => {
     app.track('app_exit_to_menu');
     showMenu();
@@ -699,10 +739,9 @@ function continueButton(): HTMLElement {
 const SKU_NO_ADS = 'sudoku_no_ads';
 const SKU_UNLIMITED_HINTS = 'sudoku_unlimited_hints';
 
+/** Название и описание берутся из словаря по sku — в коде только логика покупки. */
 interface ShopItem {
   sku: string;
-  title: string;
-  description: string;
   owned: (s: Save) => boolean;
   apply: (s: Save) => void;
 }
@@ -710,8 +749,6 @@ interface ShopItem {
 const SHOP_ITEMS: ShopItem[] = [
   {
     sku: SKU_NO_ADS,
-    title: 'Без рекламы',
-    description: 'Убирает рекламу между партиями навсегда. Подсказки за рекламу остаются по желанию.',
     owned: (s) => !!s.purchases.noAds,
     apply: (s) => {
       s.purchases.noAds = true;
@@ -719,8 +756,6 @@ const SHOP_ITEMS: ShopItem[] = [
   },
   {
     sku: SKU_UNLIMITED_HINTS,
-    title: 'Безлимитные подсказки',
-    description: 'Все подсказки, кроме первой, становятся бесплатными — без рекламы.',
     owned: (s) => !!s.purchases.unlimitedHints,
     apply: (s) => {
       s.purchases.unlimitedHints = true;
@@ -733,14 +768,15 @@ const SHOP_ITEMS: ShopItem[] = [
  * dialog() не подходит по форме, переиспользуются только его CSS-классы. */
 async function showShop(): Promise<void> {
   const s = app.save.data;
-  const box = el('div', { class: 'dialog shop' }, el('h2', {}, '🛍️ Магазин'));
+  const box = el('div', { class: 'dialog shop' }, el('h2', {}, t().shop.title));
 
   for (const item of SHOP_ITEMS) {
     const owned = item.owned(s);
+    const copy = t().shop.items[item.sku];
     const btn = el(
       'button',
       { class: `btn ${owned ? 'ghost' : 'primary'}`, type: 'button', disabled: owned },
-      owned ? 'Куплено' : 'Купить',
+      owned ? t().shop.owned : t().shop.buy,
     ) as HTMLButtonElement;
     if (!owned) btn.addEventListener('click', () => void buy(item, btn));
 
@@ -748,13 +784,13 @@ async function showShop(): Promise<void> {
       el(
         'div',
         { class: 'shop-item' },
-        el('div', { class: 'shop-item-text' }, el('b', {}, item.title), el('span', {}, item.description)),
+        el('div', { class: 'shop-item-text' }, el('b', {}, copy.title), el('span', {}, copy.description)),
         btn,
       ),
     );
   }
 
-  const closeBtn = el('button', { class: 'btn ghost', type: 'button' }, 'Закрыть') as HTMLButtonElement;
+  const closeBtn = el('button', { class: 'btn ghost', type: 'button' }, t().common.close) as HTMLButtonElement;
   box.append(el('div', { class: 'actions' }, closeBtn));
 
   const overlay = el('div', { class: 'overlay' }, box);
@@ -776,10 +812,10 @@ async function buy(item: ShopItem, btn: HTMLButtonElement): Promise<void> {
     item.apply(app.save.data);
     app.save.markDirty();
     app.track('purchase', { sku: item.sku });
-    btn.textContent = 'Куплено';
+    btn.textContent = t().shop.owned;
   } catch {
     btn.textContent = original;
     btn.disabled = false;
-    toast('Покупка не завершилась — попробуйте ещё раз');
+    toast(t().shop.failed);
   }
 }
