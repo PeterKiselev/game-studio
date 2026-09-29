@@ -27,7 +27,7 @@ export interface Env {
   VK_APP_SECRET: string;
 }
 
-interface ShopItem {
+export interface ShopItem {
   title: string;
   /** Цена в голосах VK — целое число. */
   price: number;
@@ -38,8 +38,13 @@ interface ShopItem {
  * Меняешь цену/название здесь — меняешь то, что видит игрок в окне покупки VK.
  * Один и тот же Worker можно развернуть отдельно для каждого приложения со
  * своим VK_APP_SECRET. До появления app_id Sudoku его сервер не разворачиваем.
+ *
+ * Экспортируется ради тестов игр: после отказа модерации VK («стоимость
+ * должна быть видна до нажатия „Купить“») цена показывается ещё и в самом
+ * магазине игры, а два списка цен, которые никто не сверяет, разъезжаются
+ * — вопрос времени. Тесты каждой игры сверяются именно с этим объектом.
  */
-const ITEMS: Record<string, ShopItem> = {
+export const ITEMS: Record<string, ShopItem> = {
   dachnye_tainy_no_ads: { title: 'Без рекламы', price: 20 },
   dachnye_tainy_unlimited_hints: { title: 'Безлимитные подсказки', price: 20 },
   sudoku_no_ads: { title: 'Без рекламы', price: 20 },

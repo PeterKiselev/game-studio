@@ -87,9 +87,12 @@ export interface Strings {
 
   shop: {
     title: string;
-    buy: string;
     owned: string;
     failed: string;
+    /** «20 голосов» / «20 votes» — цена показывается отдельно от кнопки и не исчезает после покупки. */
+    price: (votes: number) => string;
+    /** «Купить за 20 голосов» — требование модератора VK: цена видна ДО нажатия. */
+    buyFor: (votes: number) => string;
     items: Record<string, { title: string; description: string }>;
   };
 
@@ -209,9 +212,10 @@ const RU: Strings = {
 
   shop: {
     title: '🛍️ Магазин',
-    buy: 'Купить',
     owned: 'Куплено',
     failed: 'Покупка не завершилась — попробуйте ещё раз',
+    price: (votes) => `${votes} ${ruPlural(votes, 'голос', 'голоса', 'голосов')}`,
+    buyFor: (votes) => `Купить за ${votes} ${ruPlural(votes, 'голос', 'голоса', 'голосов')}`,
     items: {
       sudoku_no_ads: {
         title: 'Без рекламы',
@@ -349,9 +353,10 @@ const EN: Strings = {
 
   shop: {
     title: '🛍️ Shop',
-    buy: 'Buy',
     owned: 'Purchased',
     failed: 'The purchase did not go through — please try again',
+    price: (votes) => `${votes} ${votes === 1 ? 'vote' : 'votes'}`,
+    buyFor: (votes) => `Buy for ${votes} ${votes === 1 ? 'vote' : 'votes'}`,
     items: {
       sudoku_no_ads: {
         title: 'No ads',

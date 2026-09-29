@@ -5,6 +5,8 @@ import { renderSudokuGrid } from './grid';
 import { ACHIEVEMENT_IDS, checkNewAchievements, starsFor } from './achievements';
 import { ACADEMY_LESSONS, nextLesson, prepareAcademyLesson } from './academy';
 import { detectLocale, setLocale, t } from './i18n';
+import { SHOP_ITEMS, SKU_NO_ADS, SKU_UNLIMITED_HINTS } from './shop';
+import type { ShopItem } from './shop';
 import './theme.css';
 import './style.css';
 
@@ -736,32 +738,21 @@ function continueButton(): HTMLElement {
 
 // --- магазин: разовые покупки -------------------------------------------------
 
-const SKU_NO_ADS = 'sudoku_no_ads';
-const SKU_UNLIMITED_HINTS = 'sudoku_unlimited_hints';
-
-/** Название и описание берутся из словаря по sku — в коде только логика покупки. */
-interface ShopItem {
-  sku: string;
-  owned: (s: Save) => boolean;
-  apply: (s: Save) => void;
-}
-
-const SHOP_ITEMS: ShopItem[] = [
-  {
-    sku: SKU_NO_ADS,
+/** Что покупка меняет в сохранении. Название и описание — в словаре, цена — в shop.ts. */
+const SHOP_EFFECTS: Record<string, { owned: (s: Save) => boolean; apply: (s: Save) => void }> = {
+  [SKU_NO_ADS]: {
     owned: (s) => !!s.purchases.noAds,
     apply: (s) => {
       s.purchases.noAds = true;
     },
   },
-  {
-    sku: SKU_UNLIMITED_HINTS,
+  [SKU_UNLIMITED_HINTS]: {
     owned: (s) => !!s.purchases.unlimitedHints,
     apply: (s) => {
       s.purchases.unlimitedHints = true;
     },
   },
-];
+};
 
 /** Тот же паттерн, что showShop() в «Дачных тайнах»: свой экран, не dialog()
  * из @studio/ui — нескольким независимым кнопкам «Купить» на одном экране
@@ -771,12 +762,12 @@ async function showShop(): Promise<void> {
   const box = el('div', { class: 'dialog shop' }, el('h2', {}, t().shop.title));
 
   for (const item of SHOP_ITEMS) {
-    const owned = item.owned(s);
+    const owned = SHOP_EFFECTS[item.sku].owned(s);
     const copy = t().shop.items[item.sku];
     const btn = el(
       'button',
       { class: `btn ${owned ? 'ghost' : 'primary'}`, type: 'button', disabled: owned },
-      owned ? t().shop.owned : t().shop.buy,
+      owned ? t().shop.owned : t().shop.buyFor(item.price),
     ) as HTMLButtonElement;
     if (!owned) btn.addEventListener('click', () => void buy(item, btn));
 
@@ -784,7 +775,15 @@ async function showShop(): Promise<void> {
       el(
         'div',
         { class: 'shop-item' },
-        el('div', { class: 'shop-item-text' }, el('b', {}, copy.title), el('span', {}, copy.description)),
+        el(
+          'div',
+          { class: 'shop-item-text' },
+          el('b', {}, copy.title),
+          el('span', {}, copy.description),
+          // Цена отдельной строкой: подпись кнопки после покупки меняется на
+          // «Куплено», а стоимость должна оставаться видимой на экране.
+          el('span', { class: 'shop-price' }, t().shop.price(item.price)),
+        ),
         btn,
       ),
     );
@@ -809,7 +808,7 @@ async function buy(item: ShopItem, btn: HTMLButtonElement): Promise<void> {
   try {
     const result = await app.platform.payments.buy(item.sku);
     if (!result.ok) throw new Error('not ok');
-    item.apply(app.save.data);
+    SHOP_EFFECTS[item.sku].apply(app.save.data);
     app.save.markDirty();
     app.track('purchase', { sku: item.sku });
     btn.textContent = t().shop.owned;

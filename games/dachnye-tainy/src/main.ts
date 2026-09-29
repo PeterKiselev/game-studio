@@ -5,6 +5,8 @@ import { dialog, el, toast } from '@studio/ui';
 import { renderPairGrid } from './grid';
 import { cases, tutorialCase } from './cases';
 import { ACHIEVEMENTS, checkNewAchievements, starsFor } from './achievements';
+import { SHOP_ITEMS, SKU_NO_ADS, SKU_UNLIMITED_HINTS, buyLabel, votes } from './shop';
+import type { ShopItem } from './shop';
 import './theme.css';
 import './style.css';
 
@@ -599,37 +601,21 @@ function caseFileSummary(source: Case, solution: Solution): HTMLElement {
 
 // --- магазин: разовые покупки -------------------------------------------------
 
-const SKU_NO_ADS = 'dachnye_tainy_no_ads';
-const SKU_UNLIMITED_HINTS = 'dachnye_tainy_unlimited_hints';
-
-interface ShopItem {
-  sku: string;
-  title: string;
-  description: string;
-  owned: (s: Save) => boolean;
-  apply: (s: Save) => void;
-}
-
-const SHOP_ITEMS: ShopItem[] = [
-  {
-    sku: SKU_NO_ADS,
-    title: 'Без рекламы',
-    description: 'Убирает рекламу между делами навсегда. Подсказки за рекламу остаются по желанию.',
+/** Кто из товаров уже куплен и что покупка меняет в сохранении. Название, описание и цена — в shop.ts. */
+const SHOP_EFFECTS: Record<string, { owned: (s: Save) => boolean; apply: (s: Save) => void }> = {
+  [SKU_NO_ADS]: {
     owned: (s) => !!s.purchases.noAds,
     apply: (s) => {
       s.purchases.noAds = true;
     },
   },
-  {
-    sku: SKU_UNLIMITED_HINTS,
-    title: 'Безлимитные подсказки',
-    description: 'Все подсказки, кроме первой, становятся бесплатными — без рекламы.',
+  [SKU_UNLIMITED_HINTS]: {
     owned: (s) => !!s.purchases.unlimitedHints,
     apply: (s) => {
       s.purchases.unlimitedHints = true;
     },
   },
-];
+};
 
 /**
  * Свой экран, не dialog() из @studio/ui: тому нужен один-единственный
@@ -642,11 +628,11 @@ async function showShop(): Promise<void> {
   const box = el('div', { class: 'dialog shop' }, el('h2', {}, '🛍️ Магазин'));
 
   for (const item of SHOP_ITEMS) {
-    const owned = item.owned(s);
+    const owned = SHOP_EFFECTS[item.sku].owned(s);
     const btn = el(
       'button',
       { class: `btn ${owned ? 'ghost' : 'primary'}`, type: 'button', disabled: owned },
-      owned ? 'Куплено' : 'Купить',
+      owned ? 'Куплено' : buyLabel(item),
     ) as HTMLButtonElement;
     if (!owned) btn.addEventListener('click', () => void buy(item, btn));
 
@@ -654,7 +640,16 @@ async function showShop(): Promise<void> {
       el(
         'div',
         { class: 'shop-item' },
-        el('div', { class: 'shop-item-text' }, el('b', {}, item.title), el('span', {}, item.description)),
+        el(
+          'div',
+          { class: 'shop-item-text' },
+          el('b', {}, item.title),
+          el('span', {}, item.description),
+          // Цена отдельной строкой, а не только в подписи кнопки: у купленного
+          // товара кнопка говорит «Куплено», и цена не должна исчезать с экрана
+          // вместе с ней — модератор VK требует, чтобы стоимость была видна.
+          el('span', { class: 'shop-price' }, votes(item.price)),
+        ),
         btn,
       ),
     );
@@ -679,7 +674,7 @@ async function buy(item: ShopItem, btn: HTMLButtonElement): Promise<void> {
   try {
     const result = await app.platform.payments.buy(item.sku);
     if (!result.ok) throw new Error('not ok');
-    item.apply(app.save.data);
+    SHOP_EFFECTS[item.sku].apply(app.save.data);
     app.save.markDirty();
     app.track('purchase', { sku: item.sku });
     btn.textContent = 'Куплено';
