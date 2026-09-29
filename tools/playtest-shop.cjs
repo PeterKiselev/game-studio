@@ -25,9 +25,21 @@ function assert(cond, message) {
   console.log('  ok —', message);
 }
 
-/** Минимальный VK-клиент: отвечает ровно на то, что игра спрашивает при запуске. */
-async function stubVkBridge(page) {
-  await page.addInitScript(() => {
+/**
+ * Минимальный VK-клиент: отвечает ровно на то, что игра спрашивает.
+ *
+ * `approvePurchase` управляет ответом на `VKWebAppShowOrderBox`. Адаптер
+ * считает покупку удачной по полю `success` (packages/platform/src/adapters/vk.ts),
+ * поэтому именно его заглушка и возвращает.
+ *
+ * Важно понимать границу: это проверка **реакции клиента** на успешный
+ * ответ Bridge — что состояние покупки применилось и кнопка стала
+ * «Куплено». Настоящий платёж заглушкой не проверяется и не заменяется:
+ * списание голосов и вызовы Worker проверяются только живыми тестовыми
+ * покупками внутри VK.
+ */
+async function stubVkBridge(page, { approvePurchase = false } = {}) {
+  await page.addInitScript((approve) => {
     window.addEventListener('message', (event) => {
       const msg = event.data;
       if (!msg || msg.type !== 'vk-connect' || !msg.handler) return;
@@ -48,21 +60,38 @@ async function stubVkBridge(page) {
           return ok({ keys: [] });
         case 'VKWebAppStorageSet':
           return ok({ result: true });
+        case 'VKWebAppShowOrderBox':
+          return approve ? ok({ success: true }) : fail();
         default:
-          // Покупку намеренно НЕ подтверждаем: этот скрипт проверяет витрину
-          // до нажатия, а не платёж. Настоящий платёж проверяется живыми
-          // тестовыми покупками внутри VK — заглушкой это не заменить.
           return fail();
       }
     });
-  });
+  }, approvePurchase);
 }
 
-async function openShop(browser, url, lang) {
-  const page = await browser.newPage({ viewport: { width: 420, height: 800 } });
+/**
+ * Видно ли по-настоящему. `textContent` есть и у скрытого узла, поэтому
+ * требование модератора «стоимость видна» проверяется видимостью и
+ * положением в окне, а не наличием строки в разметке.
+ */
+async function assertVisibleIn(locator, viewport, what) {
+  const visible = await locator.isVisible();
+  assert(visible, `${what}: элемент действительно виден`);
+  const box = await locator.boundingBox();
+  assert(!!box && box.width > 0 && box.height > 0, `${what}: элемент имеет ненулевой размер`);
+  assert(
+    box.x >= 0 && box.y >= 0 && box.x + box.width <= viewport.width && box.y + box.height <= viewport.height,
+    `${what}: элемент целиком в окне ${viewport.width}×${viewport.height}`,
+  );
+}
+
+const VIEWPORT = { width: 420, height: 800 };
+
+async function openShop(browser, url, lang, options = {}) {
+  const page = await browser.newPage({ viewport: VIEWPORT });
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
-  await stubVkBridge(page);
+  await stubVkBridge(page, options);
   await page.goto(`${url}${url.includes('?') ? '&' : '?'}lang=${lang}`, { waitUntil: 'networkidle' });
   await page.waitForSelector('.shop-btn', { timeout: 8000 });
   await page.locator('.shop-btn').click();
@@ -74,20 +103,88 @@ async function checkShop({ page, errors }, { name, expectPrice, expectButton }) 
   const items = await page.locator('.shop-item').count();
   assert(items === 2, `${name}: в магазине два товара`);
 
-  const prices = await page.locator('.shop-price').allTextContents();
-  assert(prices.length === 2, `${name}: цена показана у каждого товара ДО нажатия`);
-  for (const price of prices) {
-    assert(price.includes(expectPrice), `${name}: цена «${price}» содержит «${expectPrice}»`);
+  const prices = page.locator('.shop-price');
+  assert((await prices.count()) === 2, `${name}: цена есть у каждого товара ДО нажатия`);
+  for (let i = 0; i < 2; i += 1) {
+    await assertVisibleIn(prices.nth(i), VIEWPORT, `${name}: цена товара ${i + 1}`);
+    assert(
+      (await prices.nth(i).innerText()).includes(expectPrice),
+      `${name}: цена товара ${i + 1} — «${expectPrice}»`,
+    );
   }
 
-  const buttons = await page.locator('.shop-item .btn').allTextContents();
-  for (const label of buttons) {
-    assert(label.includes(expectButton), `${name}: кнопка «${label}» называет цену`);
+  const buttons = page.locator('.shop-item .btn');
+  for (let i = 0; i < 2; i += 1) {
+    await assertVisibleIn(buttons.nth(i), VIEWPORT, `${name}: кнопка покупки ${i + 1}`);
+    assert(
+      (await buttons.nth(i).innerText()).includes(expectButton),
+      `${name}: кнопка ${i + 1} называет цену — «${expectButton}»`,
+    );
   }
 
-  // Требование модератора буквально: увидеть стоимость можно, ничего не нажимая.
-  const visibleText = await page.locator('.dialog.shop').innerText();
-  assert(visibleText.includes(expectPrice), `${name}: стоимость видна в тексте витрины без единого клика`);
+  assert(errors.length === 0, `${name}: без ошибок в консоли: ` + errors.join('; '));
+  await page.close();
+}
+
+/**
+ * Успешная покупка глазами клиента: кнопка становится «Куплено», а цена
+ * **остаётся на экране и не меняется**. Второе важнее первого — именно
+ * ради него цена вынесена отдельной строкой, а не спрятана в подпись
+ * кнопки, которая после покупки текст теряет.
+ *
+ * Заодно это единственная живая проверка рефакторинга
+ * `item.apply` → `SHOP_EFFECTS[item.sku].apply`: если ключ разъедется с
+ * каталогом, покупка молча не применится, и сценарий это увидит.
+ */
+async function checkSuccessfulPurchase({ page, errors }, { name, expectPrice, expectOwned }) {
+  const firstItem = page.locator('.shop-item').first();
+  const priceBefore = await firstItem.locator('.shop-price').innerText();
+  const button = firstItem.locator('.btn');
+
+  await button.click();
+  await page.waitForFunction(
+    ([expected]) => {
+      const btn = document.querySelector('.shop-item .btn');
+      return !!btn && btn.textContent.trim() === expected;
+    },
+    [expectOwned],
+    { timeout: 5000 },
+  );
+  assert(true, `${name}: после успешной покупки кнопка стала «${expectOwned}»`);
+  assert(await button.isDisabled(), `${name}: купленный товар нельзя купить повторно`);
+
+  const price = firstItem.locator('.shop-price');
+  await assertVisibleIn(price, VIEWPORT, `${name}: цена после покупки`);
+  const priceAfter = await price.innerText();
+  assert(priceAfter === priceBefore, `${name}: цена не изменилась после покупки («${priceAfter}»)`);
+  assert(priceAfter.includes(expectPrice), `${name}: цена осталась «${expectPrice}»`);
+
+  /*
+   * Ключевая проверка, и она не про надпись. Подпись кнопки меняется сразу
+   * после успешного ответа Bridge — независимо от того, применилось ли
+   * состояние покупки в сохранении. Проверено негативным контролем:
+   * сломанный ключ SHOP_EFFECTS сценарий БЕЗ этой перезагрузки проходил.
+   *
+   * Поэтому перезагружаем страницу и открываем магазин заново: если
+   * покупка реально применилась и сохранилась, товар уже помечен
+   * купленным до всякого клика.
+   */
+  await page.reload({ waitUntil: 'networkidle' });
+  await page.waitForSelector('.shop-btn', { timeout: 8000 });
+  await page.locator('.shop-btn').click();
+  await page.waitForSelector('.shop-item');
+
+  const restored = page.locator('.shop-item').first();
+  const restoredLabel = (await restored.locator('.btn').innerText()).trim();
+  assert(
+    restoredLabel === expectOwned,
+    `${name}: покупка пережила перезагрузку — кнопка «${restoredLabel}» без единого клика`,
+  );
+  await assertVisibleIn(restored.locator('.shop-price'), VIEWPORT, `${name}: цена купленного товара после перезагрузки`);
+  assert(
+    (await restored.locator('.shop-price').innerText()).includes(expectPrice),
+    `${name}: у купленного товара цена по-прежнему «${expectPrice}»`,
+  );
 
   assert(errors.length === 0, `${name}: без ошибок в консоли: ` + errors.join('; '));
   await page.close();
@@ -111,11 +208,31 @@ async function checkShop({ page, errors }, { name, expectPrice, expectButton }) 
   });
 
   console.log('\n=== «Академия Sudoku», английский ===');
-  const en = await openShop(browser, SUDOKU, 'en');
-  await checkShop(en, {
+  await checkShop(await openShop(browser, SUDOKU, 'en'), {
     name: 'Sudoku en',
     expectPrice: '20 votes',
     expectButton: 'Buy for 20 votes',
+  });
+
+  console.log('\n=== Успешная покупка: «Дачные тайны» ===');
+  await checkSuccessfulPurchase(await openShop(browser, DACHNYE, 'ru', { approvePurchase: true }), {
+    name: 'Дачные тайны',
+    expectPrice: '20 голосов',
+    expectOwned: 'Куплено',
+  });
+
+  console.log('\n=== Успешная покупка: «Академия Sudoku», русский ===');
+  await checkSuccessfulPurchase(await openShop(browser, SUDOKU, 'ru', { approvePurchase: true }), {
+    name: 'Sudoku ru',
+    expectPrice: '20 голосов',
+    expectOwned: 'Куплено',
+  });
+
+  console.log('\n=== Успешная покупка: «Академия Sudoku», английский ===');
+  await checkSuccessfulPurchase(await openShop(browser, SUDOKU, 'en', { approvePurchase: true }), {
+    name: 'Sudoku en',
+    expectPrice: '20 votes',
+    expectOwned: 'Purchased',
   });
 
   await browser.close();
