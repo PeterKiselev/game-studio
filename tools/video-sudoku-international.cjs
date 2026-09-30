@@ -114,8 +114,15 @@ function serveDirOnce(dir, port) {
 
 const LANDSCAPE = { label: 'landscape', width: 1920, height: 1080, cover: join(COVERS, 'cover-1920x1080.png') };
 const PORTRAIT = { label: 'portrait', width: 720, height: 1080, cover: join(COVERS, 'cover-800x1200.png') };
-const COVER_HOLD_S = 1.5;
 const FPS = 25;
+// Третье ревью Codex 30 сентября 2026: 1,5с при 25fps — 37,5 кадра, не целое
+// число. Дробная граница сегмента заставки означает, что сам стык не
+// выровнен по кадру, и энкодер/декодер обходятся с ним неоднозначно — один
+// из источников найденного разрыва (см. buildVideo ниже). COVER_HOLD_FRAMES
+// делает границу целочисленной по построению, COVER_HOLD_S — только
+// производное значение для `-t`.
+const COVER_HOLD_FRAMES = 38;
+const COVER_HOLD_S = COVER_HOLD_FRAMES / FPS;
 const MAX_MB = 50;
 
 const pause = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -186,6 +193,37 @@ function findGameplayWebm(dir) {
  * не зависит от того, совпадают ли параметры кодеков между «картинкой» и
  * «живой записью» — то самое рассогласование и дало битый кадр на стыке
  * в прошлой версии.
+ *
+ * === Третье ревью Codex 30 сентября 2026: разрыв пережил setpts ===
+ *
+ * `setpts=PTS-STARTPTS` убрал рассинхрон таймстампов, но ffmpeg-проверка
+ * (`-ss` + извлечение кадра) целых кадров не увидела разрыв, который
+ * стабильно виден при непрерывном воспроизведении в Chromium с
+ * `currentTime = 0`, без перемотки. Извлечение через `-ss` — это seek на
+ * ключевой кадр плюс решительный повторный decode до точной метки
+ * времени; оно не воспроизводит то, как браузерный декодер/композитор
+ * непрерывно проигрывает реальный битстрим. Дефект — в самом битстриме,
+ * не в способе его измерения, и порог SSIM поднимать нельзя (это спрячет
+ * проблему, а не решит её).
+ *
+ * Правки битстрима, а не проверки:
+ *
+ * 1. `COVER_HOLD_FRAMES` (см. выше) — граница сегментов теперь ровно на
+ *    кадре, не на дробной секунде.
+ * 2. `-bf 0` — без B-кадров. B-кадры ссылаются на кадры до И после себя
+ *    по порядку декодирования; на стыке двух склеенных фильтром
+ *    сегментов это заставляет декодер держать эталоны из другого
+ *    «видео» дольше, чем нужно, и именно такая пересортировка кадров
+ *    при воспроизведении (не при точечном seek) даёт визуальный разрыв.
+ * 3. `-force_key_frames "expr:eq(n,0)+eq(n,${COVER_HOLD_FRAMES})"` —
+ *    принудительный IDR-кадр ровно на первом кадре геймплея. IDR не
+ *    ссылается вообще ни на что раньше себя — декодер гарантированно
+ *    начинает сегмент геймплея с чистого листа, а не из GOP заставки.
+ * 4. `-x264-params scenecut=0` — без этого libx264 вправе сам вставить
+ *    дополнительные ключевые кадры по эвристике смены сцены (а смена
+ *    сцены здесь буквально на стыке) и тем самым сдвинуть наш
+ *    принудительный кадр; `scenecut=0` оставляет ключевые кадры только
+ *    там, где мы явно их просим.
  */
 function buildVideo({ label, width, height, cover }, gameplayWebm, outMp4) {
   const filter =
@@ -195,7 +233,7 @@ function buildVideo({ label, width, height, cover }, gameplayWebm, outMp4) {
 
   execFileSync(FFMPEG, [
     '-y',
-    '-loop', '1', '-t', String(COVER_HOLD_S), '-i', cover,
+    '-loop', '1', '-framerate', String(FPS), '-t', String(COVER_HOLD_S), '-i', cover,
     '-i', gameplayWebm,
     '-filter_complex', filter,
     '-map', '[outv]',
@@ -203,6 +241,9 @@ function buildVideo({ label, width, height, cover }, gameplayWebm, outMp4) {
     '-c:v', 'libx264',
     '-preset', 'medium',
     '-crf', '20',
+    '-bf', '0',
+    '-x264-params', 'scenecut=0',
+    '-force_key_frames', `expr:eq(n,0)+eq(n,${COVER_HOLD_FRAMES})`,
     '-pix_fmt', 'yuv420p',
     '-movflags', '+faststart',
     outMp4,

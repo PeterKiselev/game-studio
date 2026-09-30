@@ -19,7 +19,7 @@
  */
 
 import { execFileSync, spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, readdirSync, statSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, statSync, readFileSync, writeFileSync, cpSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { createServer } from 'node:http';
 import { createRequire } from 'node:module';
@@ -385,6 +385,153 @@ function checkSeamIntegrity(videoPath, label) {
   }
 }
 
+/**
+ * Третье ревью Codex 30 сентября 2026: `checkSeamIntegrity()` выше
+ * извлекает кадры через `-ss` — точечный seek на ближайший ключевой
+ * кадр с последующим decode до нужной метки времени. Это НЕ то же самое,
+ * что видит браузерный декодер при непрерывном воспроизведении с
+ * `currentTime = 0` без перемотки: ревью воспроизвело разрыв именно так
+ * (Chromium, от нуля) и независимо подтвердило — ffmpeg-извлечение кадра
+ * в той же точке уже целое, то есть прежняя проверка была
+ * ложнозелёной для этого конкретного дефекта. Порог здесь НЕ поднят —
+ * ровно тот же 0,95, что и у `checkSeamIntegrity()`; исправлен сам
+ * битстрим (`-bf 0`, принудительный IDR на стыке, целочисленная граница
+ * сегментов — см. buildVideo в tools/video-sudoku-international.cjs), а
+ * эта проверка теперь честно воспроизводит именно тот способ просмотра,
+ * которым дефект был найден.
+ *
+ * Видео проигрывается в реальном headless Chromium от начала, кадры
+ * снимаются через `<canvas>.drawImage(video, …)` в моменты, когда
+ * `video.currentTime` впервые пересекает каждую целевую метку — не seek,
+ * а естественный ход воспроизведения с `requestAnimationFrame`.
+ */
+async function captureBrowserFrames(videoPath, label, times) {
+  const dir = VIDEO_TMP;
+  const videoName = `${label}-browser-play.mp4`;
+  cpSync(videoPath, join(dir, videoName));
+  const playerHtml = `<!doctype html><html><body style="margin:0"><video id="v" src="${videoName}" muted playsinline></video></body></html>`;
+  writeFileSync(join(dir, `${label}-player.html`), playerHtml);
+
+  const mime = { '.html': 'text/html', '.mp4': 'video/mp4' };
+  const server = createServer((req, res) => {
+    const path = decodeURIComponent(req.url.split('?')[0]);
+    const file = join(dir, path);
+    let body;
+    try {
+      body = readFileSync(file);
+    } catch {
+      res.writeHead(404);
+      res.end();
+      return;
+    }
+    const ext = Object.keys(mime).find((e) => file.endsWith(e));
+    res.writeHead(200, { 'Content-Type': mime[ext] ?? 'application/octet-stream' });
+    res.end(body);
+  });
+  const PORT = 4883;
+  await new Promise((resolve) => server.listen(PORT, '127.0.0.1', resolve));
+
+  const browser = await chromium.launch();
+  // Второй, независимый предохранитель поверх внутрибраузерного тайм-аута
+  // ниже: если зависнет сам Playwright IPC (не JS-код на странице), этот
+  // таймер всё равно закроет браузер и провалит промис, а не подвесит
+  // весь процесс на неопределённое время.
+  const hardTimeout = setTimeout(() => {
+    browser.close().catch(() => {});
+  }, 45000);
+  try {
+    const page = await browser.newPage();
+    page.setDefaultTimeout(30000);
+    await page.goto(`http://127.0.0.1:${PORT}/${label}-player.html`);
+    // Жёсткий предохранитель: этот скрипт однажды завис намертво (без единой
+    // строчки в логе, stdout буферизован до выхода процесса) — первопричина
+    // найдена и исправлена (гонка `loadedmetadata` ниже), но тайм-аут
+    // оставлен на будущее: если браузер когда-нибудь снова зависнет по
+    // другой причине, скрипт честно упадёт с ошибкой через 20с, а не
+    // провисит неопределённое время незаметно.
+    const dataUrls = await page.evaluate(async (targetTimes) => {
+      const video = document.getElementById('v');
+      const TIMEOUT_MS = 20000;
+      const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('таймаут воспроизведения видео в браузере')), TIMEOUT_MS));
+
+      const run = (async () => {
+        // Реальная причина прежнего зависания: `<video>` начинает грузить
+        // метаданные сам, ещё до того, как этот код вообще запустится
+        // (page.goto уже дождался load-события страницы) — событие
+        // `loadedmetadata` к этому моменту почти всегда УЖЕ произошло.
+        // `video.onloadedmetadata = resolve` вешает обработчик на событие,
+        // которое никогда не случится again — await висит бесконечно,
+        // никакой ошибки, никакого сообщения. Проверка `readyState` первым
+        // делом устраняет саму гонку, а не маскирует её большим тайм-аутом.
+        if (video.readyState < 1) {
+          await new Promise((resolve, reject) => {
+            video.addEventListener('loadedmetadata', resolve, { once: true });
+            video.addEventListener('error', () => reject(new Error('video failed to load metadata')), { once: true });
+          });
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        const ctx = canvas.getContext('2d');
+        const results = [];
+        let idx = 0;
+        video.playbackRate = 8; // быстрая перемотка НЕ seek'ом — currentTime идёт непрерывно, просто быстрее, до окна проверки
+        await video.play();
+        await new Promise((resolve) => {
+          function tick() {
+            if (video.playbackRate !== 1 && video.currentTime >= targetTimes[0] - 0.1) {
+              video.playbackRate = 1; // от самого окна проверки — уже нормальная скорость, ничего не пропущено
+            }
+            while (idx < targetTimes.length && video.currentTime >= targetTimes[idx]) {
+              ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+              results.push(canvas.toDataURL('image/png'));
+              idx += 1;
+            }
+            if (idx >= targetTimes.length || video.ended) {
+              resolve();
+              return;
+            }
+            requestAnimationFrame(tick);
+          }
+          requestAnimationFrame(tick);
+        });
+        return results;
+      })();
+
+      return Promise.race([run, timeout]);
+    }, times);
+
+    return dataUrls.map((dataUrl, i) => {
+      const png = join(dir, `${label}-browser-frame-${i}.png`);
+      writeFileSync(png, Buffer.from(dataUrl.split(',')[1], 'base64'));
+      return png;
+    });
+  } finally {
+    clearTimeout(hardTimeout);
+    await browser.close().catch(() => {});
+    server.close();
+  }
+}
+
+async function checkSeamIntegrityBrowser(videoPath, label) {
+  const times = [1.50, 1.56, 1.62, 1.68, 1.74, 1.80, 1.86, 1.92, 1.98, 2.04];
+  const frames = await captureBrowserFrames(videoPath, label, times);
+  if (frames.length !== times.length) {
+    fail(`${label}: браузер не доиграл до конца окна проверки стыка — поймано ${frames.length} из ${times.length} кадров`);
+    return;
+  }
+  const pairSsims = [];
+  for (let i = 0; i < frames.length - 1; i += 1) {
+    pairSsims.push(ssimBetween(frames[i], frames[i + 1]));
+  }
+  const worst = Math.min(...pairSsims.map((v) => v ?? 0));
+  if (pairSsims.every((v) => v !== null) && worst >= 0.95) {
+    ok(`${label}: браузерное воспроизведение от currentTime=0 подтверждает чистый стык (мин. SSIM ${worst.toFixed(4)})`);
+  } else {
+    fail(`${label}: браузер (currentTime=0, без seek) показывает разрыв на стыке — SSIM соседних кадров: ${pairSsims.map((v) => v?.toFixed(4) ?? 'н/д').join(', ')}`);
+  }
+}
+
 /** SSIM первого кадра против обложки, приведённой к его разрешению. 1.0 — идентичны, площадкам этого не объяснить словами — только числом. */
 function ssimAgainstCover(framePng, coverPng, width, height) {
   const stderr = runFfmpeg([
@@ -450,6 +597,8 @@ for (const spec of VIDEO_SPECS) {
   }
 
   checkSeamIntegrity(path, spec.file);
+  process.stdout.write(`  (запускаю браузерную проверку стыка для ${spec.file} — до ~45с)\n`);
+  await checkSeamIntegrityBrowser(path, spec.file);
 }
 rmSync(VIDEO_TMP, { recursive: true, force: true });
 
