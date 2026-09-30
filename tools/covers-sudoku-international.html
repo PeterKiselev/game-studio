@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Sudoku Academy — international covers</title>
+<style>
+  * { box-sizing: border-box; margin: 0; }
+  html, body { width: 100%; height: 100%; overflow: hidden; }
+  body {
+    position: relative;
+    background: #f4ead2 url("../games/sudoku/store/promo/key-art-clean.png") center 55% / cover no-repeat;
+    font-family: Georgia, "Times New Roman", serif;
+  }
+
+  /*
+   * Узкие кадры (square/portrait) берут источник почти по высоте и режут
+   * по ширине — сюжет (раскрытая книга с сеткой) в исходнике смещён
+   * вправо от центра, поэтому для них фокус сдвинут на ~68%, иначе в
+   * кадр попадает пустое кремовое поле слева, а не книга.
+   */
+  body.narrow {
+    background-position: 68% center;
+  }
+
+  /* Обложка: только название игры, без слоганов и посторонних элементов —
+   * такое требование площадок (title only, no "Play", no logos). Скрим —
+   * не рамка и не логотип, просто затемнение под текст для читаемости. */
+  .title {
+    position: absolute;
+    left: 6%;
+    bottom: 7%;
+    right: 6%;
+    padding-top: 22%;
+    background: linear-gradient(to top, rgba(23,58,56,.82) 0%, rgba(23,58,56,.55) 45%, rgba(23,58,56,0) 100%);
+  }
+  .title span {
+    position: absolute;
+    left: 0;
+    bottom: 6%;
+    color: #faf6eb;
+    font-size: 7.2vw;
+    font-weight: 700;
+    line-height: 1.02;
+    letter-spacing: -.02em;
+  }
+  body.notext .title { display: none; }
+</style>
+</head>
+<body>
+  <div class="title"><span>Sudoku<br>Academy</span></div>
+</body>
+</html>
