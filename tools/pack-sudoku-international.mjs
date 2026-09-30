@@ -19,19 +19,22 @@
  */
 
 import { execFileSync, spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, readdirSync, statSync, readFileSync, writeFileSync, cpSync, rmSync, unlinkSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, statSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { createServer } from 'node:http';
 import { createRequire } from 'node:module';
 import { chromium } from 'playwright';
 
-// ffmpeg-static лежит в глобальных пакетах (NODE_PATH), тем же путём, что
-// уже используют tools/video.cjs и tools/video-sudoku-international.cjs —
-// один способ находить один и тот же бинарник по всему проекту. В ESM
-// нет обычного require(), createRequire(import.meta.url) даёт его аналог;
-// базовый путь для абсолютного require('...ffmpeg-static') значения не имеет.
-const requireGlobal = createRequire(import.meta.url);
-const FFMPEG = requireGlobal(join(process.env.NODE_PATH ?? '', 'ffmpeg-static'));
+const { stageSudokuInternational } = createRequire(import.meta.url)('./lib/stage-sudoku-international.cjs');
+
+// Повторное ревью Codex 30 сентября 2026: ffmpeg-static раньше был только
+// в глобальных пакетах (NODE_PATH среды Claude), поэтому обычная команда
+// `node tools/pack-sudoku-international.mjs` после чистого `npm install`
+// падала с `Cannot find module 'ffmpeg-static'`. Теперь пакет — обычная
+// devDependency этого репозитория (`package.json`), и обычный require()
+// находит его сам, без переменных окружения. В ESM нет require() —
+// createRequire(import.meta.url) даёт его аналог.
+const FFMPEG = createRequire(import.meta.url)('ffmpeg-static');
 
 const ROOT = join(import.meta.dirname, '..');
 const BUILD = join(ROOT, 'games', 'sudoku', 'dist', 'web');
@@ -41,45 +44,17 @@ const COVERS = join(ROOT, 'games', 'sudoku', 'store', 'international', 'covers')
 const VIDEOS = join(ROOT, 'games', 'sudoku', 'store', 'international', 'videos');
 
 /**
- * `npm run build:sudoku:web` даёт обычную web-сборку — ту же, что открыта
- * на GitHub Pages, и её мы не трогаем. Для международного пакета берём
- * копию и убираем чанки VK/Яндекс-адаптеров: на этой сборке
- * `__PLATFORM__ === 'web'`, `detectPlatformId()` возвращает 'web' сразу
- * (packages/platform/src/index.ts) и они не импортируются никогда —
- * но статически внутри лежит строка с адресом Yandex SDK
- * (`https://yandex.ru/games/sdk/v2`), а площадки типа CrazyGames и Poki
- * прямо требуют работать без внешних запросов. Код мёртвый и так, удалить
- * файл безопаснее, чем объяснять модератору, что ссылка не выполняется.
+ * Стейджинг международной копии — в tools/lib/stage-sudoku-international.cjs, общий
+ * с tools/video-sudoku-international.cjs. Раньше эта функция жила только здесь,
+ * и ролик писался с обычной (русской по умолчанию) dev-сборки,
+ * и в кадре мелькало русское «Загружаем…» — повторное ревью
+ * Codex 30 сентября 2026, пункт 3. Теперь оба инструмента показывают один и
+ * тот же уже англизированный HTML — точно то, что увидит игрок
+ * площадки. Содержимое функции (убрать VK/Яндекс-чанки,
+ * подставить window.__SUDOKU_FORCE_LOCALE__, англизировать оболочку)
+ * не повторены здесь второй раз — см. комментарий в самом модуле.
  */
-/**
- * Ревью Codex 30 сентября 2026 поймало: международный ZIP на ru-RU
- * браузере без `?lang=` открывался по-русски — `detectLocale()` смотрит
- * на `platform.locale`, а тот на web-адаптере берётся из
- * `navigator.language`. Площадкам нужен английский безусловно. Флаг
- * `window.__SUDOKU_FORCE_LOCALE__` (games/sudoku/src/i18n.ts) даёт это
- * ровно там, где нужно, не трогая обычную web/VK-сборку: строка
- * подставляется только в копию `index.html` внутри этих двух ZIP.
- */
-function injectForceEnglish() {
-  const path = join(DIST, 'index.html');
-  const html = readFileSync(path, 'utf8');
-  const marker = '<script>window.__SUDOKU_FORCE_LOCALE__="en";</script>';
-  if (html.includes(marker)) return; // на случай повторного запуска без пересборки
-  if (!html.includes('<head>')) throw new Error('index.html без <head> — не могу подставить умолчание языка');
-  writeFileSync(path, html.replace('<head>', `<head>\n    ${marker}`), 'utf8');
-}
-
-function stageWithoutUnusedAdapters() {
-  if (!existsSync(BUILD)) return;
-  rmSync(DIST, { recursive: true, force: true });
-  cpSync(BUILD, DIST, { recursive: true });
-  const assetsDir = join(DIST, 'assets');
-  for (const f of readdirSync(assetsDir)) {
-    if (/^(vk|yandex)\..*\.js$/.test(f)) unlinkSync(join(assetsDir, f));
-  }
-  injectForceEnglish();
-}
-stageWithoutUnusedAdapters();
+stageSudokuInternational(BUILD, DIST);
 
 const issues = [];
 const ok = (msg) => console.log('  ok —', msg);
@@ -137,6 +112,26 @@ if (!existsSync(DIST)) {
   else fail(`initial bundle превышает ориентир 20 МБ: ${(totalBytes / 1024 / 1024).toFixed(2)} МБ`);
   if (totalBytes < 50 * 1024 * 1024) ok('initial bundle меньше жёсткого лимита 50 МБ');
   else fail(`initial bundle превышает жёсткий лимит 50 МБ: ${(totalBytes / 1024 / 1024).toFixed(2)} МБ`);
+}
+
+// --- 1a. Статическая HTML-оболочка ДО исполнения JavaScript ---
+// Повторное ревью Codex 30 сентября 2026, пункт 3: живой браузерный тест
+// ниже смотрит на страницу уже после того, как отработал наш JS — он не
+// мог поймать то, что видно до этого (сырой HTML, или площадка с
+// отключённым/медленным JS). Читаем файл напрямую, без браузера.
+console.log('\n=== Статическая HTML-оболочка (до JavaScript) ===');
+if (existsSync(DIST)) {
+  const html = readFileSync(join(DIST, 'index.html'), 'utf8');
+  if (html.includes('<html lang="en">')) ok('<html lang="en"> в самом HTML, не только после JS');
+  else fail('<html lang="ru"> или другое значение в сыром HTML — площадка увидит русский до JavaScript');
+
+  if (html.includes('<title>Sudoku Academy</title>')) ok('<title>Sudoku Academy</title> в сыром HTML');
+  else fail('заголовок страницы в сыром HTML не "Sudoku Academy"');
+
+  if (html.includes('Loading…') && !html.includes('Загружаем…')) ok('текст загрузки в сыром HTML — "Loading…"');
+  else fail('текст загрузки в сыром HTML не англизирован (ожидался "Loading…", не "Загружаем…")');
+} else {
+  fail('нет DIST для проверки статической оболочки — сборка не найдена');
 }
 
 // --- 1b. Локаль по умолчанию в упакованном ZIP, живым браузером ---
@@ -333,6 +328,63 @@ function extractFirstFrame(videoPath, outPng) {
   execFileSync(FFMPEG, ['-y', '-i', videoPath, '-frames:v', '1', '-update', '1', outPng], { stdio: 'ignore' });
 }
 
+/** Кадр в произвольный момент времени → PNG. `-ss` перед `-i` — точная перемотка по timestamp'у, не по ключевым кадрам. */
+function extractFrameAt(videoPath, timeSec, outPng) {
+  execFileSync(FFMPEG, ['-y', '-ss', String(timeSec), '-i', videoPath, '-frames:v', '1', '-update', '1', outPng], { stdio: 'ignore' });
+}
+
+/** SSIM двух PNG одного разрешения — без приведения масштаба, в отличие от ssimAgainstCover. */
+function ssimBetween(pngA, pngB) {
+  const stderr = runFfmpeg(['-i', pngA, '-i', pngB, '-lavfi', 'ssim', '-f', 'null', '-']);
+  const match = stderr.match(/All:([\d.]+)/g);
+  if (!match) return null;
+  return Number(match[match.length - 1].split(':')[1]);
+}
+
+/**
+ * Повторное ревью Codex 30 сентября 2026: portrait-ролик на 1,659с и
+ * 1,860с показывал вертикально разорванные/сдвинутые кадры при обычном
+ * воспроизведении — прежняя проверка смотрела только на frame 0 и
+ * закономерно это пропускала. Причина (см. tools/video-sudoku-international.cjs)
+ * — отсутствие `setpts=PTS-STARTPTS` перед `concat`; исправлено там,
+ * здесь — проверка, что дефект не вернётся незамеченным.
+ *
+ * Стык заставка/геймплей ровно на 1,5с — сразу после него идёт пауза
+ * ~2с на экране меню перед первым кликом (recordGameplay в
+ * video-sudoku-international.cjs), то есть контент в окне 1,55–1,95с
+ * почти статичен по построению записи, не по совпадению. Битый/сдвинутый
+ * кадр внутри этого окна резко отличается от соседних стабильных кадров —
+ * SSIM между соседними кадрами в этом окне должен быть высоким везде,
+ * не только в среднем. Проверяем каждую соседнюю пару, а не общий разброс,
+ * чтобы один испорченный кадр между двумя нормальными не размылся в
+ * среднем по сэмплам. Сэмплы начинаются с 1,52с (не с 1,5с ровно) и идут
+ * с шагом ~0,06с: первая пара после самого стыка (где кадр закономерно
+ * и легитимно меняется — заставка становится геймплеем) — самое частое
+ * место дефекта на практике, подтверждено негативным контролем на
+ * реальной регрессии без `setpts` (см. HANDOFF.md): там разрыв ловился
+ * именно в первой паре после стыка, 0,52–0,56с после начала геймплея,
+ * а не только там, где его увидело ревью на своей записи (1,659с/1,860с) —
+ * значит частый шаг важнее совпадения с конкретными секундами того прогона.
+ */
+function checkSeamIntegrity(videoPath, label) {
+  const times = [1.52, 1.58, 1.64, 1.70, 1.76, 1.82, 1.88, 1.94, 2.0];
+  const frames = times.map((t, i) => {
+    const png = join(VIDEO_TMP, `${label}-seam-${i}.png`);
+    extractFrameAt(videoPath, t, png);
+    return png;
+  });
+  const pairSsims = [];
+  for (let i = 0; i < frames.length - 1; i += 1) {
+    pairSsims.push(ssimBetween(frames[i], frames[i + 1]));
+  }
+  const worst = Math.min(...pairSsims.map((v) => v ?? 0));
+  if (pairSsims.every((v) => v !== null) && worst >= 0.95) {
+    ok(`${label}: стык заставка/геймплей чист — все соседние кадры в окне 1,55–1,95с согласованы (мин. SSIM ${worst.toFixed(4)})`);
+  } else {
+    fail(`${label}: разрыв/скачок кадра около стыка — соседние кадры в окне 1,55–1,95с разошлись (SSIM: ${pairSsims.map((v) => v?.toFixed(4) ?? 'н/д').join(', ')})`);
+  }
+}
+
 /** SSIM первого кадра против обложки, приведённой к его разрешению. 1.0 — идентичны, площадкам этого не объяснить словами — только числом. */
 function ssimAgainstCover(framePng, coverPng, width, height) {
   const stderr = runFfmpeg([
@@ -396,6 +448,8 @@ for (const spec of VIDEO_SPECS) {
   } else {
     fail(`${spec.file}: первый кадр НЕ совпадает с обложкой (SSIM ${ssim ?? 'н/д'})`);
   }
+
+  checkSeamIntegrity(path, spec.file);
 }
 rmSync(VIDEO_TMP, { recursive: true, force: true });
 

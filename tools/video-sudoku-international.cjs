@@ -10,7 +10,38 @@
  * подтверждены повторно в этом заходе (docs.crazygames.com/requirements/game-covers/:
  * «both landscape (1080p, 16:9) and portrait (1080p, 2:3) versions»).
  *
- * === Ревью Codex 30 сентября 2026 нашло два дефекта, оба исправлены здесь ===
+ * === Повторное ревью Codex 30 сентября 2026 нашло рваные кадры на стыке ===
+ *
+ * Portrait-ролик на 1,659с и 1,860с (около границы заставка/геймплей на
+ * 1,5с) показывал вертикально разорванные/сдвинутые кадры при обычном
+ * воспроизведении — не артефакт перемотки, воспроизводится стабильно.
+ * Причина: `concat`-фильтр требует монотонно растущих таймстампов от
+ * каждого входа, а `-loop 1 -t 1.5 -i cover.png` и записанный Playwright
+ * `.webm` начинают PTS не с нуля независимо друг от друга. Без явного
+ * `setpts=PTS-STARTPTS` на обоих входах декодер стыкует кадры по чужим
+ * таймстампам, из-за чего энкодер иногда обсчитывает межкадровую
+ * интерполяц/выравнивание по кадру, которого фактически ещё/уже нет —
+ * это и есть визуальный разрыв. Добавлено `setpts=PTS-STARTPTS` в оба
+ * плеча фильтра ниже; проверено автоматической выборкой нескольких
+ * кадров вокруг стыка (не только frame 0), см.
+ * tools/pack-sudoku-international.mjs, раздел «Превью-ролики».
+ *
+ * === Повторное ревью Codex 30 сентября 2026, ещё одна находка (не в списке
+ * блокеров, но всплыла при проверке предыдущих трёх) ===
+ *
+ * Ролик писался с обычного `npm run dev`/preview-сервера — то есть с
+ * той же сборки, что открыта на GitHub Pages, с русской HTML-оболочкой
+ * по умолчанию (`<html lang="ru">`, «Загружаем…» до того, как отработает
+ * JS). `?lang=en` в URL переключает язык уже ПОСЛЕ маунта — сам этот
+ * самый первый кадр загрузки успевал попасть в запись и по SSIM-проверке
+ * стыка (см. tools/pack-sudoku-international.mjs) выглядел как «разрыв»:
+ * не битый кадр, а честный короткий русский флэш экрана загрузки.
+ * Исправление — записывать ролик с того же самого уже упакованного и
+ * англизированного HTML, что уходит в ZIP (tools/lib/stage-sudoku-international.cjs),
+ * а не с отдельной dev-сборки: свой статический сервер над `release/_international-stage`
+ * вместо внешнего `http://127.0.0.1:4176/`.
+ *
+ * === Первое ревью Codex 30 сентября 2026 нашло два дефекта, оба исправлены здесь ===
  *
  * 1. Первые кадры роликов были белыми/пустыми, а не обложкой. Первая версия
  *    снимала «заставку» отдельной страницей с живым скринкастом (открыть
@@ -33,20 +64,53 @@
  *    (`.hint-btn`), как и урок: подсказка по построению всегда даёт
  *    доказанно верный ход, конфликтов не бывает в принципе.
  *
- * Запуск:
- *   NODE_PATH="$(npm root -g)" node tools/video-sudoku-international.cjs [базовый-url]
+ * Запуск (сначала собрать сборку, дальше скрипт сам стейджит и поднимает
+ * сервер под упакованный HTML):
+ *   npm run build -w @studio/sudoku -- --mode web
+ *   node tools/video-sudoku-international.cjs [базовый-url — необязательно, для ручной отладки против другого сервера]
+ *
+ * ffmpeg-static и playwright — обычные devDependencies этого репозитория
+ * (package.json), обычный require() находит их сам после `npm install`,
+ * без NODE_PATH — см. пункт 2 ревью Codex 30 сентября 2026 выше.
  */
 const { chromium } = require('playwright');
 const { execFileSync } = require('node:child_process');
-const { mkdirSync, readdirSync, rmSync, existsSync, statSync } = require('node:fs');
+const { mkdirSync, readdirSync, rmSync, existsSync, statSync, readFileSync } = require('node:fs');
 const { join } = require('node:path');
+const { createServer } = require('node:http');
+const { stageSudokuInternational } = require('./lib/stage-sudoku-international.cjs');
 
-const BASE = process.argv[2] || 'http://127.0.0.1:4176/';
+const EXPLICIT_BASE = process.argv[2];
+const BUILD = join(__dirname, '..', 'games', 'sudoku', 'dist', 'web');
+const DIST = join(__dirname, '..', 'release', '_international-stage');
 const OUT = join(__dirname, '..', 'games', 'sudoku', 'store', 'international', 'videos');
 const COVERS = join(__dirname, '..', 'games', 'sudoku', 'store', 'international', 'covers');
 const TMP = join(OUT, '_raw');
 
-const FFMPEG = require(join(process.env.NODE_PATH ?? '', 'ffmpeg-static'));
+const FFMPEG = require('ffmpeg-static');
+
+/** Тот же статический сервер-заглушка, что и в tools/pack-sudoku-international.mjs — сервит уже упакованный (англизированный) HTML, не dev-сборку. */
+function serveDirOnce(dir, port) {
+  const mime = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png' };
+  const server = createServer((req, res) => {
+    let path = decodeURIComponent(req.url.split('?')[0]);
+    if (path === '/') path = '/index.html';
+    const file = join(dir, path);
+    let body;
+    try {
+      body = readFileSync(file);
+    } catch {
+      res.writeHead(404);
+      res.end();
+      return;
+    }
+    const ext = Object.keys(mime).find((e) => file.endsWith(e));
+    res.writeHead(200, { 'Content-Type': mime[ext] ?? 'application/octet-stream' });
+    res.end(body);
+  });
+  server.listen(port, '127.0.0.1');
+  return server;
+}
 
 const LANDSCAPE = { label: 'landscape', width: 1920, height: 1080, cover: join(COVERS, 'cover-1920x1080.png') };
 const PORTRAIT = { label: 'portrait', width: 720, height: 1080, cover: join(COVERS, 'cover-800x1200.png') };
@@ -61,9 +125,12 @@ const pause = (ms) => new Promise((r) => setTimeout(r, ms));
  * Обе задачи решаются через кнопку подсказки — доказанно верные ходы,
  * без единого конфликта или ошибки на экране (см. пункт 2 выше).
  */
-async function recordGameplay(context) {
+async function recordGameplay(context, base) {
   const page = await context.newPage();
-  await page.goto(`${BASE}${BASE.includes('?') ? '&' : '?'}lang=en`, { waitUntil: 'networkidle' });
+  // Упакованный DIST уже англизирован (window.__SUDOKU_FORCE_LOCALE__ + сам
+  // HTML) сам по себе, но ?lang=en оставлен — при ручном запуске с
+  // EXPLICIT_BASE (обычная dev-сборка) он всё ещё нужен.
+  await page.goto(`${base}${base.includes('?') ? '&' : '?'}lang=en`, { waitUntil: 'networkidle' });
   await page.waitForSelector('.menu');
   await pause(2000); // дать зрителю увидеть меню курса, а не сразу прыгать в урок
 
@@ -122,8 +189,8 @@ function findGameplayWebm(dir) {
  */
 function buildVideo({ label, width, height, cover }, gameplayWebm, outMp4) {
   const filter =
-    `[0:v]scale=${width}:${height}:force_original_aspect_ratio=disable,fps=${FPS},format=yuv420p,setsar=1[v0];` +
-    `[1:v]scale=${width}:${height}:force_original_aspect_ratio=disable,fps=${FPS},format=yuv420p,setsar=1[v1];` +
+    `[0:v]setpts=PTS-STARTPTS,scale=${width}:${height}:force_original_aspect_ratio=disable,fps=${FPS},format=yuv420p,setsar=1[v0];` +
+    `[1:v]setpts=PTS-STARTPTS,scale=${width}:${height}:force_original_aspect_ratio=disable,fps=${FPS},format=yuv420p,setsar=1[v1];` +
     `[v0][v1]concat=n=2:v=1:a=0[outv]`;
 
   execFileSync(FFMPEG, [
@@ -146,6 +213,18 @@ function buildVideo({ label, width, height, cover }, gameplayWebm, outMp4) {
   mkdirSync(OUT, { recursive: true });
   rmSync(TMP, { recursive: true, force: true });
   mkdirSync(TMP, { recursive: true });
+
+  let server = null;
+  let base = EXPLICIT_BASE;
+  if (!base) {
+    if (!stageSudokuInternational(BUILD, DIST)) {
+      throw new Error(`нет сборки ${BUILD} — сначала npm run build -w @studio/sudoku -- --mode web`);
+    }
+    const PORT = 4882;
+    server = serveDirOnce(DIST, PORT);
+    base = `http://127.0.0.1:${PORT}/`;
+  }
+
   const browser = await chromium.launch();
 
   for (const spec of [LANDSCAPE, PORTRAIT]) {
@@ -163,7 +242,7 @@ function buildVideo({ label, width, height, cover }, gameplayWebm, outMp4) {
       locale: 'en-US',
     });
 
-    await recordGameplay(context);
+    await recordGameplay(context, base);
     await context.close();
 
     const gameplayWebm = findGameplayWebm(dir);
@@ -180,6 +259,7 @@ function buildVideo({ label, width, height, cover }, gameplayWebm, outMp4) {
 
   await browser.close();
   rmSync(TMP, { recursive: true, force: true });
+  if (server) server.close();
 })().catch((err) => {
   console.error('Не удалось записать ролик:', err.message);
   process.exit(1);
