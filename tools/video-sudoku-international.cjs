@@ -5,52 +5,63 @@
  * ботом в гомоку и не подходит по формату: другая игра, другое разрешение,
  * другие требования к первому кадру).
  *
- * Требование площадки (docs.crazygames.com/requirements/game-covers/):
- * ролик должен начинаться с той же статичной обложки, что уже загружена
- * отдельным файлом — это даёт бесшовный переход обложка→видео на витрине.
- * Поэтому первые кадры — реально обложка (screenshot той же HTML-заготовки,
- * что рендерит tools/covers-sudoku-international.cjs), и только затем
- * начинается запись настоящего интерфейса игры.
- *
  * Указанные размеры (1920×1080 landscape, 720×1080 portrait 2:3) — из
  * официальных требований CrazyGames, проверены Codex 30 сентября 2026 и
  * подтверждены повторно в этом заходе (docs.crazygames.com/requirements/game-covers/:
  * «both landscape (1080p, 16:9) and portrait (1080p, 2:3) versions»).
+ *
+ * === Ревью Codex 30 сентября 2026 нашло два дефекта, оба исправлены здесь ===
+ *
+ * 1. Первые кадры роликов были белыми/пустыми, а не обложкой. Первая версия
+ *    снимала «заставку» отдельной страницей с живым скринкастом (открыть
+ *    HTML обложки → подождать → закрыть страницу), а затем склеивала её
+ *    .webm с .webm геймплея через демультиплексор `-f concat`. Проблема
+ *    была не в подходе, а в реализации: у отдельно записанного видео
+ *    первые кадры códec'а действительно недоопределены (Chromium начинает
+ *    писать WebM чуть раньше, чем страница реально прокрашена), и это
+ *    видно только при покадровом просмотре, не на глаз при первом обзоре.
+ *    Исправление — не «подождать подольше», а убрать саму запись живой
+ *    страницы для заставки: заставка теперь рендерится напрямую из уже
+ *    готового PNG обложки через `ffmpeg -loop 1 -i cover.png`, тем самым
+ *    первый кадр ролика побитово тот же материал, что и статичная обложка.
+ *
+ * 2. Геймплей практики показывал ошибки игрока: скрипт вслепую вводил
+ *    цифры 4/7/2 в первые свободные клетки, что на реальном пазле почти
+ *    всегда даёт конфликт (красная подсветка, растущий счётчик Mistakes).
+ *    Для витрины это не «настоящий геймплей», а реклама провала.
+ *    Исправление — практика тоже играется через кнопку подсказки
+ *    (`.hint-btn`), как и урок: подсказка по построению всегда даёт
+ *    доказанно верный ход, конфликтов не бывает в принципе.
  *
  * Запуск:
  *   NODE_PATH="$(npm root -g)" node tools/video-sudoku-international.cjs [базовый-url]
  */
 const { chromium } = require('playwright');
 const { execFileSync } = require('node:child_process');
-const { mkdirSync, readdirSync, renameSync, rmSync, existsSync, statSync } = require('node:fs');
+const { mkdirSync, readdirSync, rmSync, existsSync, statSync } = require('node:fs');
 const { join } = require('node:path');
-const { pathToFileURL } = require('node:url');
 
 const BASE = process.argv[2] || 'http://127.0.0.1:4176/';
 const OUT = join(__dirname, '..', 'games', 'sudoku', 'store', 'international', 'videos');
+const COVERS = join(__dirname, '..', 'games', 'sudoku', 'store', 'international', 'covers');
 const TMP = join(OUT, '_raw');
-const COVER_HTML = pathToFileURL(join(__dirname, 'covers-sudoku-international.html')).href;
 
 const FFMPEG = require(join(process.env.NODE_PATH ?? '', 'ffmpeg-static'));
 
-const LANDSCAPE = { width: 1920, height: 1080, coverClass: '' };
-const PORTRAIT = { width: 720, height: 1080, coverClass: 'narrow' };
-const COVER_HOLD_MS = 1500;
+const LANDSCAPE = { label: 'landscape', width: 1920, height: 1080, cover: join(COVERS, 'cover-1920x1080.png') };
+const PORTRAIT = { label: 'portrait', width: 720, height: 1080, cover: join(COVERS, 'cover-800x1200.png') };
+const COVER_HOLD_S = 1.5;
+const FPS = 25;
 const MAX_MB = 50;
 
 const pause = (ms) => new Promise((r) => setTimeout(r, ms));
 
-/** Первые кадры ролика — статичная обложка, снятая тем же макетом, что даёт PNG-обложку. */
-async function recordCoverHold(context, viewport, coverClass) {
-  const page = await context.newPage();
-  await page.goto(COVER_HTML, { waitUntil: 'load' });
-  if (coverClass) await page.evaluate((cls) => { document.body.className = cls; }, coverClass);
-  await pause(COVER_HOLD_MS);
-  await page.close();
-}
-
-/** Реальный геймплей: меню → урок за один клик → решение → практика. Не анимация, настоящий интерфейс. */
-async function recordGameplay(context, viewport) {
+/**
+ * Реальный геймплей: меню → урок за один клик → решение → практика.
+ * Обе задачи решаются через кнопку подсказки — доказанно верные ходы,
+ * без единого конфликта или ошибки на экране (см. пункт 2 выше).
+ */
+async function recordGameplay(context) {
   const page = await context.newPage();
   await page.goto(`${BASE}${BASE.includes('?') ? '&' : '?'}lang=en`, { waitUntil: 'networkidle' });
   await page.waitForSelector('.menu');
@@ -79,81 +90,88 @@ async function recordGameplay(context, viewport) {
   await page.waitForSelector('.menu');
   await pause(800);
 
-  // Показываем и практику — второй самостоятельный режим, не только курс.
+  // Практика — второй самостоятельный режим, не только курс. Играется
+  // подсказками: каждый ход доказуемо верен, ошибок на экране не будет.
   await page.locator('.difficulty-card').first().click();
   await page.waitForSelector('.puzzle');
   await pause(1000);
-  const empties = page.locator('.sudoku-cell:not(.given)');
-  for (const [i, digit] of [[0, '4'], [1, '7'], [2, '2']]) {
-    const cell = empties.nth(i);
-    if (await cell.count()) {
-      await cell.click();
-      await page.locator('.digit-btn', { hasText: digit }).click();
-      await pause(650);
-    }
+  for (let i = 0; i < 3; i += 1) {
+    const hintBtn = page.locator('.hint-btn');
+    if ((await hintBtn.count()) === 0) break;
+    await hintBtn.click();
+    await pause(900); // видно, как заполняется клетка и меняется объяснение
   }
-  await pause(3000);
+  await pause(2500);
 
   await page.close();
 }
 
-function findLatestWebm(dir) {
+function findGameplayWebm(dir) {
   const files = readdirSync(dir).filter((f) => f.endsWith('.webm'));
-  if (!files.length) throw new Error('Playwright не сохранил видео: ' + dir);
-  // Playwright пишет по одному файлу на страницу — их два (обложка, геймплей),
-  // сортировка по времени изменения даёт правильный порядок склейки.
-  return files
-    .map((f) => join(dir, f))
-    .sort((a, b) => statSync(a).mtimeMs - statSync(b).mtimeMs);
+  if (files.length !== 1) throw new Error(`ожидался один .webm геймплея, найдено ${files.length}: ` + dir);
+  return join(dir, files[0]);
 }
 
-function concatToMp4(webmFiles, mp4, viewport) {
-  const listFile = join(TMP, `${viewport.width}x${viewport.height}.txt`);
-  require('node:fs').writeFileSync(listFile, webmFiles.map((f) => `file '${f.replace(/'/g, "'\\''")}'`).join('\n'));
+/**
+ * Заставка + геймплей — одним вызовом ffmpeg через `concat`-фильтр, а не
+ * склейкой готовых контейнеров через `-f concat`. Фильтр decode’ит оба
+ * входа и нормализует масштаб/fps/цветовой формат ПЕРЕД склейкой, поэтому
+ * не зависит от того, совпадают ли параметры кодеков между «картинкой» и
+ * «живой записью» — то самое рассогласование и дало битый кадр на стыке
+ * в прошлой версии.
+ */
+function buildVideo({ label, width, height, cover }, gameplayWebm, outMp4) {
+  const filter =
+    `[0:v]scale=${width}:${height}:force_original_aspect_ratio=disable,fps=${FPS},format=yuv420p,setsar=1[v0];` +
+    `[1:v]scale=${width}:${height}:force_original_aspect_ratio=disable,fps=${FPS},format=yuv420p,setsar=1[v1];` +
+    `[v0][v1]concat=n=2:v=1:a=0[outv]`;
+
   execFileSync(FFMPEG, [
     '-y',
-    '-f', 'concat',
-    '-safe', '0',
-    '-i', listFile,
+    '-loop', '1', '-t', String(COVER_HOLD_S), '-i', cover,
+    '-i', gameplayWebm,
+    '-filter_complex', filter,
+    '-map', '[outv]',
     '-an', // немой ролик — требование площадки
     '-c:v', 'libx264',
     '-preset', 'medium',
     '-crf', '20',
     '-pix_fmt', 'yuv420p',
     '-movflags', '+faststart',
-    mp4,
+    outMp4,
   ]);
 }
 
 (async () => {
   mkdirSync(OUT, { recursive: true });
+  rmSync(TMP, { recursive: true, force: true });
   mkdirSync(TMP, { recursive: true });
   const browser = await chromium.launch();
 
-  for (const [label, viewport] of [
-    ['landscape', LANDSCAPE],
-    ['portrait', PORTRAIT],
-  ]) {
-    const dir = join(TMP, label);
+  for (const spec of [LANDSCAPE, PORTRAIT]) {
+    if (!existsSync(spec.cover)) {
+      throw new Error(`нет обложки ${spec.cover} — сначала node tools/covers-sudoku-international.cjs`);
+    }
+
+    const dir = join(TMP, spec.label);
     mkdirSync(dir, { recursive: true });
 
     const context = await browser.newContext({
-      viewport,
-      recordVideo: { dir, size: viewport },
+      viewport: { width: spec.width, height: spec.height },
+      recordVideo: { dir, size: { width: spec.width, height: spec.height } },
       colorScheme: 'light',
       locale: 'en-US',
     });
 
-    await recordCoverHold(context, viewport, viewport.coverClass);
-    await recordGameplay(context, viewport);
+    await recordGameplay(context);
     await context.close();
 
-    const webmFiles = findLatestWebm(dir);
-    const mp4 = join(OUT, `preview-${label}.mp4`);
-    concatToMp4(webmFiles, mp4, viewport);
+    const gameplayWebm = findGameplayWebm(dir);
+    const mp4 = join(OUT, `preview-${spec.label}.mp4`);
+    buildVideo(spec, gameplayWebm, mp4);
 
     const sizeMb = statSync(mp4).size / 1024 / 1024;
-    console.log(`${mp4}  ${viewport.width}x${viewport.height}  ${sizeMb.toFixed(1)} MB`);
+    console.log(`${mp4}  ${spec.width}x${spec.height}  ${sizeMb.toFixed(1)} MB`);
     if (sizeMb > MAX_MB) {
       console.error(`ПРЕВЫШЕН лимит площадки ${MAX_MB} MB: ${mp4}`);
       process.exitCode = 1;
@@ -161,7 +179,7 @@ function concatToMp4(webmFiles, mp4, viewport) {
   }
 
   await browser.close();
-  if (existsSync(TMP)) rmSync(TMP, { recursive: true, force: true });
+  rmSync(TMP, { recursive: true, force: true });
 })().catch((err) => {
   console.error('Не удалось записать ролик:', err.message);
   process.exit(1);

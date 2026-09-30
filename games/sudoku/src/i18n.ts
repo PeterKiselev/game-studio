@@ -431,15 +431,45 @@ const EN: Strings = {
 const DICTS: Record<Locale, Strings> = { ru: RU, en: EN };
 
 /**
- * Выбор языка. `?lang=` имеет приоритет над площадкой намеренно: без него
- * невозможно воспроизводимо прогнать браузерный сценарий на конкретной
- * локали, а тест, который зависит от настроек машины, — не тест.
- * Всё, что не начинается на `ru`, считаем английским: для витрин
- * CrazyGames/Poki английский и есть язык по умолчанию.
+ * Необязательный флаг для международных сборок (CrazyGames/Poki): им
+ * нужен английский по умолчанию БЕЗУСЛОВНО, а не только для браузеров
+ * с неРусской локалью. Прежняя формулировка комментария здесь была
+ * неточной именно в этом — «для витрин английский и есть язык по
+ * умолчанию» было верно не всегда: у ru-RU браузера без `?lang=` игра
+ * всё равно открывалась на русском, потому что determineLocale смотрел
+ * на `platform.locale`, а он на web-адаптере берётся из
+ * `navigator.language` (см. `packages/platform/src/adapters/web.ts`).
+ * Ревью Codex 30 сентября 2026 поймало это на живом ru-RU контексте.
+ *
+ * Флаг выставляется НЕ в общем `index.html` (это сломало бы обычную
+ * web/VK-сборку, где русский по умолчанию — правильное поведение), а
+ * отдельной строкой, которую `tools/pack-sudoku-international.mjs`
+ * подставляет только в копию `index.html` внутри двух международных
+ * ZIP. Для любой другой сборки `window.__SUDOKU_FORCE_LOCALE__` не
+ * определён, и поведение не меняется ни на бит.
+ */
+declare global {
+  interface Window {
+    __SUDOKU_FORCE_LOCALE__?: Locale;
+  }
+}
+
+/**
+ * Выбор языка, в порядке убывания приоритета:
+ * 1. `?lang=` — без него невозможно воспроизводимо прогнать браузерный
+ *    сценарий на конкретной локали, а тест, зависящий от настроек
+ *    машины, — не тест;
+ * 2. `window.__SUDOKU_FORCE_LOCALE__` — жёсткое умолчание для
+ *    международных ZIP, см. комментарий выше;
+ * 3. локаль площадки: `ru*` — русский, всё остальное — английский.
  */
 export function detectLocale(platformLocale: string, search = globalThis.location?.search ?? ''): Locale {
   const requested = new URLSearchParams(search).get('lang');
   if (requested === 'ru' || requested === 'en') return requested;
+  if (typeof window !== 'undefined') {
+    const forced = window.__SUDOKU_FORCE_LOCALE__;
+    if (forced === 'ru' || forced === 'en') return forced;
+  }
   return platformLocale.toLowerCase().startsWith('ru') ? 'ru' : 'en';
 }
 

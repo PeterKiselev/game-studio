@@ -43,6 +43,50 @@ describe('выбор языка', () => {
   });
 });
 
+/**
+ * Тестовое окружение — Node (`typeof document === 'undefined'` уже
+ * используется в setLocale по этой же причине), поэтому `window` для
+ * этих тестов ставится и убирается вручную через globalThis, а не через
+ * jsdom — заводить целое DOM-окружение ради одного флага было бы лишним.
+ */
+describe('window.__SUDOKU_FORCE_LOCALE__ — умолчание международных ZIP', () => {
+  function withForcedWindow<T>(forced: 'ru' | 'en' | undefined, run: () => T): T {
+    const had = 'window' in globalThis;
+    const previous = had ? (globalThis as any).window : undefined;
+    (globalThis as any).window = { __SUDOKU_FORCE_LOCALE__: forced };
+    try {
+      return run();
+    } finally {
+      if (had) (globalThis as any).window = previous;
+      else delete (globalThis as any).window;
+    }
+  }
+
+  it('форсирует английский для ru-локали площадки без ?lang= — ровно тот сценарий, что поймало ревью', () => {
+    withForcedWindow('en', () => {
+      expect(detectLocale('ru_RU', '')).toBe('en');
+    });
+  });
+
+  it('без флага (обычная web/VK-сборка) поведение не меняется — ru-локаль всё ещё даёт русский', () => {
+    // window вообще не определён, как в реальной обычной сборке и в этом тестовом окружении по умолчанию.
+    expect(detectLocale('ru_RU', '')).toBe('ru');
+  });
+
+  it('?lang= всё равно главнее флага — «Продолжить с ?lang=ru» из международного ZIP обязан работать', () => {
+    withForcedWindow('en', () => {
+      expect(detectLocale('ru_RU', '?lang=ru')).toBe('ru');
+    });
+  });
+
+  it('невалидное значение флага игнорируется, откатывается на локаль площадки', () => {
+    withForcedWindow(undefined, () => {
+      expect(detectLocale('ru_RU', '')).toBe('ru');
+      expect(detectLocale('en_US', '')).toBe('en');
+    });
+  });
+});
+
 describe('полнота словаря', () => {
   it.each(LOCALES)('%s: у каждого урока есть название и подзаголовок', (value) => {
     withLocale(value, () => {

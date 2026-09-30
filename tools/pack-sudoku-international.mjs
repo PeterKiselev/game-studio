@@ -18,9 +18,20 @@
  *   node tools/pack-sudoku-international.mjs
  */
 
-import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, readdirSync, statSync, readFileSync, cpSync, rmSync, unlinkSync } from 'node:fs';
+import { execFileSync, spawnSync } from 'node:child_process';
+import { existsSync, mkdirSync, readdirSync, statSync, readFileSync, writeFileSync, cpSync, rmSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
+import { createServer } from 'node:http';
+import { createRequire } from 'node:module';
+import { chromium } from 'playwright';
+
+// ffmpeg-static лежит в глобальных пакетах (NODE_PATH), тем же путём, что
+// уже используют tools/video.cjs и tools/video-sudoku-international.cjs —
+// один способ находить один и тот же бинарник по всему проекту. В ESM
+// нет обычного require(), createRequire(import.meta.url) даёт его аналог;
+// базовый путь для абсолютного require('...ffmpeg-static') значения не имеет.
+const requireGlobal = createRequire(import.meta.url);
+const FFMPEG = requireGlobal(join(process.env.NODE_PATH ?? '', 'ffmpeg-static'));
 
 const ROOT = join(import.meta.dirname, '..');
 const BUILD = join(ROOT, 'games', 'sudoku', 'dist', 'web');
@@ -40,6 +51,24 @@ const VIDEOS = join(ROOT, 'games', 'sudoku', 'store', 'international', 'videos')
  * прямо требуют работать без внешних запросов. Код мёртвый и так, удалить
  * файл безопаснее, чем объяснять модератору, что ссылка не выполняется.
  */
+/**
+ * Ревью Codex 30 сентября 2026 поймало: международный ZIP на ru-RU
+ * браузере без `?lang=` открывался по-русски — `detectLocale()` смотрит
+ * на `platform.locale`, а тот на web-адаптере берётся из
+ * `navigator.language`. Площадкам нужен английский безусловно. Флаг
+ * `window.__SUDOKU_FORCE_LOCALE__` (games/sudoku/src/i18n.ts) даёт это
+ * ровно там, где нужно, не трогая обычную web/VK-сборку: строка
+ * подставляется только в копию `index.html` внутри этих двух ZIP.
+ */
+function injectForceEnglish() {
+  const path = join(DIST, 'index.html');
+  const html = readFileSync(path, 'utf8');
+  const marker = '<script>window.__SUDOKU_FORCE_LOCALE__="en";</script>';
+  if (html.includes(marker)) return; // на случай повторного запуска без пересборки
+  if (!html.includes('<head>')) throw new Error('index.html без <head> — не могу подставить умолчание языка');
+  writeFileSync(path, html.replace('<head>', `<head>\n    ${marker}`), 'utf8');
+}
+
 function stageWithoutUnusedAdapters() {
   if (!existsSync(BUILD)) return;
   rmSync(DIST, { recursive: true, force: true });
@@ -48,6 +77,7 @@ function stageWithoutUnusedAdapters() {
   for (const f of readdirSync(assetsDir)) {
     if (/^(vk|yandex)\..*\.js$/.test(f)) unlinkSync(join(assetsDir, f));
   }
+  injectForceEnglish();
 }
 stageWithoutUnusedAdapters();
 
@@ -107,6 +137,78 @@ if (!existsSync(DIST)) {
   else fail(`initial bundle превышает ориентир 20 МБ: ${(totalBytes / 1024 / 1024).toFixed(2)} МБ`);
   if (totalBytes < 50 * 1024 * 1024) ok('initial bundle меньше жёсткого лимита 50 МБ');
   else fail(`initial bundle превышает жёсткий лимит 50 МБ: ${(totalBytes / 1024 / 1024).toFixed(2)} МБ`);
+}
+
+// --- 1b. Локаль по умолчанию в упакованном ZIP, живым браузером ---
+// Именно то, что поймало ревью Codex: раньше это утверждалось в README,
+// но не проверялось. Контекст с locale: 'ru-RU' воспроизводит настоящего
+// ru-RU игрока (packages/platform/src/adapters/web.ts берёт язык из
+// navigator.language, который Playwright здесь и подставляет).
+async function serveDirOnce(dir, port) {
+  const mime = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png' };
+  const server = createServer((req, res) => {
+    // Баг был именно тут: запрос "/?lang=ru" не равен "/" целиком, поэтому
+    // условие ниже раньше сравнивало req.url ДО отрезания query — путь
+    // "/" после split('?') не подменялся на index.html, и сервер отдавал
+    // 404 на сам HTML-документ. Playwright это тихо проглатывал (страница
+    // формально "загрузилась" с пустым телом), а html.lang оказывался
+    // null — из-за чужого бага в тестовом сервере, а не в игре.
+    let path = decodeURIComponent(req.url.split('?')[0]);
+    if (path === '/') path = '/index.html';
+    const file = join(dir, path);
+    // Файл читаем ДО первого writeHead: если readFileSync бросит (файла
+    // нет), заголовки ещё не отправлены и можно честно ответить 404.
+    // Другой порядок сам поймал себя — с 200 уже отправленным catch
+    // пытался писать 404 повторно и падал ERR_HTTP_HEADERS_SENT.
+    let body;
+    try {
+      body = readFileSync(file);
+    } catch {
+      res.writeHead(404);
+      res.end();
+      return;
+    }
+    const ext = Object.keys(mime).find((e) => file.endsWith(e));
+    res.writeHead(200, { 'Content-Type': mime[ext] ?? 'application/octet-stream' });
+    res.end(body);
+  });
+  await new Promise((resolve) => server.listen(port, '127.0.0.1', resolve));
+  return () => server.close();
+}
+
+console.log('\n=== Локаль по умолчанию в упакованном ZIP (живой браузер) ===');
+if (existsSync(DIST)) {
+  const PORT = 4881;
+  const closeServer = await serveDirOnce(DIST, PORT);
+  try {
+    const browser = await chromium.launch();
+
+    const bareContext = await browser.newContext({ locale: 'ru-RU' });
+    const barePage = await bareContext.newPage();
+    await barePage.goto(`http://127.0.0.1:${PORT}/`, { waitUntil: 'networkidle' });
+    const bareLang = await barePage.locator('html').getAttribute('lang');
+    const bareTitle = await barePage.title();
+    if (bareLang === 'en' && bareTitle === 'Sudoku Academy') {
+      ok(`голый URL в контексте ru-RU всё равно даёт английский (<html lang>=${bareLang}, title="${bareTitle}")`);
+    } else {
+      fail(`голый URL в контексте ru-RU дал <html lang>=${bareLang}, title="${bareTitle}" — должен быть английский`);
+    }
+    await bareContext.close();
+
+    const ruContext = await browser.newContext({ locale: 'ru-RU' });
+    const ruPage = await ruContext.newPage();
+    await ruPage.goto(`http://127.0.0.1:${PORT}/?lang=ru`, { waitUntil: 'networkidle' });
+    const ruLang = await ruPage.locator('html').getAttribute('lang');
+    if (ruLang === 'ru') ok('?lang=ru по-прежнему работает внутри международного ZIP');
+    else fail(`?lang=ru дал <html lang>=${ruLang} вместо ru — сломан явный выбор языка`);
+    await ruContext.close();
+
+    await browser.close();
+  } finally {
+    closeServer();
+  }
+} else {
+  fail('нет DIST для проверки локали — сборка не найдена');
 }
 
 // --- 2. Упаковка двух ZIP ---
@@ -188,20 +290,114 @@ console.log('\n=== Poki thumbnail ===');
 }
 
 // --- 5. Ролики ---
+// Ревью Codex 30 сентября 2026: отчёт заявлял разрешение, длительность и
+// отсутствие звука, но валидатор проверял только вес и расширение — эти
+// свойства никто не сверял автоматически, и битый стык кадров (см.
+// tools/video-sudoku-international.cjs) прошёл бы здесь молча. Теперь
+// проверяется каждое заявленное свойство, включая первый кадр против
+// соответствующей обложки — то есть дефект, который был, здесь бы поймался.
 console.log('\n=== Превью-ролики ===');
+const VIDEO_TMP = join(RELEASE, '_video-check');
+mkdirSync(VIDEO_TMP, { recursive: true });
+
+/**
+ * Разбирает вывод ffmpeg по stderr. Намеренно `spawnSync`, не
+ * `execFileSync`: у `-i` без выходного файла код выхода ненулевой, и
+ * `execFileSync` даёт stderr только через исключение — но у `ssimAgainstCover`
+ * ниже (`-f null -`) команда завершается штатно, кодом 0, и та же уловка
+ * с `catch` молча ничего не ловит. Первая версия так и потеряла весь вывод
+ * SSIM — не «похоже на брак», а форменный провал через `н/д`, который сам
+ * себя разоблачил на первом же прогоне. `spawnSync` отдаёт stderr в обоих
+ * случаях одинаково, независимо от кода выхода.
+ */
+function runFfmpeg(args) {
+  return spawnSync(FFMPEG, args, { encoding: 'utf8' }).stderr ?? '';
+}
+
+function probeVideo(path) {
+  const stderr = runFfmpeg(['-i', path]);
+  const duration = stderr.match(/Duration: (\d\d):(\d\d):(\d\d\.\d\d)/);
+  const durationSec = duration ? Number(duration[1]) * 3600 + Number(duration[2]) * 60 + Number(duration[3]) : null;
+  const video = stderr.match(/Video:.*?(\d{2,5})x(\d{2,5})/);
+  const hasAudio = /Stream #0:1.*Audio/.test(stderr) || /: Audio:/.test(stderr);
+  return {
+    durationSec,
+    width: video ? Number(video[1]) : null,
+    height: video ? Number(video[2]) : null,
+    hasAudio,
+  };
+}
+
+/** Первый кадр ролика → PNG, тем же ffmpeg, что и вся остальная обработка видео в проекте. */
+function extractFirstFrame(videoPath, outPng) {
+  execFileSync(FFMPEG, ['-y', '-i', videoPath, '-frames:v', '1', '-update', '1', outPng], { stdio: 'ignore' });
+}
+
+/** SSIM первого кадра против обложки, приведённой к его разрешению. 1.0 — идентичны, площадкам этого не объяснить словами — только числом. */
+function ssimAgainstCover(framePng, coverPng, width, height) {
+  const stderr = runFfmpeg([
+    '-i', framePng,
+    '-i', coverPng,
+    '-lavfi', `[1:v]scale=${width}:${height}[cov];[0:v][cov]ssim`,
+    '-f', 'null', '-',
+  ]);
+  const match = stderr.match(/All:([\d.]+)/g);
+  if (!match) return null;
+  return Number(match[match.length - 1].split(':')[1]); // последнее значение — итог по всему сравнению
+}
+
 const VIDEO_SPECS = [
-  { file: 'preview-landscape.mp4', width: 1920, height: 1080 },
-  { file: 'preview-portrait.mp4', width: 720, height: 1080 },
+  {
+    file: 'preview-landscape.mp4',
+    width: 1920,
+    height: 1080,
+    cover: join(COVERS, 'cover-1920x1080.png'),
+  },
+  {
+    file: 'preview-portrait.mp4',
+    width: 720,
+    height: 1080,
+    cover: join(COVERS, 'cover-800x1200.png'), // обложка 800×1200 (2:3), видео 720×1080 (тот же 2:3) — сравнение со скейлом внутри ssimAgainstCover
+  },
 ];
+
 for (const spec of VIDEO_SPECS) {
   const path = join(VIDEOS, spec.file);
   if (!existsSync(path)) { fail(`нет ролика ${spec.file}`); continue; }
+
   const sizeMb = statSync(path).size / 1024 / 1024;
   console.log(`  ${spec.file}: ${sizeMb.toFixed(1)} МБ`);
   if (sizeMb < 50) ok(`${spec.file} меньше лимита 50 МБ`);
   else fail(`${spec.file} превышает лимит 50 МБ: ${sizeMb.toFixed(1)} МБ`);
-  if (spec.file.endsWith('.mp4')) ok(`${spec.file}: формат mp4`);
+
+  const info = probeVideo(path);
+  if (info.width === spec.width && info.height === spec.height) ok(`${spec.file}: разрешение ${info.width}×${info.height}`);
+  else fail(`${spec.file}: разрешение ${info.width}×${info.height} вместо ${spec.width}×${spec.height}`);
+
+  if (info.durationSec !== null && info.durationSec >= 15 && info.durationSec <= 20) {
+    ok(`${spec.file}: длительность ${info.durationSec.toFixed(2)}с — в требуемом окне 15–20с`);
+  } else {
+    fail(`${spec.file}: длительность ${info.durationSec} вне окна 15–20с`);
+  }
+
+  if (!info.hasAudio) ok(`${spec.file}: без звука`);
+  else fail(`${spec.file}: обнаружена аудиодорожка — ролик должен быть немым`);
+
+  const framePng = join(VIDEO_TMP, spec.file.replace('.mp4', '-frame0.png'));
+  extractFirstFrame(path, framePng);
+  const ssim = ssimAgainstCover(framePng, spec.cover, spec.width, spec.height);
+  // Порог 0.97, не 1.0: первый кадр перекодирован через h264 (libx264,
+  // crf 20) из исходного PNG, а не побитовая копия — небольшие потери
+  // сжатия неизбежны и не значат, что кадр «другой». Именно этот порог
+  // и поймал бы прежний дефект: там на 0–0.6с шёл белый/пустой кадр, а не
+  // обложка, SSIM был бы далёк от единицы.
+  if (ssim !== null && ssim >= 0.97) {
+    ok(`${spec.file}: первый кадр совпадает с обложкой (SSIM ${ssim.toFixed(4)})`);
+  } else {
+    fail(`${spec.file}: первый кадр НЕ совпадает с обложкой (SSIM ${ssim ?? 'н/д'})`);
+  }
 }
+rmSync(VIDEO_TMP, { recursive: true, force: true });
 
 // Временная копия сборки без неиспользуемых адаптеров нужна была только
 // для упаковки/проверки — в release/ остаются только два ZIP.
