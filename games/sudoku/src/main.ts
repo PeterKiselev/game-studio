@@ -201,6 +201,27 @@ function showMenu(): void {
     screenChildren.push(shopBtn);
   }
 
+  // CrazyGames-чеклист требует ссылку на Privacy/Terms прямо в интерфейсе
+  // игры, не только в тексте формы подачи (documents уже существуют и
+  // приняты VK — см. CLAUDE.md §7, раздел «Хостинг и деплой» — здесь только
+  // ссылка на них, не новый текст). Открываются в новой вкладке, чтобы не
+  // терять прогресс партии.
+  const legalLinks = el(
+    'div',
+    { class: 'legal-links' },
+    el(
+      'a',
+      { href: 'https://peterkiselev.github.io/game-studio/privacy.html', target: '_blank', rel: 'noopener' },
+      t().common.privacy,
+    ),
+    el(
+      'a',
+      { href: 'https://peterkiselev.github.io/game-studio/terms.html', target: '_blank', rel: 'noopener' },
+      t().common.terms,
+    ),
+  );
+  screenChildren.push(legalLinks);
+
   const screen = el('div', { class: 'screen menu' }, ...screenChildren);
   root.replaceChildren(screen);
 }

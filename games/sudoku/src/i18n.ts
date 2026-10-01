@@ -24,6 +24,8 @@ export interface Strings {
     menu: string;
     close: string;
     toMenu: string;
+    privacy: string;
+    terms: string;
   };
 
   menu: {
@@ -148,7 +150,7 @@ const EN_UNIT: Record<'row' | 'col' | 'box', string> = {
 const RU: Strings = {
   appTitle: 'Академия Sudoku',
 
-  common: { menu: 'Меню', close: 'Закрыть', toMenu: 'В меню' },
+  common: { menu: 'Меню', close: 'Закрыть', toMenu: 'В меню', privacy: 'Конфиденциальность', terms: 'Условия использования' },
 
   menu: {
     academyKicker: '🎓 КУРС ЛОГИКИ',
@@ -290,7 +292,7 @@ const RU: Strings = {
 const EN: Strings = {
   appTitle: 'Sudoku Academy',
 
-  common: { menu: 'Menu', close: 'Close', toMenu: 'To menu' },
+  common: { menu: 'Menu', close: 'Close', toMenu: 'To menu', privacy: 'Privacy', terms: 'Terms of use' },
 
   menu: {
     academyKicker: '🎓 LOGIC COURSE',
