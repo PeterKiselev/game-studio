@@ -169,17 +169,29 @@ function showMenu(): void {
     diffList.append(card);
   }
 
-  const achievementsBox = el('div', { class: 'achievements' });
-  for (const id of ACHIEVEMENT_IDS) {
-    const unlocked = s.achievements.includes(id);
-    achievementsBox.append(
-      el(
-        'div',
-        { class: `achievement${unlocked ? ' unlocked' : ''}` },
-        el('div', { class: 'badge' }, unlocked ? '🏅' : '🔒'),
-        el('div', { class: 'label' }, t().achievements[id].title),
-      ),
-    );
+  // Полная сетка из шести замков подряд для игрока, который ещё ничего не
+  // открыл, — это шесть одинаковых «🔒» для чтения на первом экране, ничего
+  // не объясняющих. Компактная строка-тизер показывает то же самое (сколько
+  // и за что), не отнимая внимание у главной кнопки урока выше. После
+  // первого же открытого достижения сетка возвращается — тогда в ней уже
+  // есть что разглядывать.
+  let achievementsSection: HTMLElement;
+  if (s.achievements.length === 0) {
+    achievementsSection = el('div', { class: 'achievements-teaser' }, t().menu.achievementsTeaser(ACHIEVEMENT_IDS.length));
+  } else {
+    const achievementsBox = el('div', { class: 'achievements' });
+    for (const id of ACHIEVEMENT_IDS) {
+      const unlocked = s.achievements.includes(id);
+      achievementsBox.append(
+        el(
+          'div',
+          { class: `achievement${unlocked ? ' unlocked' : ''}` },
+          el('div', { class: 'badge' }, unlocked ? '🏅' : '🔒'),
+          el('div', { class: 'label' }, t().achievements[id].title),
+        ),
+      );
+    }
+    achievementsSection = achievementsBox;
   }
 
   const screenChildren: HTMLElement[] = [
@@ -190,7 +202,7 @@ function showMenu(): void {
     el('div', { class: 'section-label' }, t().menu.practice),
     diffList,
     el('div', { class: 'section-label' }, t().menu.achievements),
-    achievementsBox,
+    achievementsSection,
   ];
 
   // Кнопка магазина — только если площадка реально умеет платежи (правило 2
@@ -310,6 +322,12 @@ function showLesson(lesson: (typeof ACADEMY_LESSONS)[number]): void {
   const notes = Array.from({ length: 81 }, () => [] as number[]);
   let selected: number | null = null;
   let complete = false;
+  // Только у первого урока курса: сетка приходит почти заполненной — это
+  // осознанный приём (один доказанный ход за раз), но без объяснения в
+  // первые секунды легко прочитать её как «чужой решённый пазл», не как
+  // тренажёр. Остальные уроки эту строку уже не показывают — к ним игрок
+  // приходит, уже зная формат.
+  const isFirstLesson = ACADEMY_LESSONS.findIndex((item) => item.id === lesson.id) === 0;
 
   const gridHandle = renderSudokuGrid(
     prepared.grid,
@@ -333,6 +351,7 @@ function showLesson(lesson: (typeof ACADEMY_LESSONS)[number]): void {
       complete = true;
       grid[prepared.hint.index] = digit;
       gridHandle.refresh();
+      gridHandle.flashCorrect(prepared.hint.index);
       if (!app.save.data.academy.completed.includes(lesson.id)) {
         app.save.data.academy.completed.push(lesson.id);
         app.save.markDirty();
@@ -376,6 +395,7 @@ function showLesson(lesson: (typeof ACADEMY_LESSONS)[number]): void {
         back,
       ),
       el('div', { class: 'lesson-instruction' }, el('span', {}, t().academy.techniqueLabel), feedback),
+      ...(isFirstLesson ? [el('div', { class: 'first-lesson-note' }, t().academy.firstLessonNote)] : []),
       el('div', { class: 'board-wrap' }, gridHandle.root),
       el('div', { class: 'controls-wrap' }, numpad, nextButton),
     ),
@@ -546,6 +566,10 @@ async function startPuzzle(mode: Mode, difficulty: Difficulty, dateIso?: string)
     }
 
     gridHandle.refresh();
+    // Та же вспышка, что у урока — верный ход в практике/ежедневной партии
+    // раньше не получал вообще никакой мгновенной обратной связи на самой
+    // клетке, только изменение цифры.
+    if (digit !== 0 && digit === puzzle.solution[index]) gridHandle.flashCorrect(index);
     persistProgress();
     checkSolved();
   }

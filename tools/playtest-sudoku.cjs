@@ -75,10 +75,18 @@ async function solveViaHints(page, maxSteps = 120) {
     await page.goto(url('ru'), { waitUntil: 'networkidle' });
     assert(await page.locator('.academy-card').isVisible(), 'академия — главный акцент первого экрана');
 
+    // Продуктовый разбор vs опубликованных судоку на CrazyGames (передан
+    // Codex): на свежем сохранении шесть одинаковых «🔒» в сетке
+    // достижений — это только чтение без пользы; строка-тизер должна
+    // стоять вместо сетки, пока не открыто ни одного значка.
+    assert(await page.locator('.achievements-teaser').isVisible(), 'на свежем сохранении — строка-тизер вместо сетки достижений');
+    assert((await page.locator('.achievements .achievement').count()) === 0, 'сама сетка достижений ещё не отрисована');
+
     // Главная кнопка ведёт СРАЗУ в урок, без промежуточного списка: на
     // портале первые секунды решают, попробует игрок игру или закроет.
     await page.locator('.academy-card').click();
     assert(await page.locator('.academy-lesson').isVisible(), 'первый урок открывается одним кликом с главного экрана');
+    assert(await page.locator('.first-lesson-note').isVisible(), 'первый урок объясняет, что это один ход, а не целая головоломка');
     await page.locator('.academy-lesson .topbar .btn').click();
 
     assert((await page.locator('.lesson-card').count()) === 12, 'курс содержит 12 уроков');
@@ -93,7 +101,19 @@ async function solveViaHints(page, maxSteps = 120) {
     await page.locator('.sudoku-cell').nth(index).click();
     await page.locator('.digit-btn', { hasText: target[3] }).click();
     assert(await page.locator('.academy-lesson .btn.primary').isVisible(), 'верный ответ открывает следующий урок');
+    assert(
+      await page.locator('.sudoku-cell').nth(index).evaluate((el) => el.classList.contains('flash-correct')),
+      'клетка вспыхивает сразу после верного хода (ещё до того, как класс снимется по таймеру)',
+    );
     assert(page.errors.length === 0, 'без ошибок в консоли: ' + page.errors.join('; '));
+
+    // Эта же строка-объяснение — только у первого урока курса: у второго
+    // игрок уже знает формат, повторять незачем (сама декларация задачи
+    // продуктового разбора — не грузить лишним текстом не только первый
+    // экран, но и сами уроки после первого).
+    await page.locator('.academy-lesson .btn.primary').click();
+    assert(await page.locator('.academy-lesson').isVisible(), 'переход на второй урок состоялся');
+    assert((await page.locator('.first-lesson-note').count()) === 0, 'на втором уроке пояснение про «один ход» уже не повторяется');
     await page.close();
   }
 
@@ -316,6 +336,61 @@ async function solveViaHints(page, maxSteps = 120) {
       assert(!!box && box.x >= 0 && box.x + box.width <= 907, `${selector} помещается по ширине`);
       assert(!!box && box.y >= 0 && box.y + box.height <= 510, `${selector} помещается по высоте`);
     }
+    assert(page.errors.length === 0, 'без ошибок в консоли: ' + page.errors.join('; '));
+    await page.close();
+  }
+
+  // --- сценарий 9: клавиатура и prefers-reduced-motion для вспышки на верном ходе ---
+  console.log('\n=== 9. Клавиатура и reduced-motion ===');
+  {
+    const page = await newPage(browser);
+    await page.goto(url('ru'), { waitUntil: 'networkidle' });
+    await page.locator('.academy-card').click();
+    await page.waitForSelector('.academy-lesson');
+
+    const explanation = await page.locator('.lesson-feedback').innerText();
+    const target = explanation.match(/строка (\d+), столбец (\d+).*только (\d+)/);
+    const index = (Number(target[1]) - 1) * 9 + Number(target[2]) - 1;
+    const cell = page.locator('.sudoku-cell').nth(index);
+    await cell.click();
+
+    // Цифровая панель — обычные <button>, но это стоит подтвердить живьём:
+    // Tab должен реально на неё попадать, а Enter/Space — нажимать, не
+    // только клик мышью. focus() на конкретную кнопку, не блуждание Tab'ом
+    // по всей странице — короче и не зависит от порядка остальных
+    // интерактивных элементов на экране.
+    const digitBtn = page.locator('.digit-btn', { hasText: target[3] });
+    await digitBtn.focus();
+    assert(await digitBtn.evaluate((el) => el === document.activeElement), 'кнопка цифры реально получает фокус по Tab/focus()');
+    await page.keyboard.press('Enter');
+    assert(await page.locator('.academy-lesson .btn.primary').isVisible(), 'Enter на сфокусированной кнопке активирует ход, не только клик мышью');
+
+    // prefers-reduced-motion: сама вспышка (класс) должна остаться —
+    // обратная связь на верный ход не пропадает для таких пользователей,
+    // просто CSS-анимация выключена média-запросом (проверяем именно это,
+    // а не наличие класса — класс ставит JS и ему не известно про media).
+    const animationName = await cell.evaluate((el) => getComputedStyle(el).animationName);
+    assert(animationName !== 'none', `без reduced-motion анимация подключена (animation-name: ${animationName})`);
+    assert(page.errors.length === 0, 'без ошибок в консоли: ' + page.errors.join('; '));
+    await page.close();
+  }
+  {
+    const page = await newPage(browser);
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.goto(url('ru'), { waitUntil: 'networkidle' });
+    await page.locator('.academy-card').click();
+    await page.waitForSelector('.academy-lesson');
+
+    const explanation = await page.locator('.lesson-feedback').innerText();
+    const target = explanation.match(/строка (\d+), столбец (\d+).*только (\d+)/);
+    const index = (Number(target[1]) - 1) * 9 + Number(target[2]) - 1;
+    const cell = page.locator('.sudoku-cell').nth(index);
+    await cell.click();
+    await page.locator('.digit-btn', { hasText: target[3] }).click();
+
+    const animationName = await cell.evaluate((el) => getComputedStyle(el).animationName);
+    assert(animationName === 'none', `prefers-reduced-motion отключает CSS-анимацию вспышки (animation-name: ${animationName})`);
+    assert(await cell.evaluate((el) => el.classList.contains('flash-correct')), 'класс всё равно ставится — реакция на верный ход не исчезает целиком, меняется только то, как она выглядит');
     assert(page.errors.length === 0, 'без ошибок в консоли: ' + page.errors.join('; '));
     await page.close();
   }

@@ -5,6 +5,14 @@ export interface GridHandle {
   root: HTMLElement;
   /** Перерисовать клетки из текущего состояния. Вызывать после любого изменения. */
   refresh: () => void;
+  /**
+   * Кратко подсветить клетку после верного хода — единственная обратная
+   * связь на правильное действие раньше была чисто текстовой («Correct.»),
+   * а сама клетка никак не отмечалась. Класс снимается по таймеру, а не
+   * по `animationend`: при `prefers-reduced-motion` анимации нет, и это
+   * событие просто не придёт — таймер работает одинаково в обоих случаях.
+   */
+  flashCorrect: (index: number) => void;
 }
 
 export interface GridState {
@@ -73,7 +81,13 @@ export function renderSudokuGrid(givens: readonly number[], getState: () => Grid
   };
   refresh();
 
-  return { root: table, refresh };
+  const flashCorrect = (index: number): void => {
+    const btn = cells[index];
+    btn.classList.add('flash-correct');
+    setTimeout(() => btn.classList.remove('flash-correct'), 450);
+  };
+
+  return { root: table, refresh, flashCorrect };
 }
 
 function renderNotes(values: readonly number[]): HTMLElement {

@@ -146,6 +146,15 @@
   flex-direction: column;
 }
 
+.first-lesson-note {
+  margin: var(--gap-2) var(--gap-3) 0;
+  padding: var(--gap-2) var(--gap-3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  color: var(--ink-2);
+  font-size: 12px;
+}
+
 .lesson-numpad {
   grid-template-columns: repeat(9, 1fr);
 }
@@ -202,6 +211,11 @@
 .difficulty-card .best {
   font-size: 12px;
   color: var(--ink-2);
+}
+
+.achievements-teaser {
+  color: var(--ink-2);
+  font-size: 13px;
 }
 
 .achievements {
@@ -316,6 +330,32 @@
 .sudoku-cell.hinted {
   outline: 2px solid var(--hint);
   outline-offset: -2px;
+}
+
+/* Обратная связь на верный ход — раньше была только текстовой. 450мс в
+   grid.ts (setTimeout) и 420мс анимации здесь нарочно не равны: класс
+   снимается чуть позже, чем заканчивается анимация, так что откат к
+   обычному фону не обрезает последний кадр. */
+@keyframes sudoku-flash-correct {
+  0% {
+    background: var(--felt);
+    color: #fff;
+  }
+  100% {
+    background: var(--surface);
+    color: var(--ink);
+  }
+}
+
+.sudoku-cell.flash-correct {
+  animation: sudoku-flash-correct 420ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sudoku-cell.flash-correct {
+    animation: none;
+    background: var(--felt-soft);
+  }
 }
 
 .notes-grid {

@@ -41,6 +41,8 @@ export interface Strings {
     streakEmpty: string;
     practice: string;
     achievements: string;
+    /** Показывается вместо полной сетки достижений, пока не открыто ни одного — шесть замков подряд только добавляют игроку чтения на первом экране, ничего не объясняя. */
+    achievementsTeaser: (total: number) => string;
     shop: string;
     resume: string;
     playedGames: Plural;
@@ -59,6 +61,8 @@ export interface Strings {
     correct: string;
     nextIs: (title: string) => string;
     courseFinished: string;
+    /** Только на первом уроке курса — объясняет, что почти заполненная сетка это один доказанный ход, а не решённая кем-то чужая головоломка. */
+    firstLessonNote: string;
   };
 
   puzzle: {
@@ -165,6 +169,7 @@ const RU: Strings = {
     streakEmpty: 'Решайте каждый день, чтобы набрать серию',
     practice: 'Практика',
     achievements: 'Достижения',
+    achievementsTeaser: (total) => `Пока нет ни одного — решите первую партию, чтобы открыть значок (всего ${total})`,
     shop: '🛍️ Магазин',
     resume: 'Продолжить',
     playedGames: (count) => `${count} ${ruPlural(count, 'партия', 'партии', 'партий')}`,
@@ -183,6 +188,7 @@ const RU: Strings = {
     correct: 'Верно. Приём освоен.',
     nextIs: (title) => ` Следующий урок: «${title}».`,
     courseFinished: ' Вы прошли базовый курс.',
+    firstLessonNote: 'Это один доказанный ход, не целая головоломка целиком — остальные клетки уже даны, чтобы вы сосредоточились на одном приёме.',
   },
 
   puzzle: {
@@ -307,6 +313,7 @@ const EN: Strings = {
     streakEmpty: 'Play every day to build a streak',
     practice: 'Practice',
     achievements: 'Achievements',
+    achievementsTeaser: (total) => `None yet — finish your first puzzle to unlock a badge (${total} total)`,
     shop: '🛍️ Shop',
     resume: 'Resume',
     playedGames: (count) => `${count} ${count === 1 ? 'game' : 'games'}`,
@@ -325,6 +332,7 @@ const EN: Strings = {
     correct: 'Correct. Technique learned.',
     nextIs: (title) => ` Next lesson: “${title}”.`,
     courseFinished: ' You have finished the basic course.',
+    firstLessonNote: 'This is one proven move, not a whole puzzle — the rest of the grid is already filled in so you can focus on a single technique.',
   },
 
   puzzle: {
