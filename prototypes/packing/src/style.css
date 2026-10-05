@@ -1,0 +1,396 @@
+/* --- экран --- */
+
+.packing {
+  padding: var(--gap-3);
+  gap: var(--gap-3);
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.packing {
+  /* Экран — колонка фиксированной высоты с прокруткой: без запрета сжатия
+     шапка и блоки уменьшались бы ниже своего содержимого и налезали друг на друга. */
+}
+
+.packing > * {
+  flex-shrink: 0;
+}
+
+.packing .topbar {
+  flex-wrap: wrap;
+  gap: var(--gap-2);
+}
+
+.packing .topbar .title {
+  margin: 0;
+  font-size: 20px;
+}
+
+.order-nav {
+  display: flex;
+  gap: var(--gap-1);
+}
+
+.order-chip {
+  min-width: var(--tap);
+  min-height: var(--tap);
+  padding: 0 var(--gap-2);
+  border: 2px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.order-chip[aria-current="step"] {
+  border-color: var(--felt);
+  background: var(--felt-soft);
+}
+
+.order-chip.done {
+  color: var(--ok);
+}
+
+.order-chip:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.order-chip:focus-visible,
+.tray-item:focus-visible {
+  outline: 3px solid var(--ink);
+  outline-offset: 2px;
+}
+
+.brief {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-1);
+}
+
+.brief p {
+  margin: 0;
+}
+
+.goal {
+  font-weight: 700;
+}
+
+.rule {
+  color: var(--ink-2);
+  font-size: 14px;
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--gap-2);
+  margin-top: var(--gap-1);
+}
+
+/* Категория читается формой контура: пунктир, жирная линия, тонкая линия. */
+.kind-badge {
+  padding: 2px var(--gap-2);
+  border-radius: var(--r-sm);
+  font-size: 13px;
+  border: 2px solid;
+}
+
+.kind-badge.k-fragile {
+  background: var(--k-fragile-bg);
+  color: var(--k-fragile-ink);
+  border-style: dashed;
+}
+
+.kind-badge.k-heavy {
+  background: var(--k-heavy-bg);
+  color: var(--k-heavy-ink);
+  border-style: solid;
+  border-width: 4px;
+}
+
+.kind-badge.k-plain {
+  background: var(--k-plain-bg);
+  color: var(--k-plain-ink);
+  border-style: solid;
+  border-width: 1px;
+}
+
+/* --- поле --- */
+
+.play {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--gap-3);
+}
+
+.board-wrap {
+  --cell: min(64px, calc((100vw - 48px) / var(--cols, 5)), calc((100dvh - 380px) / var(--rows, 5)));
+}
+
+.board {
+  display: grid;
+  grid-template-columns: repeat(var(--cols), var(--cell));
+  grid-auto-rows: var(--cell);
+  padding: 6px;
+  background: var(--felt);
+  border-radius: var(--r-md);
+}
+
+.cell {
+  appearance: none;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0 solid currentColor;
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--line);
+  color: var(--ink);
+  font: inherit;
+  cursor: pointer;
+}
+
+.cell svg {
+  width: 70%;
+  height: 70%;
+}
+
+.cell:focus-visible {
+  z-index: 2;
+  outline: 3px solid var(--ink);
+  outline-offset: -3px;
+}
+
+.cell.filled {
+  box-shadow: none;
+}
+
+.cell.k-fragile {
+  background: var(--k-fragile-bg);
+  color: var(--k-fragile-ink);
+  border-style: dashed;
+}
+
+.cell.k-heavy {
+  background: var(--k-heavy-bg);
+  color: var(--k-heavy-ink);
+  border-style: solid;
+}
+
+.cell.k-plain {
+  background: var(--k-plain-bg);
+  color: var(--k-plain-ink);
+  border-style: solid;
+}
+
+.cell.k-fragile.edge-t { border-top-width: 3px; }
+.cell.k-fragile.edge-r { border-right-width: 3px; }
+.cell.k-fragile.edge-b { border-bottom-width: 3px; }
+.cell.k-fragile.edge-l { border-left-width: 3px; }
+.cell.k-heavy.edge-t { border-top-width: 5px; }
+.cell.k-heavy.edge-r { border-right-width: 5px; }
+.cell.k-heavy.edge-b { border-bottom-width: 5px; }
+.cell.k-heavy.edge-l { border-left-width: 5px; }
+.cell.k-plain.edge-t { border-top-width: 2px; }
+.cell.k-plain.edge-r { border-right-width: 2px; }
+.cell.k-plain.edge-b { border-bottom-width: 2px; }
+.cell.k-plain.edge-l { border-left-width: 2px; }
+
+.cell.conflict {
+  outline: 3px solid var(--conflict);
+  outline-offset: -3px;
+}
+
+.cell .warn {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--conflict);
+  color: var(--surface);
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 18px;
+  text-align: center;
+}
+
+/* Призрак показывает, куда ляжет предмет; «нельзя» отличается штриховкой, не только цветом. */
+.cell.ghost-ok {
+  outline: 3px solid var(--ok);
+  outline-offset: -3px;
+}
+
+.cell.ghost-bad {
+  outline: 3px solid var(--conflict);
+  outline-offset: -3px;
+  background-image: repeating-linear-gradient(45deg, transparent 0 5px, var(--conflict) 5px 7px);
+}
+
+/* --- предметы, действия, статус --- */
+
+.side {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-2);
+  width: min(100%, 420px);
+}
+
+.tray-head {
+  color: var(--ink-2);
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.tray {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--gap-2);
+  min-height: 72px;
+}
+
+.tray-empty {
+  margin: 0;
+  align-self: center;
+  color: var(--ink-2);
+}
+
+.tray-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: var(--tap);
+  min-height: var(--tap);
+  padding: var(--gap-2);
+  border: 2px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  cursor: pointer;
+}
+
+.tray-item.held {
+  border-color: var(--felt);
+  background: var(--felt-soft);
+  box-shadow: 0 0 0 2px var(--felt);
+}
+
+.mini {
+  --mini: 26px;
+  display: grid;
+  grid-template-columns: repeat(var(--mw), var(--mini));
+  grid-template-rows: repeat(var(--mh), var(--mini));
+}
+
+.mini-cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid;
+}
+
+.mini-cell svg {
+  width: 80%;
+  height: 80%;
+}
+
+.mini-cell.k-fragile {
+  background: var(--k-fragile-bg);
+  color: var(--k-fragile-ink);
+  border-style: dashed;
+}
+
+.mini-cell.k-heavy {
+  background: var(--k-heavy-bg);
+  color: var(--k-heavy-ink);
+  border-width: 3px;
+}
+
+.mini-cell.k-plain {
+  background: var(--k-plain-bg);
+  color: var(--k-plain-ink);
+  border-width: 1px;
+}
+
+.tray-name {
+  font-size: 12px;
+}
+
+.kind-mark {
+  font-size: 11px;
+}
+
+.kind-mark.k-fragile { color: var(--k-fragile-ink); }
+.kind-mark.k-heavy { color: var(--k-heavy-ink); }
+.kind-mark.k-plain { color: var(--k-plain-ink); }
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--gap-2);
+}
+
+.actions .btn[hidden] {
+  display: none;
+}
+
+.actions .btn {
+  min-height: var(--tap);
+  padding: 0 var(--gap-3);
+}
+
+.status {
+  margin: 0;
+  min-height: 2.6em;
+  color: var(--ink-2);
+  font-size: 14px;
+}
+
+.result {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-2);
+  padding: var(--gap-3);
+  border: 2px solid var(--ok);
+  border-radius: var(--r-md);
+  background: var(--felt-soft);
+}
+
+.result[hidden] {
+  display: none;
+}
+
+/* Горизонтальный экран (телефон набок, окно портала): поле слева, предметы справа. */
+@media (orientation: landscape) and (max-height: 650px) {
+  .packing {
+    padding: var(--gap-2) var(--gap-3);
+    gap: var(--gap-2);
+  }
+
+  .play {
+    flex-direction: row;
+    align-items: flex-start;
+    justify-content: center;
+  }
+
+  .board-wrap {
+    --cell: min(64px, calc((100dvh - 190px) / var(--rows, 5)), calc(48vw / var(--cols, 5)));
+  }
+
+  .side {
+    flex: 1;
+    max-width: 380px;
+  }
+
+  .tray {
+    min-height: 0;
+  }
+}

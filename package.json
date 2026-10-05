@@ -25,6 +25,9 @@
     "build:sudoku:web": "npm run build -w @studio/sudoku -- --mode web",
     "build:sudoku:vk": "npm run build -w @studio/sudoku -- --mode vk",
     "pack:sudoku:vk": "node tools/pack.mjs sudoku vk",
+    "dev:packing": "vite prototypes/packing",
+    "build:packing": "vite build prototypes/packing",
+    "typecheck:packing": "tsc --noEmit -p prototypes/packing/tsconfig.json",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },

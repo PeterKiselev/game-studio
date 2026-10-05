@@ -1,0 +1,72 @@
+/*
+ * Тёплая «картонная» палитра поверх общих токенов студии — тот же приём,
+ * что у «Дачных тайн» и судоку: меняются значения токенов, имена остаются.
+ * Токены --k-* — специфика этой игры: цвет и контур каждой категории
+ * предметов; категория отличается ещё и формой контура (пунктир/жирная
+ * линия/тонкая), а не только цветом.
+ */
+
+:root {
+  --paper: #f4efe6;
+  --surface: #fffdf8;
+  --surface-2: #ebe3d3;
+  --ink: #2a2118;
+  --ink-2: #6b5a47;
+  --ink-3: #8f7e69;
+  --line: #d6c9b2;
+  --felt: #8a5a2b;
+  --felt-soft: #f0e1c8;
+
+  --k-fragile-bg: #fde7f0;
+  --k-fragile-ink: #a3275f;
+  --k-heavy-bg: #dfe3ea;
+  --k-heavy-ink: #2f3b52;
+  --k-plain-bg: #e8f1df;
+  --k-plain-ink: #3d6a2b;
+  --conflict: #b3332b;
+  --ok: #2c7a4b;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #1b1610;
+    --surface: #251e16;
+    --surface-2: #30271c;
+    --ink: #f1e8d8;
+    --ink-2: #c4b399;
+    --ink-3: #9a8a72;
+    --line: #433727;
+    --felt: #d0955a;
+    --felt-soft: #3a2d1c;
+
+    --k-fragile-bg: #3b1f2e;
+    --k-fragile-ink: #f08cb8;
+    --k-heavy-bg: #252c3a;
+    --k-heavy-ink: #a9b8d6;
+    --k-plain-bg: #243320;
+    --k-plain-ink: #9ed17e;
+    --conflict: #e0776a;
+    --ok: #6fcf97;
+  }
+}
+
+:root[data-theme="dark"] {
+  --paper: #1b1610;
+  --surface: #251e16;
+  --surface-2: #30271c;
+  --ink: #f1e8d8;
+  --ink-2: #c4b399;
+  --ink-3: #9a8a72;
+  --line: #433727;
+  --felt: #d0955a;
+  --felt-soft: #3a2d1c;
+
+  --k-fragile-bg: #3b1f2e;
+  --k-fragile-ink: #f08cb8;
+  --k-heavy-bg: #252c3a;
+  --k-heavy-ink: #a9b8d6;
+  --k-plain-bg: #243320;
+  --k-plain-ink: #9ed17e;
+  --conflict: #e0776a;
+  --ok: #6fcf97;
+}

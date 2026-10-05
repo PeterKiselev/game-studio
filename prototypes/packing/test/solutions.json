@@ -1,0 +1,150 @@
+{
+  "order-1": [
+    {
+      "itemId": "book",
+      "x": 1,
+      "y": 1,
+      "rot": 0
+    },
+    {
+      "itemId": "cup",
+      "x": 0,
+      "y": 0,
+      "rot": 0
+    },
+    {
+      "itemId": "teddy",
+      "x": 0,
+      "y": 1,
+      "rot": 0
+    }
+  ],
+  "order-2": [
+    {
+      "itemId": "teapot",
+      "x": 2,
+      "y": 2,
+      "rot": 0
+    },
+    {
+      "itemId": "teddy",
+      "x": 0,
+      "y": 2,
+      "rot": 0
+    },
+    {
+      "itemId": "toolbox",
+      "x": 0,
+      "y": 0,
+      "rot": 0
+    },
+    {
+      "itemId": "vase",
+      "x": 3,
+      "y": 0,
+      "rot": 0
+    }
+  ],
+  "order-3": [
+    {
+      "itemId": "dumbbell",
+      "x": 2,
+      "y": 0,
+      "rot": 0
+    },
+    {
+      "itemId": "teapot",
+      "x": 3,
+      "y": 2,
+      "rot": 0
+    },
+    {
+      "itemId": "teddy",
+      "x": 0,
+      "y": 2,
+      "rot": 0
+    },
+    {
+      "itemId": "toolbox",
+      "x": 0,
+      "y": 0,
+      "rot": 0
+    },
+    {
+      "itemId": "vase",
+      "x": 2,
+      "y": 2,
+      "rot": 0
+    }
+  ],
+  "order-4": [
+    {
+      "itemId": "anvil",
+      "x": 0,
+      "y": 2,
+      "rot": 3
+    },
+    {
+      "itemId": "cushion",
+      "x": 2,
+      "y": 0,
+      "rot": 0
+    },
+    {
+      "itemId": "lamp",
+      "x": 4,
+      "y": 2,
+      "rot": 0
+    },
+    {
+      "itemId": "teapot",
+      "x": 2,
+      "y": 3,
+      "rot": 2
+    },
+    {
+      "itemId": "toolbox",
+      "x": 0,
+      "y": 0,
+      "rot": 0
+    },
+    {
+      "itemId": "vase",
+      "x": 2,
+      "y": 2,
+      "rot": 1
+    }
+  ],
+  "order-5": [
+    {
+      "itemId": "anvil",
+      "x": 2,
+      "y": 0,
+      "rot": 3
+    },
+    {
+      "itemId": "cushion",
+      "x": 0,
+      "y": 2,
+      "rot": 0
+    },
+    {
+      "itemId": "teapot",
+      "x": 2,
+      "y": 3,
+      "rot": 2
+    },
+    {
+      "itemId": "toolbox",
+      "x": 0,
+      "y": 0,
+      "rot": 0
+    },
+    {
+      "itemId": "vase",
+      "x": 0,
+      "y": 3,
+      "rot": 0
+    }
+  ]
+}
