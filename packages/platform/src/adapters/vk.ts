@@ -18,13 +18,22 @@ export class VkPlatform extends BasePlatform {
     const params = new URLSearchParams(location.search);
     this.locale = params.get('vk_language') ?? 'ru';
 
+    // Одноклассники запускают то же мини-приложение с параметром vk_client=ok.
+    // В официальной таблице совместимости VK Bridge в ОК (apiok.ru/apps/vk)
+    // VKWebAppShowOrderBox и VKWebAppOpenPayForm помечены «не поддерживается» —
+    // модератор ОК отклонил «Дачные тайны» именно с «платежи не работают».
+    // Рабочего платёжного пути в ОК у нас нет, поэтому платежи там выключены:
+    // игра по правилу 2 из CLAUDE.md скроет магазин, а не покажет мёртвую кнопку.
+    // Страница таблицы не датирована — свежесть проверяется отдельно в кабинете ОК.
+    const isOk = params.get('vk_client') === 'ok';
+
     this.caps = {
       banner: false, // у VK нет sticky-баннера, только полноэкранные форматы
       interstitial: await this.hasAd('interstitial'),
       rewarded: await this.hasAd('reward'),
       cloudSave: true,
       auth: true,
-      payments: true,
+      payments: !isOk,
       leaderboard: false,
       share: true,
     };

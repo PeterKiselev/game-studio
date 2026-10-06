@@ -235,6 +235,65 @@ async function checkSuccessfulPurchase({ page, errors }, { name, expectPrice, ex
     expectOwned: 'Purchased',
   });
 
+  /*
+   * Замечание модерации VK: «магазин не обнаруживается на первом экране».
+   * Кнопка должна быть видна в окне сразу после загрузки меню, без прокрутки,
+   * — на телефоне и на десктопе.
+   */
+  console.log('\n=== Sudoku: магазин виден на первом экране ===');
+  for (const [w, h] of [[360, 640], [420, 800], [1000, 700], [1280, 720]]) {
+    const page = await browser.newPage({ viewport: { width: w, height: h } });
+    await stubVkBridge(page);
+    await page.goto(`${SUDOKU}?lang=ru`, { waitUntil: 'networkidle' });
+    await page.waitForSelector('.shop-btn', { timeout: 8000 });
+    await assertVisibleIn(page.locator('.shop-btn'), { width: w, height: h }, `первый экран ${w}×${h}: кнопка магазина`);
+    await page.locator('.shop-btn').click();
+    await page.waitForSelector('.shop-item');
+    const clipped = await page.evaluate(() =>
+      [...document.querySelectorAll('.shop-item .btn, .shop-item .shop-price')].filter((n) => {
+        const r = n.getBoundingClientRect();
+        return r.right > window.innerWidth + 1 || r.left < -1;
+      }).length,
+    );
+    assert(clipped === 0, `экран магазина ${w}×${h}: цены и кнопки не обрезаны по ширине`);
+    await page.close();
+  }
+
+  /*
+   * ОК: модератор «Дачных тайн» ответил «Платежи не работают». В ОК нет
+   * VKWebAppShowOrderBox (apiok.ru/apps/vk), поэтому при vk_client=ok магазина
+   * быть не должно вовсе, а ни одного вызова ShowOrderBox — тоже.
+   * Заглушка — не настоящая ОК: реальную среду проверяет только владелец.
+   */
+  console.log('\n=== ОК (vk_client=ok): платежи выключены, магазин скрыт ===');
+  for (const [name, url] of [['Дачные тайны', DACHNYE], ['Sudoku', SUDOKU]]) {
+    const page = await browser.newPage({ viewport: VIEWPORT });
+    const errors = [];
+    page.on('pageerror', (e) => errors.push(e.message));
+    await stubVkBridge(page, { approvePurchase: true });
+    await page.addInitScript(() => {
+      window.addEventListener('message', (e) => {
+        if (e.data && e.data.handler === 'VKWebAppShowOrderBox') window.__orderBoxCalled = true;
+      });
+    });
+    await page.goto(`${url}?vk_client=ok&lang=ru`, { waitUntil: 'networkidle' });
+    await page.waitForTimeout(600);
+    assert((await page.locator('.shop-btn').count()) === 0, `${name} в ОК: кнопки магазина нет`);
+    assert(!(await page.evaluate(() => window.__orderBoxCalled)), `${name} в ОК: VKWebAppShowOrderBox не вызывался`);
+    assert(errors.length === 0, `${name} в ОК: без ошибок в консоли: ` + errors.join('; '));
+    await page.close();
+  }
+
+  // Контрольная пара: тот же стенд без vk_client по-прежнему показывает магазин (VK не тронут).
+  for (const [name, url] of [['Дачные тайны', DACHNYE], ['Sudoku', SUDOKU]]) {
+    const page = await browser.newPage({ viewport: VIEWPORT });
+    await stubVkBridge(page);
+    await page.goto(`${url}?vk_client=vk&lang=ru`, { waitUntil: 'networkidle' });
+    await page.waitForSelector('.shop-btn', { timeout: 8000 });
+    assert(true, `${name} во ВКонтакте (vk_client=vk): магазин на месте`);
+    await page.close();
+  }
+
   await browser.close();
   console.log('\nВСЕ ПРОВЕРКИ ПРОШЛИ');
 })().catch((err) => {

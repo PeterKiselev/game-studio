@@ -194,8 +194,20 @@ function showMenu(): void {
     achievementsSection = achievementsBox;
   }
 
+  // Вход в магазин — в шапке первого экрана, а не в самом низу меню: модератор
+  // VK не находил его, потому что он оказывался ниже экрана телефона. Кнопка
+  // по-прежнему только если площадка реально умеет платежи (правило 2 из
+  // CLAUDE.md: скрываем, а не показываем мёртвую кнопку) — на ОК, где
+  // VKWebAppShowOrderBox не поддерживается, caps.payments выключен адаптером.
+  const menuHead = el('div', { class: 'menu-head' }, el('h1', {}, t().appTitle));
+  if (app.platform.caps.payments) {
+    const shopBtn = el('button', { class: 'btn shop-btn', type: 'button' }, t().menu.shop) as HTMLButtonElement;
+    shopBtn.addEventListener('click', () => void showShop());
+    menuHead.append(shopBtn);
+  }
+
   const screenChildren: HTMLElement[] = [
-    el('h1', {}, t().appTitle),
+    menuHead,
     academyCard(s.academy.completed),
     allLessonsButton(),
     dailyCard,
@@ -204,14 +216,6 @@ function showMenu(): void {
     el('div', { class: 'section-label' }, t().menu.achievements),
     achievementsSection,
   ];
-
-  // Кнопка магазина — только если площадка реально умеет платежи (правило 2
-  // из CLAUDE.md: скрываем, а не показываем мёртвую кнопку).
-  if (app.platform.caps.payments) {
-    const shopBtn = el('button', { class: 'btn ghost shop-btn', type: 'button' }, t().menu.shop) as HTMLButtonElement;
-    shopBtn.addEventListener('click', () => void showShop());
-    screenChildren.push(shopBtn);
-  }
 
   // CrazyGames-чеклист требует ссылку на Privacy/Terms прямо в интерфейсе
   // игры, не только в тексте формы подачи (documents уже существуют и

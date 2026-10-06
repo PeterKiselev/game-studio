@@ -395,6 +395,93 @@ async function solveViaHints(page, maxSteps = 120) {
     await page.close();
   }
 
+  // --- сценарий 10: геометрия экрана партии (замечание модерации VK) ---
+  // Модератор прислал скриншоты: на десктопе сетка перекрывала верхнюю
+  // панель и цифры, после рекламы вёрстка ломалась. Отсутствие горизонтальной
+  // прокрутки этого не ловит — проверяем сами прямоугольники элементов.
+  console.log('\n=== 10. Геометрия: пересечения на разных окнах и после смены высоты ===');
+  {
+    const PAIRS = [
+      ['.puzzle .topbar', '.sudoku-grid'],
+      ['.stats-bar', '.sudoku-grid'],
+      ['.sudoku-grid', '.numpad'],
+      ['.sudoku-grid', '.hint-bar'],
+      ['.numpad', '.hint-bar'],
+    ];
+    const measure = (page, pairs) =>
+      page.evaluate((pairs) => {
+        const rect = (sel) => {
+          const n = document.querySelector(sel);
+          if (!n) return null;
+          const r = n.getBoundingClientRect();
+          return { l: r.left, t: r.top, r: r.right, b: r.bottom, w: r.width, h: r.height };
+        };
+        const out = [];
+        for (const [a, b] of pairs) {
+          const ra = rect(a);
+          const rb = rect(b);
+          if (!ra || !rb || ra.w === 0 || rb.w === 0) continue;
+          const ix = Math.min(ra.r, rb.r) - Math.max(ra.l, rb.l);
+          const iy = Math.min(ra.b, rb.b) - Math.max(ra.t, rb.t);
+          if (ix > 1 && iy > 1) out.push(`${a}×${b} на ${Math.round(iy)}px`);
+        }
+        const g = rect('.sudoku-grid');
+        if (g && Math.abs(g.w - g.h) > 1.5) out.push(`сетка не квадратная ${Math.round(g.w)}×${Math.round(g.h)}`);
+        if (g && (g.l < -1 || g.r > window.innerWidth + 1)) out.push('сетка выходит за окно по ширине');
+        if (document.documentElement.scrollWidth > window.innerWidth + 1) out.push('горизонтальная прокрутка');
+        return out;
+      }, pairs);
+
+    const sizes = [];
+    for (const w of [360, 420, 620, 1000, 1280, 1600]) for (const h of [480, 540, 600, 700, 800, 1000]) sizes.push([w, h]);
+    const bad = [];
+    for (const [w, h] of sizes) {
+      const page = await newPage(browser, { viewport: { width: w, height: h } });
+      await page.goto(url('ru'), { waitUntil: 'networkidle' });
+      await page.locator('.difficulty-card').first().click();
+      await page.waitForSelector('.puzzle');
+      const found = await measure(page, PAIRS);
+      if (found.length) bad.push(`${w}×${h}: ${found.join('; ')}`);
+      // Окно, где всё должно поместиться без прокрутки целиком: сетка и панель цифр видны.
+      if (h >= 700) {
+        const below = await page.evaluate(
+          () => ['.sudoku-grid', '.numpad'].filter((s) => document.querySelector(s).getBoundingClientRect().bottom > window.innerHeight + 1),
+        );
+        if (below.length) bad.push(`${w}×${h}: ниже окна: ${below.join(', ')}`);
+      }
+      await page.close();
+    }
+    assert(bad.length === 0, `${sizes.length} размеров окна: нет пересечений блоков` + (bad.length ? '\n' + bad.join('\n') : ''));
+
+    // Реклама: платформа меняет доступную высоту посреди партии и потом возвращает.
+    for (const [w, h, shrunk] of [[1000, 760, 520], [420, 800, 560], [1280, 900, 600]]) {
+      const page = await newPage(browser, { viewport: { width: w, height: h } });
+      await page.goto(url('ru'), { waitUntil: 'networkidle' });
+      await page.locator('.difficulty-card').first().click();
+      await page.waitForSelector('.puzzle');
+      await page.locator('.sudoku-cell').nth(40).click();
+      for (const height of [shrunk, h, shrunk + 40, h]) {
+        await page.setViewportSize({ width: w, height });
+        await page.waitForTimeout(120);
+        const found = await measure(page, PAIRS);
+        assert(found.length === 0, `${w}×${h}: после смены высоты окна на ${height} блоки не пересекаются` + (found.length ? ': ' + found.join('; ') : ''));
+      }
+      assert(page.errors.length === 0, 'без ошибок в консоли: ' + page.errors.join('; '));
+      await page.close();
+    }
+
+    // Тот же контейнер у урока Академии.
+    for (const [w, h] of [[1000, 700], [420, 640]]) {
+      const page = await newPage(browser, { viewport: { width: w, height: h } });
+      await page.goto(url('ru'), { waitUntil: 'networkidle' });
+      await page.locator('.academy-card').click();
+      await page.waitForSelector('.academy-lesson');
+      const found = await measure(page, [['.sudoku-grid', '.numpad'], ['.sudoku-grid', '.lesson-feedback']]);
+      assert(found.length === 0, `урок Академии ${w}×${h}: без пересечений` + (found.length ? ': ' + found.join('; ') : ''));
+      await page.close();
+    }
+  }
+
   await browser.close();
   console.log('\nВСЕ ПРОВЕРКИ ПРОШЛИ');
 })().catch((err) => {

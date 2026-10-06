@@ -20,6 +20,14 @@
   letter-spacing: -0.01em;
 }
 
+/* Заголовок и магазин в одной строке: магазин виден без прокрутки. */
+.menu-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--gap-2);
+}
+
 .daily-card {
   display: flex;
   flex-direction: column;
@@ -252,8 +260,27 @@
 
 /* --- экран 2: партия --- */
 
-.puzzle {
-  overflow: hidden;
+/* Экран партии и экран урока — колонка фиксированной высоты. Раньше у партии
+ * стоял overflow: hidden, а поле имело фиксированную ширину и сжимаемый
+ * контейнер: при малой высоте окна поле вылезало из него и перекрывало
+ * статус-строку и панель цифр (воспроизведено при 800–1600×660 и на всех
+ * узких окнах ниже ~660px). Теперь контейнер поля не меньше 232px, а размер
+ * поля берётся из его реального места (см. @supports в конце файла); если
+ * окно ещё ниже — экран прокручивается, а не накладывается. */
+.puzzle,
+.academy-lesson {
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.puzzle > *,
+.academy-lesson > * {
+  flex-shrink: 0;
+}
+
+.puzzle > .board-wrap,
+.academy-lesson > .board-wrap {
+  flex-shrink: 1;
 }
 
 .stats-bar {
@@ -270,12 +297,14 @@
 }
 
 .board-wrap {
-  flex: 1;
+  flex: 1 1 auto;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: var(--gap-2);
-  min-height: 0;
+  /* поле не меньше 216px + отступы: ниже этого экран прокручивается */
+  min-height: 232px;
+  container-type: size;
 }
 
 .sudoku-grid {
@@ -526,7 +555,7 @@
 }
 
 .shop-btn {
-  align-self: flex-start;
+  flex-shrink: 0;
 }
 
 .legal-links {
@@ -598,4 +627,15 @@
   margin-top: 2px;
   font-weight: 700;
   color: var(--felt);
+}
+
+/* Размер поля — из места, которое ему реально досталось (container query
+ * units контейнера .board-wrap), а не из ширины окна. Так поле не вылезает ни
+ * при малой высоте, ни при уменьшении высоты окна на ходу (например, после
+ * полноэкранной рекламы на телефоне). Без поддержки cq-единиц остаётся прежнее
+ * правило по ширине. Стоит после media-блоков, чтобы перекрыть их расчёт по vh. */
+@supports (width: 1cqh) {
+  .sudoku-grid {
+    width: min(94vw, 420px, 100cqh, 100cqw);
+  }
 }
