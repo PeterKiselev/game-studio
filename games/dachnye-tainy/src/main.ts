@@ -144,7 +144,31 @@ async function restorePurchases(reason: 'launch' | 'after_purchase'): Promise<vo
   if (added.length > 0) {
     app.save.markDirty();
     app.track('purchase_restored', { reason, count: added.length });
+    notifyPurchasesChanged();
   }
+}
+
+/**
+ * Ответ сервера может прийти, когда игрок уже в магазине или в деле. Экраны,
+ * которые показывают права (кнопки покупки, подпись подсказки), подписываются
+ * здесь и обновляются без перезагрузки. Подписка живёт, пока узел в документе:
+ * экраны заменяются целиком, отписываться вручную негде.
+ */
+const purchaseListeners = new Set<() => void>();
+
+function onPurchasesChanged(node: Element, refresh: () => void): void {
+  const listener = (): void => {
+    if (!node.isConnected) {
+      purchaseListeners.delete(listener);
+      return;
+    }
+    refresh();
+  };
+  purchaseListeners.add(listener);
+}
+
+function notifyPurchasesChanged(): void {
+  for (const listener of [...purchaseListeners]) listener();
 }
 
 void main();
@@ -366,6 +390,7 @@ async function startCase(source: Case): Promise<void> {
   );
   root.replaceChildren(screen);
   updateHintButtonLabel(); // на случай восстановленного saved.hintsUsed > 0
+  onPurchasesChanged(hintBtn, updateHintButtonLabel);
 
   function refreshAll(): void {
     for (const g of grids) g.refresh();
@@ -665,6 +690,12 @@ async function showShop(): Promise<void> {
       owned ? 'Куплено' : buyLabel(item),
     ) as HTMLButtonElement;
     if (!owned) btn.addEventListener('click', () => void buy(item, btn));
+    onPurchasesChanged(btn, () => {
+      if (!SHOP_EFFECTS[item.sku].owned(app.save.data)) return;
+      btn.textContent = 'Куплено';
+      btn.disabled = true;
+      btn.classList.replace('primary', 'ghost');
+    });
 
     box.append(
       el(

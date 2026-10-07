@@ -30,8 +30,9 @@ function assert(cond, message) {
   console.log('  ok —', message);
 }
 
-async function stubVkBridge(page, { approvePurchase = false } = {}) {
-  await page.addInitScript((approve) => {
+async function stubVkBridge(page, { approvePurchase = false, ads = false } = {}) {
+  await page.addInitScript(([approve, adsOn]) => {
+    window.__adsShown = 0;
     window.addEventListener('message', (event) => {
       const msg = event.data;
       if (!msg || msg.type !== 'vk-connect' || !msg.handler) return;
@@ -42,7 +43,10 @@ async function stubVkBridge(page, { approvePurchase = false } = {}) {
         case 'VKWebAppInit':
           return ok({ result: true });
         case 'VKWebAppCheckNativeAds':
-          return ok({ result: false });
+          return ok({ result: adsOn });
+        case 'VKWebAppShowNativeAds':
+          window.__adsShown += 1;
+          return ok({ result: true });
         case 'VKWebAppGetUserInfo':
           return ok({ id: 574470572, first_name: 'Test', last_name: 'Player' });
         case 'VKWebAppStorageGet':
@@ -55,7 +59,7 @@ async function stubVkBridge(page, { approvePurchase = false } = {}) {
           return fail();
       }
     });
-  }, approvePurchase);
+  }, [approvePurchase, ads]);
 }
 
 /**
@@ -68,6 +72,7 @@ async function stubServer(context, state) {
     state.requests.push(url.pathname + url.search);
     if (state.mode === 'down') return route.abort('failed');
     if (state.mode === 'hang') return; // не отвечаем вовсе
+    if (state.gate) await state.gate; // задержанный ответ: отпускает сценарий
     if (state.mode === '503') return route.fulfill({ status: 503, contentType: 'application/json', body: '{"error":"not_configured"}' });
     return route.fulfill({
       status: 200,
@@ -78,7 +83,7 @@ async function stubServer(context, state) {
   });
 }
 
-async function open(browser, base, launch, { state, approvePurchase = false } = {}) {
+async function open(browser, base, launch, { state, approvePurchase = false, ads = false } = {}) {
   const context = await browser.newContext({ viewport: { width: 420, height: 800 } });
   const page = await context.newPage();
   page.errors = [];
@@ -87,7 +92,7 @@ async function open(browser, base, launch, { state, approvePurchase = false } = 
   page.on('request', (r) => {
     if (r.url().includes('/restore')) page.restoreCalls.push(r.url());
   });
-  await stubVkBridge(page, { approvePurchase });
+  await stubVkBridge(page, { approvePurchase, ads });
   if (state) await stubServer(context, state);
   await page.goto(`${base}?${launch}`, { waitUntil: 'domcontentloaded' });
   await page.waitForSelector('.plot, .shop-btn, h1', { timeout: 10000 });
@@ -230,6 +235,58 @@ async function settle(page, ms = 700) {
     await settle(page);
     assert((await shopLabels(page))[1] === 'Куплено', 'пустой ответ не отзывает выданное право');
     assert(state.requests.every((r) => r.startsWith('/vk/restore')), 'все запросы — только к адресу этой сборки');
+    await context.close();
+  }
+
+  /** Ответ сервера придёт, только когда сценарий вызовет release(). */
+  function delayed(journal) {
+    const state = { mode: 'ok', journal, requests: [] };
+    state.gate = new Promise((resolve) => {
+      state.release = resolve;
+    });
+    return state;
+  }
+
+  console.log('\n=== 9. Задержанное восстановление при открытом магазине — кнопки обновляются без перезагрузки ===');
+  {
+    const state = delayed([NO_ADS]);
+    const { context, page } = await open(browser, RESTORE, VK_LAUNCH, { state });
+    await page.locator('.shop-btn').click();
+    await page.waitForSelector('.shop-item');
+    const buttons = page.locator('.shop-item .btn');
+    assert((await buttons.first().innerText()).trim() !== 'Куплено', 'до ответа сервера «Без рекламы» ещё не куплено');
+    state.release();
+    await page.waitForFunction(() => document.querySelector('.shop-item .btn').textContent.trim() === 'Куплено', null, { timeout: 3000 });
+    assert(await buttons.first().isDisabled(), 'после ответа — «Куплено» и кнопка неактивна, магазин не закрывался');
+    assert((await buttons.nth(1).innerText()).trim() !== 'Куплено', 'второй товар не тронут');
+    assert((await page.locator('.shop-price').first().innerText()).includes('20'), 'цена купленного товара осталась на экране');
+    assert(page.errors.length === 0, 'без ошибок: ' + page.errors.join('; '));
+    await context.close();
+  }
+
+  console.log('\n=== 10. Задержанное восстановление на экране дела — подсказка без рекламы без перезагрузки ===');
+  {
+    const state = delayed([HINTS]);
+    const { context, page } = await open(browser, RESTORE, VK_LAUNCH, { state, ads: true });
+    await page.getByRole('button', { name: /Чей пирог остался в беседке/ }).click();
+    try {
+      await page.getByRole('button', { name: 'Понятно, начинаем' }).click({ timeout: 1500 });
+    } catch {
+      /* обучающего диалога нет */
+    }
+    await page.waitForSelector('.case');
+    const hint = page.locator('.hint-btn');
+    await hint.click(); // первая подсказка бесплатна
+    await page.waitForFunction(() => /рекламу/.test(document.querySelector('.hint-btn').textContent), null, { timeout: 3000 });
+    assert(true, 'до ответа сервера предлагается «Ещё подсказка за рекламу»');
+    state.release();
+    await page.waitForFunction(() => !/рекламу/.test(document.querySelector('.hint-btn').textContent), null, { timeout: 3000 });
+    assert((await hint.innerText()).trim() === '💡 Ещё подсказка', 'после ответа — «Ещё подсказка», без упоминания рекламы');
+    const adsBefore = await page.evaluate(() => window.__adsShown);
+    await hint.click();
+    await page.waitForTimeout(500);
+    assert((await page.evaluate(() => window.__adsShown)) === adsBefore, 'следующая подсказка выдана без показа рекламы');
+    assert(page.errors.length === 0, 'без ошибок: ' + page.errors.join('; '));
     await context.close();
   }
 
