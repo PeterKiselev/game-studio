@@ -522,3 +522,11 @@
   font-style: italic;
   color: var(--ink-3);
 }
+
+.case-scroll .to-grids {
+  align-self: flex-start;
+}
+
+.case-scroll .to-grids[hidden] {
+  display: none;
+}

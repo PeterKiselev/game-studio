@@ -3,7 +3,7 @@ import { markKey, nextHint, uniqueSolution } from '@studio/rules';
 import type { Case, PlayerMarks, Ref, Solution } from '@studio/rules';
 import { dialog, el, toast } from '@studio/ui';
 import { renderPairGrid } from './grid';
-import { cases, tutorialCase } from './cases';
+import { PLOT_CASE_IDS, cases, tutorialCase } from './cases';
 import { ACHIEVEMENTS, checkNewAchievements, starsFor } from './achievements';
 import { SHOP_ITEMS, SKU_NO_ADS, SKU_UNLIMITED_HINTS, buyLabel, votes } from './shop';
 import type { ShopItem } from './shop';
@@ -369,6 +369,11 @@ async function startCase(source: Case): Promise<void> {
     }
   }
 
+  // Длинное вступление и факты на маленьком экране уводят сетки за первый
+  // экран. Текст не уменьшаем — даём явный переход, и только когда он нужен.
+  const toGridsBtn = el('button', { class: 'btn ghost to-grids', type: 'button', hidden: true }, 'К таблицам ↓') as HTMLButtonElement;
+  toGridsBtn.addEventListener('click', () => gridsBox.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+
   const hintText = el('div', { class: 'hint-text', hidden: true });
   const hintBtn = el('button', { class: 'btn hint-btn', type: 'button' }, '💡 Подсказка') as HTMLButtonElement;
   hintBtn.addEventListener('click', () => void useHint());
@@ -391,13 +396,27 @@ async function startCase(source: Case): Promise<void> {
     el(
       'div',
       { class: 'case-scroll' },
-      ...(source.intro ? [el('div', { class: 'case-intro' }, source.intro)] : []),
+      ...(source.intro ? [el('div', { class: 'case-intro' }, source.intro), toGridsBtn] : []),
       cluesBox,
       gridsBox,
     ),
     hintBar,
   );
   root.replaceChildren(screen);
+  if (source.intro) {
+    const scroller = screen.querySelector('.case-scroll') as HTMLElement;
+    const placeToGrids = (): void => {
+      if (!toGridsBtn.isConnected) {
+        window.removeEventListener('resize', placeToGrids);
+        return;
+      }
+      // Кнопка нужна, если верх первой сетки ниже видимой области прокрутки.
+      const visibleBottom = scroller.getBoundingClientRect().bottom;
+      toGridsBtn.hidden = gridsBox.getBoundingClientRect().top < visibleBottom - 40;
+    };
+    placeToGrids();
+    window.addEventListener('resize', placeToGrids);
+  }
   updateHintButtonLabel(); // на случай восстановленного saved.hintsUsed > 0
   onPurchasesChanged(hintBtn, updateHintButtonLabel);
 
@@ -588,7 +607,8 @@ async function finishCase(
       hintsUsed,
       hadMistake,
       casesCompletedCount: s.casesCompleted.length,
-      totalCases: cases.length,
+      plotCasesCompleted: PLOT_CASE_IDS.filter((id) => s.casesCompleted.includes(id)).length,
+      plotCasesTotal: PLOT_CASE_IDS.length,
       flawlessCount: Object.values(s.stars).filter((v) => v === 3).length,
     });
     s.achievements.push(...newAchievements);

@@ -174,6 +174,7 @@ async function geometry(page, pairs) {
   console.log('\n=== 4. Вёрстка: телефон, большой телефон, десктоп ===');
   for (const viewport of [
     { width: 360, height: 640 },
+    { width: 375, height: 667 },
     { width: 390, height: 844 },
     { width: 1000, height: 700 },
   ]) {
@@ -188,7 +189,30 @@ async function geometry(page, pairs) {
     const introBox = await page.locator('.case-intro').boundingBox();
     assert(introBox && introBox.y >= 0 && introBox.y < viewport.height, `${viewport.width}×${viewport.height}: вступление видно сразу`);
     const fontSize = await page.locator('.case-intro').evaluate((n) => parseFloat(getComputedStyle(n).fontSize));
-    assert(fontSize >= 13, `${viewport.width}×${viewport.height}: текст вступления читаемый (${fontSize}px)`);
+    assert(fontSize >= 14, `${viewport.width}×${viewport.height}: текст вступления не уменьшен (${fontSize}px)`);
+
+    // «К таблицам»: есть ровно тогда, когда первая сетка ниже первого экрана.
+    const below = await page.evaluate(() => {
+      const scroller = document.querySelector('.case-scroll').getBoundingClientRect();
+      return document.querySelector('.grids-stack').getBoundingClientRect().top >= scroller.bottom - 40;
+    });
+    const toGrids = page.locator('.to-grids');
+    assert((await toGrids.isVisible()) === below, `${viewport.width}×${viewport.height}: кнопка «К таблицам» ${below ? 'показана — сетки ниже первого экрана' : 'скрыта — сетки видны сразу'}`);
+    if (viewport.width === 360) assert(below, '360×640: сетки действительно ниже первого экрана (иначе проверка ничего не проверяет)');
+    if (below) {
+      const btnBox = await toGrids.boundingBox();
+      assert(btnBox && btnBox.y + btnBox.height <= viewport.height, `${viewport.width}×${viewport.height}: кнопка видна без прокрутки`);
+      await toGrids.click();
+      await page.waitForTimeout(700); // плавная прокрутка
+      const pos = await page.evaluate(() => {
+        const grid = document.querySelector('.grids-stack').getBoundingClientRect();
+        const bar = document.querySelector('.hint-bar').getBoundingClientRect();
+        const scroller = document.querySelector('.case-scroll').getBoundingClientRect();
+        return { top: grid.top, barTop: bar.top, scrollerTop: scroller.top };
+      });
+      assert(pos.top >= pos.scrollerTop - 1 && pos.top < pos.barTop - 40, `${viewport.width}×${viewport.height}: после нажатия начало таблиц на экране, над панелью подсказки`);
+      await page.locator('.case-scroll').evaluate((n) => n.scrollTo(0, 0));
+    }
     // Нижняя панель подсказки не закрывает последнюю сетку после прокрутки до конца.
     await page.locator('.case-scroll').evaluate((n) => n.scrollTo(0, n.scrollHeight));
     await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));

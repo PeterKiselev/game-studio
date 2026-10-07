@@ -103,6 +103,25 @@ describe('глава 1, дело 1 «Шланг у водокачки»', () => 
     expect(Object.keys(marks)).toHaveLength(48);
   });
 
+  it('вступление явно задаёт условия: по одному в каждый час, все вещи разные', () => {
+    expect(source.intro).toContain('в 6, 7, 8 и 9 часов');
+    expect(source.intro).toContain('все четыре разные');
+  });
+
+  /**
+   * Сторож формулировок, не замена чтению: каждый текст называет обе
+   * сущности своего правила и слово, которым это правило выражено.
+   */
+  it.each(source.clues.map((clue, i) => [i + 1, clue] as const))('улика %i прямо выражает своё правило', (_n, clue) => {
+    const text = clue.text.toLowerCase();
+    for (const ref of [clue.a, clue.b]) {
+      const stem = ref.value.toLowerCase().slice(0, Math.min(4, ref.value.length));
+      expect(text, `в тексте нет «${ref.value}»: ${clue.text}`).toContain(stem);
+    }
+    const marker = { before: /раньше|позже/, after: /позже|раньше/, adjacent: /соседние часы/, different: / не с /, same: /тот же|та же/ }[clue.kind];
+    expect(text, `нет слова для правила ${clue.kind}: ${clue.text}`).toMatch(marker);
+  });
+
   it('есть вступление и находка, ведущая к делу 2', () => {
     expect(source.intro).toMatch(/Кто принёс шланг\?/);
     expect(source.finding?.text).toMatch(/Склад правления/);

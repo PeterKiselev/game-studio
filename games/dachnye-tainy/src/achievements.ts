@@ -36,7 +36,12 @@ export interface CompletionContext {
   hadMistake: boolean;
   /** Сколько дел раскрыто всего, включая только что раскрытое. */
   casesCompletedCount: number;
-  totalCases: number;
+  /**
+   * Для «Все тайны участка»: сколько из исходных дел участка раскрыто и сколько
+   * их всего. Главы считаются отдельно — новые дела не сдвигают прежнюю цель.
+   */
+  plotCasesCompleted: number;
+  plotCasesTotal: number;
   /** Сколько дел раскрыто без единой подсказки, включая только что раскрытое. */
   flawlessCount: number;
 }
@@ -48,7 +53,7 @@ export function checkNewAchievements(unlocked: ReadonlySet<string>, ctx: Complet
   if (ctx.hintsUsed === 0) candidates.push('no_hints');
   if (ctx.flawlessCount >= 3) candidates.push('three_flawless');
   if (ctx.hadMistake) candidates.push('comeback');
-  if (ctx.casesCompletedCount === ctx.totalCases) candidates.push('all_cases');
+  if (ctx.plotCasesCompleted === ctx.plotCasesTotal) candidates.push('all_cases');
   return candidates.filter((id) => !unlocked.has(id));
 }
 
