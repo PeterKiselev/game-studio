@@ -10,24 +10,28 @@ compatibility_flags = ["nodejs_compat"]
 # в этом файле и не коммитится никуда.
 
 # --- Учёт покупок и Одноклассники ------------------------------------------
-# НЕ развёрнуто и не включено. Пока блоков ниже нет, ВК работает как раньше
-# (подтверждение без учёта), а /ok и /restore отвечают «не настроено».
-# Включение — только после ревью Codex и по решению владельца:
-#   1) раскомментировать [[durable_objects.bindings]] и [[migrations]] ниже;
-#   2) [vars]: APP_SLUG, VK_APP_ID, PAYMENTS_MODE ("test" до модерации, "live" после), OK_APP_KEY;
-#   3) секрет подписи ОК: `npx wrangler secret put OK_APP_SECRET`
-#      (какое поле кабинета — не подтверждено, см. docs/ok-dachnye-tainy-payments-2026-10.md);
-#   4) цены в ОКах (`priceOk`) в src/index.ts — называет владелец.
-# [vars]
-# APP_SLUG = "dachnye-tainy"
-# VK_APP_ID = "54767366"
-# PAYMENTS_MODE = "test"
-# OK_APP_KEY = "<публичный application_key ОК-приложения>"
+# Основной (боевой) Worker выше — без журнала: ВК работает как раньше, /ok и
+# /restore отвечают «не настроено». Рабочий режим платежей ОК заблокирован в
+# коде до подтверждения признака режима в уведомлениях ОК.
 #
-# [[durable_objects.bindings]]
-# name = "LEDGER"
-# class_name = "LedgerDO"
-#
-# [[migrations]]
-# tag = "v1"
-# new_sqlite_classes = ["LedgerDO"]
+# Изолированный ТЕСТОВЫЙ сервер — отдельный Worker с другим именем и адресом,
+# только PAYMENTS_MODE = "test". НЕ развёрнут. Развёртывание — только после
+# ревью Codex и по решению владельца: `npx wrangler deploy --env oktest`
+# (секреты: `npx wrangler secret put OK_APP_SECRET --env oktest`, то же для
+# VK_APP_SECRET). Цены в ОКах (`priceOk`) называет владелец.
+[env.oktest]
+name = "dachnye-tainy-payments-oktest"
+
+[env.oktest.vars]
+APP_SLUG = "dachnye-tainy"
+VK_APP_ID = "54767366"
+PAYMENTS_MODE = "test"
+# OK_APP_KEY = "<публичный application_key ОК-приложения — пока неизвестен>"
+
+[[env.oktest.durable_objects.bindings]]
+name = "LEDGER"
+class_name = "LedgerDO"
+
+[[env.oktest.migrations]]
+tag = "v1"
+new_sqlite_classes = ["LedgerDO"]

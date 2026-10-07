@@ -245,10 +245,12 @@ describe('Сбой между записями транзакции', () => {
 // --- test / live ------------------------------------------------------------
 
 describe('Разделение тестового и рабочего режимов', () => {
-  it('ОК: покупка в тестовом деплое не восстанавливается в рабочем', async () => {
+  it('ОК: рабочий режим заблокирован — и подтверждение (2), и восстановление (503)', async () => {
     const ns = new FakeNamespace();
+    expect(errCode(await handleOkPayment(okParams(), okCtx(ns, { mode: 'live' })))).toBe('2');
+    expect(ns.allKeys()).toEqual([]);
     await handleOkPayment(okParams(), okCtx(ns, { mode: 'test' }));
-    expect(await restored(await handleRestore(launch(), restoreCtx(ns, { mode: 'live' })))).toEqual([]);
+    expect((await handleRestore(launch(), restoreCtx(ns, { mode: 'live' }))).status).toBe(503);
     expect(await restored(await handleRestore(launch(), restoreCtx(ns, { mode: 'test' })))).toEqual(['alpha']);
   });
 
@@ -294,6 +296,56 @@ describe('Повтор после изменения цены', () => {
     const changed = { ...old, catalog: { ...catalog(), alpha: { ...catalog().alpha, price: 25 } } };
     expect(((await (await handleVkOrder(vkOrder(), changed)).json()) as Record<string, unknown>).response).toBeDefined();
     expect(((await (await handleVkOrder(vkOrder({ order_id: '999' }), changed)).json()) as Record<string, unknown>).error).toBeDefined();
+  });
+});
+
+// --- ВК: оплаченная сумма только из уведомления -------------------------------
+
+describe('ВК: item_price', () => {
+  const vkCtx = (ns: FakeNamespace, c = catalog()) => ({ app: 'dachnye-tainy', appId: DT_ID, ledger: doLedger(ns), catalog: c });
+  const body = async (res: Response) => (await res.json()) as { response?: unknown; error?: { error_code: number } };
+
+  it.each([['отсутствует', '__drop__'], ['пустой', ''], ['не число', 'abc'], ['дробный', '20.5']])(
+    'новый заказ, item_price %s — ошибка, хотя цена каталога совпала бы; ничего не записано',
+    async (_label, value) => {
+      const ns = new FakeNamespace();
+      const fields = Object.fromEntries(vkOrder());
+      if (value === '__drop__') delete fields.item_price;
+      else fields.item_price = value;
+      expect((await body(await handleVkOrder(new URLSearchParams(fields), vkCtx(ns)))).error).toBeDefined();
+      expect(ns.allKeys()).toEqual([]);
+    },
+  );
+
+  it('повтор после изменения каталога без item_price — тот же успех по записи, журнал не меняется', async () => {
+    const ns = new FakeNamespace();
+    await handleVkOrder(vkOrder(), vkCtx(ns));
+    const before = ns.allKeys();
+    const changed = { ...catalog(), alpha: { ...catalog().alpha, price: 25 } };
+    const fields = Object.fromEntries(vkOrder());
+    delete fields.item_price;
+    const res = await body(await handleVkOrder(new URLSearchParams(fields), vkCtx(ns, changed)));
+    expect(res.response).toEqual({ order_id: 2363385, app_order_id: 2363385 });
+    expect(ns.allKeys()).toEqual(before);
+  });
+
+  it('повтор с другим item_price — конфликт; с другим товаром — конфликт', async () => {
+    const ns = new FakeNamespace();
+    await handleVkOrder(vkOrder(), vkCtx(ns));
+    expect((await body(await handleVkOrder(vkOrder({ item_price: '25' }), vkCtx(ns)))).error).toBeDefined();
+    expect((await body(await handleVkOrder(vkOrder({ item: 'beta' }), vkCtx(ns)))).error).toBeDefined();
+  });
+
+  it('item_discount, отличный от 0, — ошибка (скидок мы не даём); 0 — допустим', async () => {
+    const ns = new FakeNamespace();
+    expect((await body(await handleVkOrder(vkOrder({ item_discount: '3' }), vkCtx(ns)))).error).toBeDefined();
+    expect((await body(await handleVkOrder(vkOrder({ item_discount: '0' }), vkCtx(ns)))).response).toBeDefined();
+  });
+
+  it('уведомление с чужим app_id — ошибка', async () => {
+    const ns = new FakeNamespace();
+    expect((await body(await handleVkOrder(vkOrder({ app_id: '54788542' }), vkCtx(ns)))).error).toBeDefined();
+    expect(ns.allKeys()).toEqual([]);
   });
 });
 

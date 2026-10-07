@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "wrangler dev",
-    "deploy": "wrangler deploy"
+    "deploy": "wrangler deploy",
+    "test:int": "vitest run --config vitest.int.config.ts"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20250101.0",

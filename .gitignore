@@ -4,3 +4,6 @@ release/
 tools/_playtest/
 *.local
 .DS_Store
+
+# локальное состояние wrangler/workerd (интеграционные тесты, wrangler dev)
+.wrangler/

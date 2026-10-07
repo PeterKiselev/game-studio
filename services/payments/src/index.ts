@@ -205,7 +205,7 @@ export default {
         // прежнее подтверждение без учёта: рабочий путь VK не ломается, пока
         // журнал не развёрнут, но и восстановления у него нет.
         if (env.LEDGER && env.APP_SLUG) {
-          return handleVkOrder(params, { app: env.APP_SLUG, ledger: ledgerOf(env), catalog: ITEMS });
+          return handleVkOrder(params, { app: env.APP_SLUG, appId: env.VK_APP_ID, ledger: ledgerOf(env), catalog: ITEMS });
         }
         return handleOrderStatusChange(params);
       default:

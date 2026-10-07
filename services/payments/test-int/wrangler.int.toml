@@ -1,0 +1,22 @@
+# Только для локальных интеграционных тестов (wrangler unstable_dev → workerd на
+# этой машине). Никогда не разворачивается: секреты ниже — выдуманные строки.
+name = "payments-integration-test"
+main = "entry.ts"
+compatibility_date = "2025-01-01"
+compatibility_flags = ["nodejs_compat"]
+
+[vars]
+APP_SLUG = "dachnye-tainy"
+VK_APP_ID = "54767366"
+PAYMENTS_MODE = "test"
+OK_APP_KEY = "INTTESTKEY"
+VK_APP_SECRET = "int-vk-secret"
+OK_APP_SECRET = "int-ok-secret"
+
+[[durable_objects.bindings]]
+name = "LEDGER"
+class_name = "LedgerDO"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["LedgerDO"]
