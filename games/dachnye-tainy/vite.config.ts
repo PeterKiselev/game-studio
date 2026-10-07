@@ -14,6 +14,8 @@ export default defineConfig(({ mode }) => {
     },
     define: {
       __PLATFORM__: JSON.stringify(platform),
+      // Адрес платёжного сервера для восстановления покупок. Не задан — выключено.
+      __PAYMENTS_URL__: JSON.stringify(process.env.VITE_PAYMENTS_URL ?? ''),
     },
     build: {
       outDir: `dist/${platform}`,

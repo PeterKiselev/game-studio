@@ -7,6 +7,7 @@ import { cases, tutorialCase } from './cases';
 import { ACHIEVEMENTS, checkNewAchievements, starsFor } from './achievements';
 import { SHOP_ITEMS, SKU_NO_ADS, SKU_UNLIMITED_HINTS, buyLabel, votes } from './shop';
 import type { ShopItem } from './shop';
+import { fetchConfirmedSkus, mergePurchases, restoreUrl } from './restore';
 import './theme.css';
 import './style.css';
 
@@ -63,6 +64,14 @@ function backfillStars(casesCompleted: string[]): Save['stars'] {
 
 const DEFAULTS: Save = { casesCompleted: [], progress: {}, stars: {}, achievements: [], purchases: {} };
 
+/**
+ * Адрес платёжного сервера для восстановления покупок задаётся при сборке
+ * (`VITE_PAYMENTS_URL`). Пусто — восстановление выключено, игра не делает ни
+ * одного запроса и ведёт себя как раньше. Так новая логика включается только
+ * сборкой, которую явно собрали с адресом (сначала — тестовой).
+ */
+declare const __PAYMENTS_URL__: string;
+
 const root = document.getElementById('app')!;
 let app!: GameApp<Save>;
 
@@ -115,6 +124,27 @@ async function main(): Promise<void> {
   app.track('app_start');
   showPlot();
   app.ready();
+  // Не ждём: игра уже на экране, восстановление только добавит права, если они есть.
+  void restorePurchases('launch');
+}
+
+/**
+ * Запрашивает у сервера подтверждённые покупки и добавляет недостающие права.
+ * Ошибка сети или сервера ничего не меняет и игроку не показывается.
+ */
+async function restorePurchases(reason: 'launch' | 'after_purchase'): Promise<void> {
+  const url = restoreUrl(__PAYMENTS_URL__, location.search);
+  if (!url) return;
+  const skus = await fetchConfirmedSkus(url, (u, init) => fetch(u, init));
+  if (!skus) {
+    app.track('purchase_restore_failed', { reason });
+    return;
+  }
+  const added = mergePurchases(app.save.data.purchases, skus);
+  if (added.length > 0) {
+    app.save.markDirty();
+    app.track('purchase_restored', { reason, count: added.length });
+  }
 }
 
 void main();
@@ -671,14 +701,27 @@ async function buy(item: ShopItem, btn: HTMLButtonElement): Promise<void> {
   const original = btn.textContent;
   btn.disabled = true;
   btn.textContent = '…';
+  let paid = false;
   try {
     const result = await app.platform.payments.buy(item.sku);
-    if (!result.ok) throw new Error('not ok');
+    paid = result.ok;
+  } catch {
+    paid = false;
+  }
+  if (paid) {
     SHOP_EFFECTS[item.sku].apply(app.save.data);
     app.save.markDirty();
     app.track('purchase', { sku: item.sku });
     btn.textContent = 'Куплено';
-  } catch {
+  }
+  // После любой попытки сверяемся с журналом: если окно ответило ошибкой или
+  // таймаутом, а оплата всё же прошла, сервер это знает. Ошибку игроку
+  // показываем, только если и журнал покупку не подтвердил.
+  await restorePurchases('after_purchase');
+  if (SHOP_EFFECTS[item.sku].owned(app.save.data)) {
+    btn.textContent = 'Куплено';
+    btn.disabled = true;
+  } else {
     btn.textContent = original;
     btn.disabled = false;
     toast('Покупка не завершилась — попробуйте ещё раз');
