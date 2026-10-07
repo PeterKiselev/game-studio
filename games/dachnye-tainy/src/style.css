@@ -480,3 +480,45 @@
   font-weight: 700;
   color: var(--felt);
 }
+
+/* Глава: вступление к делу, заголовок фактов, находка на развязке. */
+.case-intro {
+  padding: 10px 12px;
+  margin-bottom: var(--gap-2);
+  background: var(--felt-soft);
+  border-radius: var(--r-sm);
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--ink);
+}
+
+.clues .clues-title {
+  font-weight: 700;
+  color: var(--ink);
+  margin-bottom: 4px;
+}
+
+.finding {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: var(--gap-3);
+  border-top: 1px dashed var(--line);
+  background: var(--surface);
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--ink-2);
+}
+
+.finding b {
+  color: var(--ink);
+}
+
+.finding p {
+  margin: 0;
+}
+
+.finding .finding-next {
+  font-style: italic;
+  color: var(--ink-3);
+}

@@ -345,6 +345,9 @@ async function startCase(source: Case): Promise<void> {
   }
 
   const cluesBox = el('div', { class: 'clues' });
+  // У дел главы улики — проверенные факты; спорные показания (с дела 2)
+  // пойдут отдельным блоком, чтобы ложь не читалась как правило головоломки.
+  if (source.intro) cluesBox.append(el('div', { class: 'clues-title' }, 'Факты'));
   for (const clue of source.clues) {
     cluesBox.append(el('div', { class: 'clue' }, el('b', {}, '•'), el('span', {}, clue.text)));
   }
@@ -385,7 +388,13 @@ async function startCase(source: Case): Promise<void> {
       el('span', { class: 'spacer' }),
       backButton(),
     ),
-    el('div', { class: 'case-scroll' }, cluesBox, gridsBox),
+    el(
+      'div',
+      { class: 'case-scroll' },
+      ...(source.intro ? [el('div', { class: 'case-intro' }, source.intro)] : []),
+      cluesBox,
+      gridsBox,
+    ),
     hintBar,
   );
   root.replaceChildren(screen);
@@ -600,6 +609,17 @@ async function finishCase(
     caseFileSummary(source, solution),
     el('div', { class: 'reveal-text' }, source.epilogue),
   ];
+  if (source.finding) {
+    children.push(
+      el(
+        'div',
+        { class: 'finding' },
+        el('b', {}, `🔎 ${source.finding.title}`),
+        el('p', {}, source.finding.text),
+        el('span', { class: 'finding-next' }, 'Продолжение следует.'),
+      ),
+    );
+  }
 
   // Сообщение о награде — только если участок правда пополнился. Дело
   // при повторном прохождении не должно врать про изменение, которого

@@ -4,6 +4,7 @@ import { thirdCase } from './third';
 import { fourthCase } from './fourth';
 import { fifthCase } from './fifth';
 import { sixthCase } from './sixth';
+import { chapter1HoseCase } from './chapter1-hose';
 import type { Case } from '@studio/rules';
 
 /**
@@ -13,6 +14,6 @@ import type { Case } from '@studio/rules';
  * Модератор VK попросил больше контента — это первая партия сверх трёх
  * дел вертикального среза, не финальный объём (цель — 10-12).
  */
-export const cases: Case[] = [tutorialCase, secondCase, thirdCase, fourthCase, fifthCase, sixthCase];
+export const cases: Case[] = [tutorialCase, secondCase, thirdCase, fourthCase, fifthCase, sixthCase, chapter1HoseCase];
 
-export { tutorialCase, secondCase, thirdCase, fourthCase, fifthCase, sixthCase };
+export { tutorialCase, secondCase, thirdCase, fourthCase, fifthCase, sixthCase, chapter1HoseCase };
