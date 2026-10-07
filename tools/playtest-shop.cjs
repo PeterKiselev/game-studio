@@ -60,6 +60,8 @@ async function stubVkBridge(page, { approvePurchase = false } = {}) {
           return ok({ keys: [] });
         case 'VKWebAppStorageSet':
           return ok({ result: true });
+        case 'VKWebAppShowNativeAds':
+          return ok({ result: true });
         case 'VKWebAppShowOrderBox':
           return approve ? ok({ success: true }) : fail();
         default:
@@ -260,9 +262,10 @@ async function checkSuccessfulPurchase({ page, errors }, { name, expectPrice, ex
   }
 
   /*
-   * ОК: модератор «Дачных тайн» ответил «Платежи не работают». В ОК нет
-   * VKWebAppShowOrderBox (apiok.ru/apps/vk), поэтому при vk_client=ok магазина
-   * быть не должно вовсе, а ни одного вызова ShowOrderBox — тоже.
+   * ОК: модератор «Дачных тайн» ответил «Платежи не работают». Страница
+   * apiok.ru/apps/vk (без даты) перечисляет VKWebAppShowOrderBox как «Не
+   * поддерживается»; платёжного пути через VK Bridge в ОК у нас нет, поэтому
+   * при vk_client=ok магазина быть не должно, как и вызовов ShowOrderBox.
    * Заглушка — не настоящая ОК: реальную среду проверяет только владелец.
    */
   console.log('\n=== ОК (vk_client=ok): платежи выключены, магазин скрыт ===');
@@ -291,6 +294,49 @@ async function checkSuccessfulPurchase({ page, errors }, { name, expectPrice, ex
     await page.goto(`${url}?vk_client=vk&lang=ru`, { waitUntil: 'networkidle' });
     await page.waitForSelector('.shop-btn', { timeout: 8000 });
     assert(true, `${name} во ВКонтакте (vk_client=vk): магазин на месте`);
+    await page.close();
+  }
+
+  /*
+   * Диагностика рекламы для проверки на настоящем VK (?diag=1). Здесь заглушка
+   * лишь проверяет, что сама диагностика работает и без флага невидима; сама
+   * реклама проверяется только на настоящем VK.
+   */
+  console.log('\n=== Sudoku: диагностика рекламы (diag=1) ===');
+  {
+    const plain = await browser.newPage({ viewport: VIEWPORT });
+    await stubVkBridge(plain);
+    await plain.goto(`${SUDOKU}?lang=ru`, { waitUntil: 'networkidle' });
+    assert((await plain.locator('[data-diag]').count()) === 0, 'без diag=1 панели диагностики нет');
+    await plain.close();
+
+    const page = await browser.newPage({ viewport: VIEWPORT });
+    const errors = [];
+    page.on('pageerror', (e) => errors.push(e.message));
+    await stubVkBridge(page);
+    await page.goto(`${SUDOKU}?lang=ru&diag=1`, { waitUntil: 'networkidle' });
+    await page.waitForSelector('[data-diag]');
+    assert(true, 'с diag=1 панель диагностики показана');
+    await page.locator('.difficulty-card').first().click();
+    await page.waitForSelector('.puzzle');
+    await page.locator('.hint-btn').click(); // первая подсказка бесплатна
+    await page.locator('.hint-btn').click({ timeout: 4000 }); // вторая — через rewarded
+    await page.waitForFunction(() => document.querySelector('[data-diag]').textContent.includes('реклама: конец'), null, { timeout: 5000 });
+    await page.setViewportSize({ width: 420, height: 560 });
+    await page.waitForTimeout(400);
+    const text = await page.locator('[data-diag]').innerText();
+    assert(text.includes('rewarded: shown=true'), 'в журнале есть итог показа rewarded');
+    assert(text.includes('реклама: пауза'), 'в журнале есть начало рекламы');
+    assert(/resize.*окно 420×560/.test(text), 'в журнале есть смена размера окна: ' + text);
+    assert(!text.includes('ПЕРЕСЕЧЕНИЕ'), 'после рекламы и смены высоты пересечений нет');
+    // Негативный контроль самой диагностики: искусственно сдвинутые цифры должны быть замечены.
+    await page.evaluate(() => {
+      document.querySelector('.numpad').style.cssText += ';position:relative;top:-260px';
+    });
+    await page.setViewportSize({ width: 420, height: 600 });
+    await page.waitForTimeout(400);
+    assert((await page.locator('[data-diag]').innerText()).includes('ПЕРЕСЕЧЕНИЕ'), 'диагностика замечает искусственное наложение блоков');
+    assert(errors.length === 0, 'без ошибок в консоли: ' + errors.join('; '));
     await page.close();
   }
 
