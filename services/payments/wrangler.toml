@@ -9,15 +9,25 @@ compatibility_flags = ["nodejs_compat"]
 # заводится командой `npx wrangler secret put VK_APP_SECRET`, не хранится
 # в этом файле и не коммитится никуда.
 
-# --- Одноклассники (маршруты /ok и /ok/restore) -----------------------------
-# НЕ развёрнуто и не включено. Для работы маршрутов нужно (по решению владельца,
-# после ревью Codex):
-#   1) секрет подписи уведомлений ОК: `npx wrangler secret put OK_APP_SECRET`
-#      (какое поле кабинета это ключ — неизвестно, см. docs/ok-dachnye-tainy-payments-2026-10.md);
-#   2) хранилище учтённых покупок — KV-пространство с привязкой PURCHASES:
-#        npx wrangler kv namespace create PURCHASES   # печатает id
-#      и раскомментировать блок ниже, подставив напечатанный id;
-#   3) цены в ОКах (`priceOk`) у товаров в src/index.ts — их называет владелец.
-# [[kv_namespaces]]
-# binding = "PURCHASES"
-# id = "<id из команды выше>"
+# --- Учёт покупок и Одноклассники ------------------------------------------
+# НЕ развёрнуто и не включено. Пока блоков ниже нет, ВК работает как раньше
+# (подтверждение без учёта), а /ok и /restore отвечают «не настроено».
+# Включение — только после ревью Codex и по решению владельца:
+#   1) раскомментировать [[durable_objects.bindings]] и [[migrations]] ниже;
+#   2) [vars]: APP_SLUG, VK_APP_ID, PAYMENTS_MODE ("test" до модерации, "live" после), OK_APP_KEY;
+#   3) секрет подписи ОК: `npx wrangler secret put OK_APP_SECRET`
+#      (какое поле кабинета — не подтверждено, см. docs/ok-dachnye-tainy-payments-2026-10.md);
+#   4) цены в ОКах (`priceOk`) в src/index.ts — называет владелец.
+# [vars]
+# APP_SLUG = "dachnye-tainy"
+# VK_APP_ID = "54767366"
+# PAYMENTS_MODE = "test"
+# OK_APP_KEY = "<публичный application_key ОК-приложения>"
+#
+# [[durable_objects.bindings]]
+# name = "LEDGER"
+# class_name = "LedgerDO"
+#
+# [[migrations]]
+# tag = "v1"
+# new_sqlite_classes = ["LedgerDO"]

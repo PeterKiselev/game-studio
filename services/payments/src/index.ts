@@ -20,11 +20,13 @@
  * не начисляет сам.
  */
 
-import { handleOkPayment, handleOkRestore, kvStore } from './ok';
-import type { KvLike, PurchaseStore } from './ok';
+import { doLedger } from './ledger';
+import type { Ledger, Mode, NamespaceLike } from './ledger';
+import { handleOkPayment, handleRestore, handleVkOrder } from './ok';
 import { verifySignature } from './signature';
 
 export { verifySignature };
+export { LedgerDO } from './ledger';
 
 export interface Env {
   /** Защищённый ключ приложения из dev.vk.ru → Платежи → Подключение. Секрет Worker'а, не в коде. */
@@ -35,12 +37,34 @@ export interface Env {
    * угадываем, пока нет подтверждения. Без него маршрут /ok отвечает ошибкой.
    */
   OK_APP_SECRET?: string;
-  /** Cloudflare KV с учтёнными покупками ОК (привязка PURCHASES, см. wrangler.toml). */
-  PURCHASES?: KvLike;
+  /** Публичный application_key ОК-приложения — уведомления чужих приложений отклоняются. */
+  OK_APP_KEY?: string;
+  /** Какому приложению каталога служит этот деплой (`dachnye-tainy`). */
+  APP_SLUG?: string;
+  /** VK ID приложения (`54767366`) — сверяется при восстановлении. */
+  VK_APP_ID?: string;
+  /**
+   * Режим деплоя: `test` до модерации, `live` после. Определяет журнал для
+   * уведомлений ОК (признак теста в GET ОК не документирован) и журнал, из
+   * которого отдаётся восстановление. Без значения учёт и восстановление выключены.
+   */
+  PAYMENTS_MODE?: string;
+  /** Durable Object журнала покупок (привязка LEDGER, см. wrangler.toml). */
+  LEDGER?: NamespaceLike;
+}
+
+function modeOf(env: Env): Mode | undefined {
+  return env.PAYMENTS_MODE === 'test' || env.PAYMENTS_MODE === 'live' ? env.PAYMENTS_MODE : undefined;
+}
+
+function ledgerOf(env: Env): Ledger | undefined {
+  return env.LEDGER ? doLedger(env.LEDGER) : undefined;
 }
 
 export interface ShopItem {
   title: string;
+  /** Приложение, которому принадлежит товар: Worker одного приложения чужие SKU не продаёт и не восстанавливает. */
+  app: string;
   /** Цена в голосах VK — целое число. */
   price: number;
   /**
@@ -62,10 +86,10 @@ export interface ShopItem {
  * — вопрос времени. Тесты каждой игры сверяются именно с этим объектом.
  */
 export const ITEMS: Record<string, ShopItem> = {
-  dachnye_tainy_no_ads: { title: 'Без рекламы', price: 20 },
-  dachnye_tainy_unlimited_hints: { title: 'Безлимитные подсказки', price: 20 },
-  sudoku_no_ads: { title: 'Без рекламы', price: 20 },
-  sudoku_unlimited_hints: { title: 'Безлимитные подсказки', price: 20 },
+  dachnye_tainy_no_ads: { app: 'dachnye-tainy', title: 'Без рекламы', price: 20 },
+  dachnye_tainy_unlimited_hints: { app: 'dachnye-tainy', title: 'Безлимитные подсказки', price: 20 },
+  sudoku_no_ads: { app: 'sudoku', title: 'Без рекламы', price: 20 },
+  sudoku_unlimited_hints: { app: 'sudoku', title: 'Безлимитные подсказки', price: 20 },
 };
 
 function json(body: unknown): Response {
@@ -135,18 +159,19 @@ export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
 
-    // Одноклассники: подтверждение покупки (GET) и восстановление. Адрес /ok
-    // указывается в «URL для платёжных уведомлений Одноклассников» — он должен
-    // отличаться от адреса ВКонтакте (требование документации).
-    if (url.pathname === '/ok' || url.pathname === '/ok/restore') {
+    // GET-маршруты: подтверждение покупки ОК и восстановление покупок.
+    // /ok указывается в «URL для платёжных уведомлений Одноклассников» — он
+    // должен отличаться от адреса ВКонтакте (требование документации).
+    if (url.pathname === '/ok' || url.pathname === '/ok/restore' || url.pathname === '/vk/restore') {
       if (request.method !== 'GET') {
         return new Response('Method not allowed', { status: 405 });
       }
-      const store: PurchaseStore | undefined = env.PURCHASES ? kvStore(env.PURCHASES) : undefined;
+      const app = { app: env.APP_SLUG, appId: env.VK_APP_ID, ledger: ledgerOf(env), catalog: ITEMS };
       if (url.pathname === '/ok') {
-        return handleOkPayment(url.searchParams, { secret: env.OK_APP_SECRET, store, catalog: ITEMS });
+        return handleOkPayment(url.searchParams, { ...app, secret: env.OK_APP_SECRET, appKey: env.OK_APP_KEY, mode: modeOf(env) });
       }
-      return handleOkRestore(url.searchParams, { secret: env.VK_APP_SECRET, store });
+      const platform = url.pathname === '/ok/restore' ? 'ok' : 'vk';
+      return handleRestore(url.searchParams, { ...app, platform, secret: env.VK_APP_SECRET, mode: modeOf(env) });
     }
 
     if (request.method !== 'POST') {
@@ -176,6 +201,12 @@ export default {
         return handleGetItem(params);
       case 'order_status_change':
       case 'order_status_change_test':
+        // С журналом — запись до подтверждения (handleVkOrder). Без журнала —
+        // прежнее подтверждение без учёта: рабочий путь VK не ломается, пока
+        // журнал не развёрнут, но и восстановления у него нет.
+        if (env.LEDGER && env.APP_SLUG) {
+          return handleVkOrder(params, { app: env.APP_SLUG, ledger: ledgerOf(env), catalog: ITEMS });
+        }
         return handleOrderStatusChange(params);
       default:
         // get_subscription/subscription_status_change сюда тоже попадут —

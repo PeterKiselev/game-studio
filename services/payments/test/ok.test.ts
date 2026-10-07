@@ -2,34 +2,83 @@ import { createHash, createHmac } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import worker, { ITEMS, handleGetItem } from '../src/index';
 import type { Env, ShopItem } from '../src/index';
-import { handleOkPayment, handleOkRestore } from '../src/ok';
-import type { PurchaseStore } from '../src/ok';
+import { LedgerDO, doLedger } from '../src/ledger';
+import type { Mode, NamespaceLike, StorageLike, TxnLike } from '../src/ledger';
+import { handleOkPayment, handleRestore, handleVkOrder } from '../src/ok';
+import type { OkCtx, RestoreCtx } from '../src/ok';
 
 /**
- * Одноклассники — подтверждение покупки, цены в ОКах, повторы, восстановление.
+ * Подтверждение и восстановление покупок (ОК и ВК) через журнал на Durable Object.
  *
- * Подписи считаются здесь независимым кодом (не переиспользуя src/signature.ts):
- * настоящий формат подтверждается только тестовым платежом на живом ОК.
- * Ключи ниже — выдуманные тестовые строки, реальные нигде не используются.
- *
- * ВАЖНО: цены в ОКах (`priceOk`) в боевом каталоге НЕ заданы — владелец их не
- * назвал. Тестовый каталог ниже придумывает числа только для проверки логики;
- * это не предложение цен.
+ * Подписи считаются здесь независимым кодом. Ключи — выдуманные тестовые строки.
+ * Цены в ОКах в тестовом каталоге придуманы для проверки логики — это не
+ * предложение цен; в боевом каталоге `priceOk` не задан.
  */
 const OK_SECRET = 'test-ok-secret';
 const VK_SECRET = 'test-vk-secret';
+const OK_KEY = 'CBAKMLELABABABABE';
+const DT_ID = '54767366';
 
-const CATALOG: Record<string, ShopItem> = {
-  alpha: { title: 'Альфа', price: 20, priceOk: 7 },
-  beta: { title: 'Бета', price: 20, priceOk: 9 },
-  no_price_ok: { title: 'Без цены ОК', price: 20 },
-};
+function catalog(priceAlpha = 7): Record<string, ShopItem> {
+  return {
+    alpha: { app: 'dachnye-tainy', title: 'Альфа', price: 20, priceOk: priceAlpha },
+    beta: { app: 'dachnye-tainy', title: 'Бета', price: 20, priceOk: 9 },
+    no_price_ok: { app: 'dachnye-tainy', title: 'Без цены ОК', price: 20 },
+    sudoku_x: { app: 'sudoku', title: 'Чужой', price: 20, priceOk: 7 },
+  };
+}
+
+// --- поддельный Durable Object с настоящей семантикой транзакции -------------
+
+/** Хранилище, которое откатывает транзакцию целиком при исключении (как DurableObjectStorage). */
+class FakeStorage implements StorageLike {
+  data = new Map<string, unknown>();
+  constructor(private readonly control: { failOnPut: number }) {}
+  async get<T>(key: string): Promise<T | undefined> {
+    return this.data.get(key) as T | undefined;
+  }
+  async list<T>({ prefix }: { prefix: string }): Promise<Map<string, T>> {
+    return new Map([...this.data].filter(([k]) => k.startsWith(prefix))) as Map<string, T>;
+  }
+  async transaction<T>(closure: (txn: TxnLike) => Promise<T>): Promise<T> {
+    const draft = new Map(this.data);
+    let n = 0;
+    const txn: TxnLike = {
+      get: async <V>(key: string) => draft.get(key) as V | undefined,
+      put: async (key, value) => {
+        n += 1;
+        if (this.control.failOnPut === n) throw new Error('сбой хранилища');
+        draft.set(key, structuredClone(value));
+      },
+    };
+    const result = await closure(txn); // исключение → draft выбрасывается
+    this.data = draft;
+    return result;
+  }
+}
+
+class FakeNamespace implements NamespaceLike {
+  control = { failOnPut: 0 };
+  storages = new Map<string, FakeStorage>();
+  idFromName(name: string): unknown {
+    return name;
+  }
+  get(id: unknown) {
+    const name = String(id);
+    if (!this.storages.has(name)) this.storages.set(name, new FakeStorage(this.control));
+    const object = new LedgerDO({ storage: this.storages.get(name)! });
+    return { fetch: (request: Request) => object.fetch(request) };
+  }
+  /** Все записи всех объектов — чтобы проверять «ничего не записано». */
+  allKeys(): string[] {
+    return [...this.storages].flatMap(([name, s]) => [...s.data.keys()].map((k) => `${name}/${k}`)).sort();
+  }
+}
+
+// --- конструкторы запросов --------------------------------------------------
 
 function md5Sig(fields: Record<string, string>, secret: string): string {
-  const str = Object.keys(fields)
-    .sort()
-    .map((k) => `${k}=${fields[k]}`)
-    .join('');
+  const str = Object.keys(fields).sort().map((k) => `${k}=${fields[k]}`).join('');
   return createHash('md5').update(str + secret).digest('hex');
 }
 
@@ -41,7 +90,7 @@ function okParams(over: Record<string, string> = {}, secret = OK_SECRET): URLSea
     amount: '7',
     product_code: 'alpha',
     method: 'callbacks.payment',
-    application_key: 'APPKEY',
+    application_key: OK_KEY,
     call_id: '1510089670220',
     ...over,
   };
@@ -49,344 +98,306 @@ function okParams(over: Record<string, string> = {}, secret = OK_SECRET): URLSea
   return new URLSearchParams({ ...fields, sig: md5Sig(fields, secret) });
 }
 
-class MemoryStore implements PurchaseStore {
-  data = new Map<string, string>();
-  puts = 0;
-  failPuts = false;
-  async get(key: string): Promise<string | null> {
-    return this.data.get(key) ?? null;
-  }
-  async put(key: string, value: string): Promise<void> {
-    if (this.failPuts) throw new Error('kv down');
-    this.puts += 1;
-    this.data.set(key, value);
-  }
-  async keys(prefix: string): Promise<string[]> {
-    return [...this.data.keys()].filter((k) => k.startsWith(prefix));
-  }
+function vkOrder(over: Record<string, string> = {}): URLSearchParams {
+  return new URLSearchParams({
+    app_id: DT_ID,
+    notification_type: 'order_status_change_test',
+    status: 'chargeable',
+    order_id: '2363385',
+    user_id: '574470572',
+    item: 'alpha',
+    item_price: '20',
+    date: '1790607282',
+    ...over,
+  });
 }
 
-function ctx(store: PurchaseStore | undefined = new MemoryStore(), secret: string | undefined = OK_SECRET) {
-  return { secret, store, catalog: CATALOG };
+function launch(over: Record<string, string> = {}, secret = VK_SECRET): URLSearchParams {
+  const fields: Record<string, string> = {
+    vk_user_id: '512005303399',
+    vk_app_id: DT_ID,
+    vk_client: 'ok',
+    vk_platform: 'desktop_web',
+    vk_language: 'ru',
+    ...over,
+  };
+  for (const key of Object.keys(fields)) if (fields[key] === '__drop__') delete fields[key];
+  const query = Object.keys(fields).sort().map((k) => `${k}=${encodeURIComponent(fields[k])}`).join('&');
+  const sign = createHmac('sha256', secret).update(query).digest('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  return new URLSearchParams({ ...fields, sign });
 }
 
-async function body(res: Response): Promise<string> {
-  return res.text();
+function okCtx(ns: FakeNamespace, over: Partial<OkCtx> = {}): OkCtx {
+  return { app: 'dachnye-tainy', appId: DT_ID, secret: OK_SECRET, appKey: OK_KEY, mode: 'test', ledger: doLedger(ns), catalog: catalog(), ...over };
 }
 
-function errCode(res: Response): string | null {
-  return res.headers.get('Invocation-error');
+function restoreCtx(ns: FakeNamespace, over: Partial<RestoreCtx> = {}): RestoreCtx {
+  return { app: 'dachnye-tainy', appId: DT_ID, platform: 'ok', secret: VK_SECRET, mode: 'test', ledger: doLedger(ns), catalog: catalog(), ...over };
 }
 
-describe('handleOkPayment — подтверждение покупки', () => {
-  it('верная покупка: ответ true и покупка записана', async () => {
-    const store = new MemoryStore();
-    const res = await handleOkPayment(okParams(), ctx(store));
-    expect(await body(res)).toBe('true');
-    expect(res.headers.get('Content-Type')).toContain('application/json');
+const errCode = (res: Response): string | null => res.headers.get('Invocation-error');
+const restored = async (res: Response): Promise<string[]> => ((await res.json()) as { skus: string[] }).skus;
+
+// --- ОК: подтверждение -------------------------------------------------------
+
+describe('ОК: подтверждение покупки', () => {
+  it('верная покупка: true, покупка восстанавливается', async () => {
+    const ns = new FakeNamespace();
+    const res = await handleOkPayment(okParams(), okCtx(ns));
+    expect(await res.text()).toBe('true');
     expect(errCode(res)).toBeNull();
-    expect(await store.keys('ok:p:512005303399:')).toEqual(['ok:p:512005303399:alpha']);
+    expect(await restored(await handleRestore(launch(), restoreCtx(ns)))).toEqual(['alpha']);
   });
 
-  it('повтор той же транзакции: снова true, второй записи нет', async () => {
-    const store = new MemoryStore();
-    await handleOkPayment(okParams(), ctx(store));
-    const putsAfterFirst = store.puts;
-    const second = await handleOkPayment(okParams(), ctx(store));
-    expect(await body(second)).toBe('true');
-    expect(store.puts).toBe(putsAfterFirst);
-    expect(await store.keys('ok:p:')).toHaveLength(1);
+  it('повтор той же транзакции: снова true, журнал не меняется', async () => {
+    const ns = new FakeNamespace();
+    await handleOkPayment(okParams(), okCtx(ns));
+    const before = ns.allKeys();
+    expect(await (await handleOkPayment(okParams(), okCtx(ns))).text()).toBe('true');
+    expect(ns.allKeys()).toEqual(before);
   });
 
-  it('тот же transaction_id для другого товара или пользователя — ошибка, ничего не меняется', async () => {
-    const store = new MemoryStore();
-    await handleOkPayment(okParams(), ctx(store));
-    const putsAfterFirst = store.puts;
-
-    const otherSku = await handleOkPayment(okParams({ product_code: 'beta', amount: '9' }), ctx(store));
-    expect(errCode(otherSku)).toBe('1001');
-    const otherUser = await handleOkPayment(okParams({ uid: '512005303400' }), ctx(store));
-    expect(errCode(otherUser)).toBe('1001');
-    expect(store.puts).toBe(putsAfterFirst);
+  it('тот же transaction_id с другим товаром или суммой — 1001, журнал не меняется', async () => {
+    const ns = new FakeNamespace();
+    await handleOkPayment(okParams(), okCtx(ns));
+    const before = ns.allKeys();
+    expect(errCode(await handleOkPayment(okParams({ product_code: 'beta', amount: '9' }), okCtx(ns)))).toBe('1001');
+    expect(ns.allKeys()).toEqual(before);
   });
 
-  it('два разных товара одного пользователя — две независимые записи', async () => {
-    const store = new MemoryStore();
-    await handleOkPayment(okParams(), ctx(store));
-    await handleOkPayment(okParams({ transaction_id: 't-1002', product_code: 'beta', amount: '9' }), ctx(store));
-    expect((await store.keys('ok:p:512005303399:')).sort()).toEqual([
-      'ok:p:512005303399:alpha',
-      'ok:p:512005303399:beta',
-    ]);
+  it('неверная подпись или подмена суммы после подписи — 104, ничего не записано', async () => {
+    const ns = new FakeNamespace();
+    expect(errCode(await handleOkPayment(okParams({}, 'чужой'), okCtx(ns)))).toBe('104');
+    const tampered = okParams();
+    tampered.set('amount', '1');
+    expect(errCode(await handleOkPayment(tampered, okCtx(ns)))).toBe('104');
+    expect(ns.allKeys()).toEqual([]);
   });
 
-  it('неверная подпись: ошибка 104, ничего не записано', async () => {
-    const store = new MemoryStore();
-    const res = await handleOkPayment(okParams({}, 'чужой-секрет'), ctx(store));
-    expect(errCode(res)).toBe('104');
-    expect(store.puts).toBe(0);
+  it('сумма не по каталогу при верной подписи — 1001, ничего не записано', async () => {
+    const ns = new FakeNamespace();
+    expect(errCode(await handleOkPayment(okParams({ amount: '1' }), okCtx(ns)))).toBe('1001');
+    expect(ns.allKeys()).toEqual([]);
   });
 
-  it('подмена суммы после подписи: ошибка подписи', async () => {
-    const store = new MemoryStore();
-    const params = okParams();
-    params.set('amount', '1');
-    const res = await handleOkPayment(params, ctx(store));
-    expect(errCode(res)).toBe('104');
-    expect(store.puts).toBe(0);
+  it('товар без цены в ОКах и неизвестный товар — 1001', async () => {
+    const ns = new FakeNamespace();
+    expect(errCode(await handleOkPayment(okParams({ product_code: 'no_price_ok', amount: '20' }), okCtx(ns)))).toBe('1001');
+    expect(errCode(await handleOkPayment(okParams({ product_code: 'нет' }), okCtx(ns)))).toBe('1001');
+    expect(ns.allKeys()).toEqual([]);
   });
 
-  it('сумма не по каталогу, даже с верной подписью: 1001 и ничего не выдано', async () => {
-    const store = new MemoryStore();
-    // Имитация «злоумышленной» покупки за 1 ОК вместо 7 (пример из требований ОК к валидации цены).
-    const res = await handleOkPayment(okParams({ amount: '1' }), ctx(store));
-    expect(errCode(res)).toBe('1001');
-    expect(store.puts).toBe(0);
-  });
-
-  it('неизвестный товар: 1001', async () => {
-    const res = await handleOkPayment(okParams({ product_code: 'нет-такого' }), ctx());
-    expect(errCode(res)).toBe('1001');
-  });
-
-  it('товар без цены в ОКах не продаётся: 1001, а не «по голосам»', async () => {
-    const store = new MemoryStore();
-    const res = await handleOkPayment(okParams({ product_code: 'no_price_ok', amount: '20' }), ctx(store));
-    expect(errCode(res)).toBe('1001');
-    expect(store.puts).toBe(0);
-  });
-
-  it('боевой каталог пока не продаёт ничего в ОК (цены не названы)', async () => {
-    // Намеренно: это сторож «не угадывать цену». Когда владелец назовёт цены, этот тест
-    // меняется вместе с каталогом — осознанным коммитом.
-    for (const sku of Object.keys(ITEMS)) {
-      const res = await handleOkPayment(
-        okParams({ product_code: sku, amount: '20' }),
-        { secret: OK_SECRET, store: new MemoryStore(), catalog: ITEMS },
-      );
+  it('боевой каталог ничего не продаёт в ОК (цены не названы)', async () => {
+    for (const sku of Object.keys(ITEMS).filter((s) => ITEMS[s].app === 'dachnye-tainy')) {
+      const res = await handleOkPayment(okParams({ product_code: sku, amount: '20' }), okCtx(new FakeNamespace(), { catalog: ITEMS }));
       expect(errCode(res)).toBe('1001');
     }
   });
 
-  it('подписки (extra_attributes) не поддерживаются', async () => {
-    const res = await handleOkPayment(
-      okParams({ extra_attributes: '{"action":"reg_subscription"}' }),
-      ctx(),
-    );
-    expect(errCode(res)).toBe('1001');
+  it('подписки, чужой method и битые поля — 1001; отсутствующий method допустим', async () => {
+    const ns = new FakeNamespace();
+    expect(errCode(await handleOkPayment(okParams({ extra_attributes: '{"action":"reg_subscription"}' }), okCtx(ns)))).toBe('1001');
+    expect(errCode(await handleOkPayment(okParams({ method: 'users.getInfo' }), okCtx(ns)))).toBe('1001');
+    for (const [f, v] of [['uid', 'abc'], ['transaction_id', '__drop__'], ['amount', '7.5']]) {
+      expect(errCode(await handleOkPayment(okParams({ [f]: v }), okCtx(ns)))).toBe('1001');
+    }
+    expect(await (await handleOkPayment(okParams({ method: '__drop__' }), okCtx(ns))).text()).toBe('true');
   });
 
-  it('чужой method отклоняется, отсутствующий — нет', async () => {
-    expect(errCode(await handleOkPayment(okParams({ method: 'users.getInfo' }), ctx()))).toBe('1001');
-    expect(await body(await handleOkPayment(okParams({ method: '__drop__' }), ctx()))).toBe('true');
-  });
-
-  it.each([
-    ['uid', 'abc'],
-    ['uid', '__drop__'],
-    ['transaction_id', '__drop__'],
-    ['amount', '7.5'],
-    ['amount', '__drop__'],
-  ])('неверное или отсутствующее поле %s=%s: 1001', async (field, value) => {
-    const res = await handleOkPayment(okParams({ [field]: value }), ctx());
-    expect(errCode(res)).toBe('1001');
-  });
-
-  it('значения с пробелом и плюсом в transaction_time декодируются до подписи', async () => {
-    // В GET пробел приходит как «+» (PHP-кодировка); URLSearchParams декодирует так же.
-    const raw = okParams({ transaction_time: '2017-11-08 00:21:10' }).toString();
-    expect(raw).toContain('transaction_time=2017-11-08+00%3A21%3A10');
-    const res = await handleOkPayment(new URLSearchParams(raw), ctx());
-    expect(await body(res)).toBe('true');
-  });
-
-  it('нет секрета или хранилища: сервисная ошибка 2, ничего не подтверждено', async () => {
-    const noSecret = { secret: undefined, store: new MemoryStore(), catalog: CATALOG };
-    const noStore = { secret: OK_SECRET, store: undefined, catalog: CATALOG };
-    expect(errCode(await handleOkPayment(okParams(), noSecret))).toBe('2');
-    expect(errCode(await handleOkPayment(okParams(), noStore))).toBe('2');
-  });
-
-  it('сбой хранилища: ответ — ошибка 2, а не true (ОК повторит или вернёт деньги)', async () => {
-    const store = new MemoryStore();
-    store.failPuts = true;
-    const res = await handleOkPayment(okParams(), ctx(store));
+  it.each(['secret', 'appKey', 'mode', 'ledger', 'app'] as const)('без настройки %s — ошибка 2, а не true', async (field) => {
+    const res = await handleOkPayment(okParams(), okCtx(new FakeNamespace(), { [field]: undefined }));
     expect(errCode(res)).toBe('2');
-    expect(await body(res)).not.toBe('true');
-  });
-
-  it('после сбоя повтор записывает покупку и подтверждает', async () => {
-    const store = new MemoryStore();
-    store.failPuts = true;
-    await handleOkPayment(okParams(), ctx(store));
-    store.failPuts = false;
-    expect(await body(await handleOkPayment(okParams(), ctx(store)))).toBe('true');
-    expect(await store.keys('ok:p:512005303399:')).toHaveLength(1);
   });
 });
 
-describe('handleGetItem — цена для ОК', () => {
-  it('site=OK возвращает цену в ОКах', async () => {
-    const res = handleGetItem(new URLSearchParams({ item: 'alpha', site: 'OK' }), CATALOG);
-    expect(await res.json()).toEqual({ response: { item_id: 'alpha', title: 'Альфа', price: 7 } });
+// --- сбой между записями -----------------------------------------------------
+
+describe('Сбой между записями транзакции', () => {
+  it('ОК: сбой на второй записи — ответ 2, в журнале ничего (ни tx, ни покупки)', async () => {
+    const ns = new FakeNamespace();
+    ns.control.failOnPut = 2; // tx: записан в черновик, p: падает
+    const res = await handleOkPayment(okParams(), okCtx(ns));
+    expect(errCode(res)).toBe('2');
+    expect(await res.text()).not.toBe('true');
+    expect(ns.allKeys()).toEqual([]);
+    expect(await restored(await handleRestore(launch(), restoreCtx(ns)))).toEqual([]);
   });
 
-  it('site=OK без цены в ОКах — ошибка, голоса вместо ОКов не подставляются', async () => {
-    const res = handleGetItem(new URLSearchParams({ item: 'no_price_ok', site: 'OK' }), CATALOG);
-    const json = (await res.json()) as { error?: { critical: boolean }; response?: unknown };
-    expect(json.response).toBeUndefined();
-    expect(json.error?.critical).toBe(true);
+  it('ОК: повтор после сбоя записывает обе записи и подтверждает', async () => {
+    const ns = new FakeNamespace();
+    ns.control.failOnPut = 2;
+    await handleOkPayment(okParams(), okCtx(ns));
+    ns.control.failOnPut = 0;
+    expect(await (await handleOkPayment(okParams(), okCtx(ns))).text()).toBe('true');
+    expect(ns.allKeys().map((k) => k.split('/')[1])).toEqual(['p:alpha', 'tx:t-1001']);
   });
 
-  it('site=VK или без site — цена в голосах как раньше (путь ВК не тронут)', async () => {
-    for (const site of ['VK', undefined]) {
-      const p = new URLSearchParams({ item: 'alpha' });
-      if (site) p.set('site', site);
-      expect(await handleGetItem(p, CATALOG).json()).toEqual({
-        response: { item_id: 'alpha', title: 'Альфа', price: 20 },
-      });
-    }
-  });
-
-  it('боевой каталог: site=OK пока отказывает для всех товаров', async () => {
-    for (const sku of Object.keys(ITEMS)) {
-      const res = handleGetItem(new URLSearchParams({ item: sku, site: 'OK' }));
-      expect(((await res.json()) as { response?: unknown }).response).toBeUndefined();
-    }
-  });
-});
-
-describe('маршрутизация Worker', () => {
-  function env(store: MemoryStore | undefined): Env {
-    const kv = store
-      ? {
-          get: (k: string) => store.get(k),
-          put: (k: string, v: string) => store.put(k, v),
-          list: async ({ prefix }: { prefix: string }) => ({
-            keys: (await store.keys(prefix)).map((name) => ({ name })),
-            list_complete: true,
-          }),
-        }
-      : undefined;
-    return { VK_APP_SECRET: VK_SECRET, OK_APP_SECRET: OK_SECRET, PURCHASES: kv };
-  }
-
-  it('GET /ok с верной подписью отвечает true (боевой каталог → без цены ОК: ошибка)', async () => {
-    const res = await worker.fetch(new Request(`https://w.test/ok?${okParams({ product_code: 'sudoku_no_ads', amount: '20' })}`), env(new MemoryStore()));
-    expect(res.headers.get('Invocation-error')).toBe('1001');
-  });
-
-  it('POST /ok и GET в корне — 405, как раньше для не-POST', async () => {
-    expect((await worker.fetch(new Request('https://w.test/ok', { method: 'POST' }), env(undefined))).status).toBe(405);
-    expect((await worker.fetch(new Request('https://w.test/'), env(undefined))).status).toBe(405);
-  });
-
-  it('GET /ok без KV: сервисная ошибка, не true', async () => {
-    const res = await worker.fetch(new Request(`https://w.test/ok?${okParams()}`), env(undefined));
-    expect(res.headers.get('Invocation-error')).toBe('2');
-  });
-
-  it('путь ВКонтакте не тронут: POST get_item с верной подписью отдаёт цену в голосах', async () => {
-    const fields = { app_id: '1', item: 'sudoku_no_ads', notification_type: 'get_item_test', order_id: '5', user_id: '1', lang: 'ru_RU', version: '5.132' };
-    const sig = md5Sig(fields, VK_SECRET);
-    const res = await worker.fetch(
-      new Request('https://w.test/', { method: 'POST', body: new URLSearchParams({ ...fields, sig }).toString() }),
-      env(undefined),
-    );
-    expect(await res.json()).toEqual({ response: { item_id: 'sudoku_no_ads', title: 'Без рекламы', price: 20 } });
-  });
-
-  it('get_item с site=OK через Worker: ошибка, пока нет цены в ОКах', async () => {
-    const fields = { app_id: '1', item: 'sudoku_no_ads', notification_type: 'get_item', order_id: '5', user_id: '1', lang: 'ru_RU', version: '5.132', site: 'OK' };
-    const sig = md5Sig(fields, VK_SECRET);
-    const res = await worker.fetch(
-      new Request('https://w.test/', { method: 'POST', body: new URLSearchParams({ ...fields, sig }).toString() }),
-      env(undefined),
-    );
-    const json = (await res.json()) as { response?: unknown; error?: unknown };
-    expect(json.response).toBeUndefined();
-    expect(json.error).toBeDefined();
+  it('ВК: сбой на второй записи — ошибка, не подтверждение; журнал пуст', async () => {
+    const ns = new FakeNamespace();
+    ns.control.failOnPut = 2;
+    const body = (await (await handleVkOrder(vkOrder(), { app: 'dachnye-tainy', ledger: doLedger(ns), catalog: catalog() })).json()) as Record<string, unknown>;
+    expect(body.response).toBeUndefined();
+    expect(body.error).toBeDefined();
+    expect(ns.allKeys()).toEqual([]);
   });
 });
 
-describe('handleOkRestore — восстановление покупок', () => {
-  function launch(over: Record<string, string> = {}, secret = VK_SECRET): URLSearchParams {
-    const fields: Record<string, string> = {
-      vk_user_id: '512005303399',
-      vk_app_id: '54767366',
-      vk_client: 'ok',
-      vk_platform: 'desktop_web',
-      vk_language: 'ru',
-      ...over,
-    };
-    for (const key of Object.keys(fields)) if (fields[key] === '__drop__') delete fields[key];
-    const query = Object.keys(fields)
-      .sort()
-      .map((k) => `${k}=${encodeURIComponent(fields[k])}`)
-      .join('&');
-    const sign = createHmac('sha256', secret).update(query).digest('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-    return new URLSearchParams({ ...fields, sign });
-  }
+// --- test / live ------------------------------------------------------------
 
-  async function seeded(): Promise<MemoryStore> {
-    const store = new MemoryStore();
-    await handleOkPayment(okParams(), ctx(store));
-    await handleOkPayment(okParams({ transaction_id: 't-1002', product_code: 'beta', amount: '9' }), ctx(store));
-    await handleOkPayment(okParams({ uid: '512005303400', transaction_id: 't-2001' }), ctx(store));
-    return store;
-  }
-
-  it('возвращает покупки пользователя из подписанного запуска и только их', async () => {
-    const res = await handleOkRestore(launch(), { secret: VK_SECRET, store: await seeded() });
-    expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ skus: ['alpha', 'beta'] });
+describe('Разделение тестового и рабочего режимов', () => {
+  it('ОК: покупка в тестовом деплое не восстанавливается в рабочем', async () => {
+    const ns = new FakeNamespace();
+    await handleOkPayment(okParams(), okCtx(ns, { mode: 'test' }));
+    expect(await restored(await handleRestore(launch(), restoreCtx(ns, { mode: 'live' })))).toEqual([]);
+    expect(await restored(await handleRestore(launch(), restoreCtx(ns, { mode: 'test' })))).toEqual(['alpha']);
   });
 
-  it('пользователь без покупок получает пустой список', async () => {
-    const res = await handleOkRestore(launch({ vk_user_id: '777' }), { secret: VK_SECRET, store: await seeded() });
-    expect(await res.json()).toEqual({ skus: [] });
+  it('ВК: order_status_change_test попадает только в тестовый журнал', async () => {
+    const ns = new FakeNamespace();
+    const ctx = { app: 'dachnye-tainy', ledger: doLedger(ns), catalog: catalog() };
+    await handleVkOrder(vkOrder(), ctx);
+    const vkLaunch = launch({ vk_user_id: '574470572', vk_client: '__drop__' });
+    expect(await restored(await handleRestore(vkLaunch, restoreCtx(ns, { platform: 'vk', mode: 'live' })))).toEqual([]);
+    expect(await restored(await handleRestore(vkLaunch, restoreCtx(ns, { platform: 'vk', mode: 'test' })))).toEqual(['alpha']);
   });
 
-  it('подмена vk_user_id после подписи — отказ, чужие покупки не отдаются', async () => {
-    const params = launch();
-    params.set('vk_user_id', '512005303400');
-    const res = await handleOkRestore(params, { secret: VK_SECRET, store: await seeded() });
+  it('один и тот же номер транзакции в test и live — независимые записи, не конфликт', async () => {
+    const ns = new FakeNamespace();
+    const ctx = { app: 'dachnye-tainy', ledger: doLedger(ns), catalog: catalog() };
+    await handleVkOrder(vkOrder({ item: 'alpha' }), ctx);
+    const live = (await (await handleVkOrder(vkOrder({ notification_type: 'order_status_change', item: 'beta' }), ctx)).json()) as Record<string, unknown>;
+    expect(live.response).toBeDefined();
+  });
+});
+
+// --- повтор после изменения цены ---------------------------------------------
+
+describe('Повтор после изменения цены', () => {
+  it('ОК: повтор принятой транзакции подтверждается и после смены цены', async () => {
+    const ns = new FakeNamespace();
+    await handleOkPayment(okParams({ amount: '7' }), okCtx(ns, { catalog: catalog(7) }));
+    const replay = await handleOkPayment(okParams({ amount: '7' }), okCtx(ns, { catalog: catalog(8) }));
+    expect(await replay.text()).toBe('true');
+  });
+
+  it('ОК: новая транзакция по старой цене после смены — 1001', async () => {
+    const ns = new FakeNamespace();
+    await handleOkPayment(okParams({ amount: '7' }), okCtx(ns, { catalog: catalog(7) }));
+    const fresh = await handleOkPayment(okParams({ transaction_id: 't-2002', amount: '7' }), okCtx(ns, { catalog: catalog(8) }));
+    expect(errCode(fresh)).toBe('1001');
+  });
+
+  it('ВК: повтор заказа подтверждается после смены цены, новый по старой цене — ошибка', async () => {
+    const ns = new FakeNamespace();
+    const old = { app: 'dachnye-tainy', ledger: doLedger(ns), catalog: catalog() };
+    await handleVkOrder(vkOrder(), old);
+    const changed = { ...old, catalog: { ...catalog(), alpha: { ...catalog().alpha, price: 25 } } };
+    expect(((await (await handleVkOrder(vkOrder(), changed)).json()) as Record<string, unknown>).response).toBeDefined();
+    expect(((await (await handleVkOrder(vkOrder({ order_id: '999' }), changed)).json()) as Record<string, unknown>).error).toBeDefined();
+  });
+});
+
+// --- изоляция приложений ------------------------------------------------------
+
+describe('Изоляция приложений', () => {
+  it('ОК: SKU другого приложения не продаётся', async () => {
+    const ns = new FakeNamespace();
+    expect(errCode(await handleOkPayment(okParams({ product_code: 'sudoku_x' }), okCtx(ns)))).toBe('1001');
+    expect(ns.allKeys()).toEqual([]);
+  });
+
+  it('ОК: уведомление с чужим application_key отклоняется', async () => {
+    const ns = new FakeNamespace();
+    expect(errCode(await handleOkPayment(okParams({ application_key: 'OTHERAPP' }), okCtx(ns)))).toBe('1001');
+    expect(ns.allKeys()).toEqual([]);
+  });
+
+  it('ВК: SKU другого приложения — ошибка 20', async () => {
+    const ns = new FakeNamespace();
+    const body = (await (await handleVkOrder(vkOrder({ item: 'sudoku_x' }), { app: 'dachnye-tainy', ledger: doLedger(ns), catalog: catalog() })).json()) as { error?: { error_code: number } };
+    expect(body.error?.error_code).toBe(20);
+  });
+
+  it('общий журнал: покупка одного приложения не видна восстановлению другого', async () => {
+    const ns = new FakeNamespace();
+    await handleOkPayment(okParams({ product_code: 'sudoku_x' }), okCtx(ns, { app: 'sudoku' }));
+    const dt = await restored(await handleRestore(launch(), restoreCtx(ns)));
+    expect(dt).toEqual([]);
+    const su = await restored(await handleRestore(launch({ vk_app_id: '54788542' }), restoreCtx(ns, { app: 'sudoku', appId: '54788542' })));
+    expect(su).toEqual(['sudoku_x']);
+  });
+
+  it('восстановление с vk_app_id другого приложения — 403', async () => {
+    const res = await handleRestore(launch({ vk_app_id: '54788542' }), restoreCtx(new FakeNamespace()));
     expect(res.status).toBe(403);
-    expect(await res.text()).not.toContain('alpha');
+  });
+});
+
+// --- восстановление -----------------------------------------------------------
+
+describe('Восстановление', () => {
+  it('подмена vk_user_id после подписи — 403', async () => {
+    const ns = new FakeNamespace();
+    await handleOkPayment(okParams(), okCtx(ns));
+    const p = launch({ vk_user_id: '1' });
+    p.set('vk_user_id', '512005303399');
+    expect((await handleRestore(p, restoreCtx(ns))).status).toBe(403);
   });
 
-  it('неверная подпись, нет подписи, чужой ключ — отказ', async () => {
-    const store = await seeded();
-    expect((await handleOkRestore(launch({}, 'чужой'), { secret: VK_SECRET, store })).status).toBe(403);
-    const unsigned = launch();
-    unsigned.delete('sign');
-    expect((await handleOkRestore(unsigned, { secret: VK_SECRET, store })).status).toBe(403);
+  it('площадка запуска должна совпадать с маршрутом', async () => {
+    const ns = new FakeNamespace();
+    expect((await handleRestore(launch({ vk_client: 'vk' }), restoreCtx(ns, { platform: 'ok' }))).status).toBe(403);
+    expect((await handleRestore(launch(), restoreCtx(ns, { platform: 'vk' }))).status).toBe(403);
   });
 
-  it('запуск не из ОК (vk_client=vk или нет) — отказ: покупки ОК не отдаются во ВК', async () => {
-    const store = await seeded();
-    expect((await handleOkRestore(launch({ vk_client: 'vk' }), { secret: VK_SECRET, store })).status).toBe(403);
-    expect((await handleOkRestore(launch({ vk_client: '__drop__' }), { secret: VK_SECRET, store })).status).toBe(403);
+  it.each(['secret', 'ledger', 'mode', 'app', 'appId'] as const)('без настройки %s — 503', async (field) => {
+    expect((await handleRestore(launch(), restoreCtx(new FakeNamespace(), { [field]: undefined }))).status).toBe(503);
+  });
+});
+
+// --- цена для ОК в get_item ---------------------------------------------------
+
+describe('get_item для ОК', () => {
+  it('site=OK — цена в ОКах; без неё — ошибка; site=VK — голоса', async () => {
+    const c = catalog();
+    expect(await handleGetItem(new URLSearchParams({ item: 'alpha', site: 'OK' }), c).json()).toEqual({ response: { item_id: 'alpha', title: 'Альфа', price: 7 } });
+    expect(((await handleGetItem(new URLSearchParams({ item: 'no_price_ok', site: 'OK' }), c).json()) as { response?: unknown }).response).toBeUndefined();
+    expect(await handleGetItem(new URLSearchParams({ item: 'alpha', site: 'VK' }), c).json()).toEqual({ response: { item_id: 'alpha', title: 'Альфа', price: 20 } });
+  });
+});
+
+// --- маршрутизация Worker -----------------------------------------------------
+
+describe('Worker', () => {
+  function env(ns?: FakeNamespace, mode: Mode = 'test'): Env {
+    return { VK_APP_SECRET: VK_SECRET, OK_APP_SECRET: OK_SECRET, OK_APP_KEY: OK_KEY, APP_SLUG: 'dachnye-tainy', VK_APP_ID: DT_ID, PAYMENTS_MODE: mode, LEDGER: ns };
+  }
+  const post = (fields: Record<string, string>) =>
+    new Request('https://w.test/', { method: 'POST', body: new URLSearchParams({ ...fields, sig: md5Sig(fields, VK_SECRET) }).toString() });
+
+  it('ВК-заказ с журналом записывается, /vk/restore его отдаёт', async () => {
+    const ns = new FakeNamespace();
+    const fields = Object.fromEntries(vkOrder({ item: 'dachnye_tainy_no_ads' }));
+    const res = await worker.fetch(post(fields), env(ns));
+    expect(await res.json()).toEqual({ response: { order_id: 2363385, app_order_id: 2363385 } });
+    const r = await worker.fetch(new Request(`https://w.test/vk/restore?${launch({ vk_user_id: '574470572', vk_client: '__drop__' })}`), env(ns));
+    expect(await r.json()).toEqual({ skus: ['dachnye_tainy_no_ads'] });
   });
 
-  it('не настроено — 503, не пустой успех', async () => {
-    expect((await handleOkRestore(launch(), { secret: undefined, store: new MemoryStore() })).status).toBe(503);
-    expect((await handleOkRestore(launch(), { secret: VK_SECRET, store: undefined })).status).toBe(503);
+  it('без журнала ВК-заказ подтверждается по-старому (рабочий путь не сломан)', async () => {
+    const fields = Object.fromEntries(vkOrder({ item: 'dachnye_tainy_no_ads' }));
+    const res = await worker.fetch(post(fields), env(undefined));
+    expect(await res.json()).toEqual({ response: { order_id: 2363385, app_order_id: 2363385 } });
   });
 
-  it('через Worker: GET /ok/restore с CORS-заголовком', async () => {
-    const store = await seeded();
-    const kv = {
-      get: (k: string) => store.get(k),
-      put: (k: string, v: string) => store.put(k, v),
-      list: async ({ prefix }: { prefix: string }) => ({ keys: (await store.keys(prefix)).map((name) => ({ name })), list_complete: true }),
-    };
-    const res = await worker.fetch(new Request(`https://w.test/ok/restore?${launch()}`), {
-      VK_APP_SECRET: VK_SECRET,
-      OK_APP_SECRET: OK_SECRET,
-      PURCHASES: kv,
-    });
-    expect(res.headers.get('Access-Control-Allow-Origin')).toBe('*');
-    expect(await res.json()).toEqual({ skus: ['alpha', 'beta'] });
+  it('GET /ok без журнала — ошибка 2; POST /ok и GET / — 405', async () => {
+    expect((await worker.fetch(new Request(`https://w.test/ok?${okParams()}`), env(undefined))).headers.get('Invocation-error')).toBe('2');
+    expect((await worker.fetch(new Request('https://w.test/ok', { method: 'POST' }), env())).status).toBe(405);
+    expect((await worker.fetch(new Request('https://w.test/'), env())).status).toBe(405);
+  });
+
+  it('get_item ВК в боевом каталоге не изменился', async () => {
+    const fields = { app_id: DT_ID, item: 'dachnye_tainy_no_ads', notification_type: 'get_item_test', order_id: '2366069', user_id: '574470572', lang: 'ru_RU', receiver_id: '574470572' };
+    expect(await (await worker.fetch(post(fields), env())).json()).toEqual({ response: { item_id: 'dachnye_tainy_no_ads', title: 'Без рекламы', price: 20 } });
   });
 });
