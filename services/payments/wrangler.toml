@@ -8,3 +8,16 @@ compatibility_flags = ["nodejs_compat"]
 # VK_APP_SECRET — секрет из dev.vk.ru → Приложение → Платежи → Подключение,
 # заводится командой `npx wrangler secret put VK_APP_SECRET`, не хранится
 # в этом файле и не коммитится никуда.
+
+# --- Одноклассники (маршруты /ok и /ok/restore) -----------------------------
+# НЕ развёрнуто и не включено. Для работы маршрутов нужно (по решению владельца,
+# после ревью Codex):
+#   1) секрет подписи уведомлений ОК: `npx wrangler secret put OK_APP_SECRET`
+#      (какое поле кабинета это ключ — неизвестно, см. docs/ok-dachnye-tainy-payments-2026-10.md);
+#   2) хранилище учтённых покупок — KV-пространство с привязкой PURCHASES:
+#        npx wrangler kv namespace create PURCHASES   # печатает id
+#      и раскомментировать блок ниже, подставив напечатанный id;
+#   3) цены в ОКах (`priceOk`) у товаров в src/index.ts — их называет владелец.
+# [[kv_namespaces]]
+# binding = "PURCHASES"
+# id = "<id из команды выше>"

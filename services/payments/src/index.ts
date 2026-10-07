@@ -20,17 +20,34 @@
  * не начисляет сам.
  */
 
-import { createHash } from 'node:crypto';
+import { handleOkPayment, handleOkRestore, kvStore } from './ok';
+import type { KvLike, PurchaseStore } from './ok';
+import { verifySignature } from './signature';
+
+export { verifySignature };
 
 export interface Env {
   /** Защищённый ключ приложения из dev.vk.ru → Платежи → Подключение. Секрет Worker'а, не в коде. */
   VK_APP_SECRET: string;
+  /**
+   * Секрет подписи GET-уведомлений Одноклассников. Какое поле кабинета это
+   * ключ, неизвестно (см. docs/ok-dachnye-tainy-payments-2026-10.md) — не
+   * угадываем, пока нет подтверждения. Без него маршрут /ok отвечает ошибкой.
+   */
+  OK_APP_SECRET?: string;
+  /** Cloudflare KV с учтёнными покупками ОК (привязка PURCHASES, см. wrangler.toml). */
+  PURCHASES?: KvLike;
 }
 
 export interface ShopItem {
   title: string;
   /** Цена в голосах VK — целое число. */
   price: number;
+  /**
+   * Цена в ОКах для Одноклассников. НЕ задана ни у одного товара: курс/цены
+   * ОК владелец не назвал, угадывать нельзя. Без неё в ОК товар не продаётся.
+   */
+  priceOk?: number;
 }
 
 /**
@@ -61,32 +78,27 @@ function errorResponse(error_code: number, error_msg: string, critical: boolean)
   return json({ error: { error_code, error_msg, critical } });
 }
 
-/**
- * Проверка подписи — буквально по разделу «Подпись параметров»: раскодировать
- * (URLSearchParams уже делает это при разборе тела запроса), отсортировать
- * пары параметр=значение кроме sig по имени параметра, склеить без
- * разделителя, добавить секретный ключ, посчитать MD5, сравнить с sig.
- */
-export function verifySignature(params: URLSearchParams, secret: string): boolean {
-  const sig = params.get('sig');
-  if (!sig) return false;
-
-  const pairs = [...params.entries()]
-    .filter(([key]) => key !== 'sig')
-    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
-    .map(([key, value]) => `${key}=${value}`)
-    .join('');
-
-  const computed = createHash('md5').update(pairs + secret).digest('hex');
-  return computed === sig;
-}
-
-export function handleGetItem(params: URLSearchParams): Response {
+export function handleGetItem(params: URLSearchParams, catalog: Record<string, ShopItem> = ITEMS): Response {
   const itemId = params.get('item');
-  const item = itemId ? ITEMS[itemId] : undefined;
+  const item = itemId && Object.prototype.hasOwnProperty.call(catalog, itemId) ? catalog[itemId] : undefined;
 
   if (!item) {
     return errorResponse(20, 'Товара не существует.', true);
+  }
+
+  // site=OK — покупка в Одноклассниках: цена должна быть в ОКах. Своей цены в ОКах
+  // нет, пока её не назвал владелец, поэтому вместо голосов не подставляем ничего.
+  if (params.get('site') === 'OK') {
+    if (item.priceOk === undefined) {
+      return errorResponse(11, 'Цена в ОКах для товара не задана.', true);
+    }
+    return json({
+      response: {
+        item_id: itemId,
+        title: item.title,
+        price: item.priceOk,
+      },
+    });
   }
 
   return json({
@@ -121,6 +133,22 @@ export function handleOrderStatusChange(params: URLSearchParams): Response {
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
+    const url = new URL(request.url);
+
+    // Одноклассники: подтверждение покупки (GET) и восстановление. Адрес /ok
+    // указывается в «URL для платёжных уведомлений Одноклассников» — он должен
+    // отличаться от адреса ВКонтакте (требование документации).
+    if (url.pathname === '/ok' || url.pathname === '/ok/restore') {
+      if (request.method !== 'GET') {
+        return new Response('Method not allowed', { status: 405 });
+      }
+      const store: PurchaseStore | undefined = env.PURCHASES ? kvStore(env.PURCHASES) : undefined;
+      if (url.pathname === '/ok') {
+        return handleOkPayment(url.searchParams, { secret: env.OK_APP_SECRET, store, catalog: ITEMS });
+      }
+      return handleOkRestore(url.searchParams, { secret: env.VK_APP_SECRET, store });
+    }
+
     if (request.method !== 'POST') {
       return new Response('Method not allowed', { status: 405 });
     }
