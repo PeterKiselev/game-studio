@@ -2,7 +2,7 @@ import { GameApp } from '@studio/game-kit';
 import { sudoku } from '@studio/rules';
 import { el, toast } from '@studio/ui';
 import { renderSudokuGrid } from './grid';
-import { diagEnabled, installDiag } from './diag';
+import { installDiag } from './diag';
 import { ACHIEVEMENT_IDS, checkNewAchievements, starsFor } from './achievements';
 import { ACADEMY_LESSONS, nextLesson, prepareAcademyLesson } from './academy';
 import { detectLocale, setLocale, t } from './i18n';
@@ -81,12 +81,7 @@ async function main(): Promise<void> {
     gameId: 'sudoku',
     saveVersion: 1,
     defaults: DEFAULTS,
-    // С diag=1 (проверка рекламы на настоящем VK) реклама между партиями не ждёт
-    // двух партий и трёх минут — иначе проверка занимает полчаса. Без флага
-    // политика прежняя.
-    adPolicy: diagEnabled()
-      ? { firstAdAfterSeconds: 0, firstAdAfterRounds: 1, minSecondsBetween: 0 }
-      : { firstAdAfterRounds: 2, minSecondsBetween: 180 },
+    adPolicy: { firstAdAfterRounds: 2, minSecondsBetween: 180 },
   });
   installDiag(app.platform);
 
@@ -205,8 +200,7 @@ function showMenu(): void {
   // VK не находил его, потому что он оказывался ниже экрана телефона. Кнопка
   // по-прежнему только если площадка реально умеет платежи (правило 2 из
   // CLAUDE.md: скрываем, а не показываем мёртвую кнопку) — в ОК
-  // (где страница apiok.ru/apps/vk перечисляет VKWebAppShowOrderBox как «Не
-  // поддерживается») caps.payments выключен адаптером.
+  // caps.payments временно выключен адаптером (причина — в комментарии там же).
   const menuHead = el('div', { class: 'menu-head' }, el('h1', {}, t().appTitle));
   if (app.platform.caps.payments) {
     const shopBtn = el('button', { class: 'btn shop-btn', type: 'button' }, t().menu.shop) as HTMLButtonElement;
