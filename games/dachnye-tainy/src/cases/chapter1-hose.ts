@@ -39,13 +39,13 @@ export const chapter1HoseCase: Case = {
     },
     {
       id: 'время',
-      title: 'У бака',
+      title: 'Время у бака',
       values: ['6:00', '7:00', '8:00', '9:00'],
       ordered: true,
     },
     {
       id: 'ноша',
-      title: 'Что несли',
+      title: 'Что принесли',
       values: ['ведро', 'лейка', 'канистра', 'шланг'],
     },
   ],

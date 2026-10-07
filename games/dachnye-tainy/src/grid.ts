@@ -28,6 +28,12 @@ export function renderPairGrid(
   marks: PlayerMarks,
   onChange: (a: Ref, b: Ref, next: MarkValue | null) => void,
   hintedKey: string | null,
+  /**
+   * answer — таблица с якорем (обычно персонажами): по ней засчитывается раскрытие.
+   * helper — пара двух других категорий: её содержимое следует из таблиц ответа,
+   * она для рассуждений и заполнять её не обязательно.
+   */
+  role: 'answer' | 'helper' = 'answer',
 ): GridHandle {
   const table = el('div', { class: 'grid-table' });
   table.style.gridTemplateColumns = `auto repeat(${colCat.values.length}, 34px)`;
@@ -72,8 +78,11 @@ export function renderPairGrid(
 
   const root = el(
     'div',
-    { class: 'grid-block' },
-    el('div', { class: 'label' }, `${rowCat.title} × ${colCat.title}`),
+    { class: `grid-block ${role}` },
+    el('div', { class: 'label' }, `${rowCat.title} — ${colCat.title}`),
+    ...(role === 'helper'
+      ? [el('div', { class: 'grid-note' }, 'Вспомогательная таблица — для рассуждений, заполнять её не обязательно.')]
+      : []),
     table,
   );
 

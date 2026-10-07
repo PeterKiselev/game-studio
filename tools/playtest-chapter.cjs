@@ -48,11 +48,14 @@ async function openChapterCase(page) {
   await page.waitForSelector('.case');
 }
 
-/** Верные пары решения: соседи × время, соседи × ноша, время × ноша. */
+/**
+ * Верные пары только таблиц ответа (соседи — время, соседи — вещь). Вспомогательную
+ * таблицу «время — вещь» намеренно не трогаем: раскрытие засчитывается без неё, и
+ * игра об этом прямо говорит.
+ */
 const SOLUTION_YES = [
   ['Зоя', '7:00'], ['Игорь', '6:00'], ['Настя', '8:00'], ['Рома', '9:00'],
   ['Зоя', 'ведро'], ['Игорь', 'канистра'], ['Настя', 'лейка'], ['Рома', 'шланг'],
-  ['7:00', 'ведро'], ['6:00', 'канистра'], ['8:00', 'лейка'], ['9:00', 'шланг'],
 ];
 
 /** Клик до состояния «да»; клетка ищется в любом порядке строка/столбец. */
@@ -154,13 +157,27 @@ async function geometry(page, pairs) {
     assert((await page.locator('.case-intro').innerText()).includes('Кто принёс шланг?'), 'вступление с вопросом дела на экране');
     assert((await page.locator('.clues-title').innerText()).trim() === 'Факты', 'улики подписаны как факты');
     assert((await page.locator('.clues .clue').count()) === 7, 'семь фактов');
+    const labels = (await page.locator('.grid-block .label').allInnerTexts()).map((t) => t.trim().toLowerCase());
+    assert(
+      JSON.stringify(labels) === JSON.stringify(['соседи — время у бака', 'соседи — что принесли', 'время у бака — что принесли']),
+      `таблицы названы понятно и в порядке «ответ, ответ, вспомогательная»: ${labels.join(' | ')}`,
+    );
+    assert((await page.locator('.grids-goal').innerText()).includes('двух верхних таблицах'), 'над таблицами сказано, что нужно для раскрытия');
+    assert((await page.locator('.grid-block.helper .grid-note').innerText()).includes('не обязательно'), 'третья таблица помечена как вспомогательная');
+    assert((await page.locator('.grid-block.answer .grid-note').count()) === 0, 'у таблиц ответа такой пометки нет');
+
     // Подсказка показывает шаг рассуждения (отметку ставит игрок) — проверяем,
     // что первый шаг объясняется фактом, а не раскрывает ответ.
     await page.locator('.hint-btn').click();
     const hintText = await page.locator('.hint-text').innerText();
     assert(hintText.length > 20 && !/Рома.*шланг|шланг.*Рома/.test(hintText), 'первая подсказка объясняет шаг, не выдавая ответ');
+    assert((await page.locator('.grid-block.helper .cell.yes').count()) === 0, 'вспомогательная таблица пуста до раскрытия');
     await solve(page);
     assert((await page.locator('.reveal-text').innerText()).includes('Шланг принёс Рома'), 'развязка совпадает с решением');
+    const head = (await page.locator('.case-file-head').innerText()).toLowerCase();
+    assert(head.includes('соседи') && head.includes('время у бака') && head.includes('что принесли'), `итог с заголовками «сосед — время — вещь»: ${head.replace(/\s+/g, ' ')}`);
+    const rows = await page.locator('.case-file-row:not(.case-file-head)').allInnerTexts();
+    assert(rows.length === 4 && rows.some((r) => /Рома[\s\S]*9:00[\s\S]*шланг/.test(r)), 'в итоге каждый сосед со своим временем и вещью');
     const finding = page.locator('.finding');
     assert(await finding.isVisible(), 'находка показана на развязке');
     assert((await finding.innerText()).includes('Склад правления'), 'находка — бирка склада правления');

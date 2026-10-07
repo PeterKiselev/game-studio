@@ -355,18 +355,37 @@ async function startCase(source: Case): Promise<void> {
   const gridsBox = el('div', { class: 'grids-stack' });
   const grids: Array<ReturnType<typeof renderPairGrid>> = [];
 
+  // Сначала таблицы ответа (пары с якорем), затем вспомогательные: раскрытие
+  // засчитывается по таблицам ответа (requiredYes), и они должны идти первыми.
+  const pairs: Array<[number, number]> = [];
   for (let i = 0; i < source.categories.length; i += 1) {
-    for (let j = i + 1; j < source.categories.length; j += 1) {
-      const handle = renderPairGrid(
-        source.categories[i],
-        source.categories[j],
-        marks,
-        onCellChange,
-        hintedKey,
-      );
-      grids.push(handle);
-      gridsBox.append(handle.root);
-    }
+    for (let j = i + 1; j < source.categories.length; j += 1) pairs.push([i, j]);
+  }
+  const isAnswer = ([i, j]: [number, number]): boolean =>
+    source.categories[i].id === source.anchor || source.categories[j].id === source.anchor;
+  pairs.sort((p, q) => Number(isAnswer(q)) - Number(isAnswer(p)));
+
+  const answerCount = pairs.filter(isAnswer).length;
+  gridsBox.append(
+    el(
+      'div',
+      { class: 'grids-goal' },
+      `Цель: в ${answerCount === 2 ? 'двух верхних таблицах' : `${answerCount} верхних таблицах`} ` +
+        'поставьте по одной ✓ в каждой строке. Когда всё верно, дело раскроется само.',
+    ),
+  );
+
+  for (const [i, j] of pairs) {
+    const handle = renderPairGrid(
+      source.categories[i],
+      source.categories[j],
+      marks,
+      onCellChange,
+      hintedKey,
+      isAnswer([i, j]) ? 'answer' : 'helper',
+    );
+    grids.push(handle);
+    gridsBox.append(handle.root);
   }
 
   // Длинное вступление и факты на маленьком экране уводят сетки за первый
@@ -678,6 +697,16 @@ function caseFileSummary(source: Case, solution: Solution): HTMLElement {
   const box = el('div', { class: 'case-file' });
   const anchorCat = source.categories.find((c) => c.id === source.anchor)!;
   const others = source.categories.filter((c) => c.id !== source.anchor);
+
+  // Итог раскрытия с заголовками: «Соседи — Время у бака — Что принесли».
+  box.append(
+    el(
+      'div',
+      { class: 'case-file-row case-file-head' },
+      el('b', {}, anchorCat.title),
+      el('span', {}, others.map((cat) => cat.title).join(' · ')),
+    ),
+  );
 
   anchorCat.values.forEach((name, subject) => {
     const parts = others.map((cat) => cat.values[solution[cat.id][subject]]);
