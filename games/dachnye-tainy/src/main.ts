@@ -1,9 +1,10 @@
 import { GameApp } from '@studio/game-kit';
 import { markKey, nextHint, uniqueSolution } from '@studio/rules';
-import type { Case, PlayerMarks, Ref, Solution } from '@studio/rules';
+import type { Case, Contradiction, PlayerMarks, Ref, Solution } from '@studio/rules';
 import { dialog, el, toast } from '@studio/ui';
 import { renderPairGrid } from './grid';
-import { PLOT_CASE_IDS, cases, tutorialCase } from './cases';
+import { CASE_REQUIRES, PLOT_CASE_IDS, cases, nextChapterCase, tutorialCase } from './cases';
+import { factsAbout, testimonyHolds } from './contradiction';
 import { ACHIEVEMENTS, checkNewAchievements, starsFor } from './achievements';
 import { SHOP_ITEMS, SKU_NO_ADS, SKU_UNLIMITED_HINTS, buyLabel, votes } from './shop';
 import type { ShopItem } from './shop';
@@ -22,7 +23,7 @@ interface Save {
    * перезаписаться. Теперь у каждого дела свой ключ, и они не мешают
    * друг другу.
    */
-  progress: Record<string, { marks: PlayerMarks; hintsUsed: number }>;
+  progress: Record<string, CaseProgress>;
   /** Обучение цели и жесту ✓/✕ показано один раз, не перед каждым делом. */
   onboardingSeen?: boolean;
   /**
@@ -36,6 +37,18 @@ interface Save {
   achievements: string[];
   /** Разовые покупки, per-SKU. VK payments — см. showShop(). */
   purchases: { noAds?: boolean; unlimitedHints?: boolean };
+}
+
+interface CaseProgress {
+  marks: PlayerMarks;
+  hintsUsed: number;
+  /**
+   * Таблицы решены, но шаг «противоречие» ещё не пройден. Дело не раскрыто,
+   * пока не найдено противоречие: вернувшись, игрок попадает сразу на этот шаг,
+   * а не к пустым или повторно заполняемым таблицам. Поле необязательное —
+   * старые сохранения читаются без миграции.
+   */
+  gridSolved?: boolean;
 }
 
 interface SaveV1 {
@@ -201,18 +214,22 @@ function showPlot(): void {
   for (const c of cases) {
     const done = s.casesCompleted.includes(c.id);
     const earned = s.stars[c.id];
+    // Дело главы без раскрытого предыдущего не имеет своего вопроса — карточка
+    // видна (глава продолжается), но заперта и говорит, что открыть сначала.
+    const required = CASE_REQUIRES[c.id];
+    const locked = !!required && !s.casesCompleted.includes(required);
+    const requiredCase = cases.find((x) => x.id === required);
+    let status = 'Ждёт расследования';
+    if (done) status = `Раскрыто · ${'⭐'.repeat(earned ?? 0)}`;
+    else if (locked && requiredCase) status = `Сначала раскройте «${shortTitle(requiredCase)}»`;
+    else if (s.progress[c.id]?.gridSolved) status = 'Таблицы готовы — осталось сверить показания';
     const card = el(
       'button',
-      { class: 'case-card', type: 'button' },
-      el('div', { class: 'stamp' }, done ? '✓' : '?'),
-      el(
-        'div',
-        { class: 'text' },
-        el('b', {}, c.title),
-        el('span', {}, done ? `Раскрыто · ${'⭐'.repeat(earned ?? 0)}` : 'Ждёт расследования'),
-      ),
+      { class: `case-card${locked ? ' locked' : ''}`, type: 'button', disabled: locked },
+      el('div', { class: 'stamp' }, done ? '✓' : locked ? '🔒' : '?'),
+      el('div', { class: 'text' }, el('b', {}, c.title), el('span', {}, status)),
     ) as HTMLButtonElement;
-    card.addEventListener('click', () => void startCase(c));
+    if (!locked) card.addEventListener('click', () => void startCase(c));
     cardsBox.append(card);
   }
 
@@ -325,6 +342,10 @@ async function startCase(source: Case): Promise<void> {
   );
 
   const saved = app.save.data.progress[source.id];
+  if (saved?.gridSolved && source.contradiction) {
+    showContradiction(source, source.contradiction, solution, saved.hintsUsed, false);
+    return;
+  }
   const marks: PlayerMarks = saved ? { ...saved.marks } : {};
   let hintedKey: string | null = null;
   let markCount = Object.keys(marks).length;
@@ -345,12 +366,13 @@ async function startCase(source: Case): Promise<void> {
   }
 
   const cluesBox = el('div', { class: 'clues' });
-  // У дел главы улики — проверенные факты; спорные показания (с дела 2)
-  // пойдут отдельным блоком, чтобы ложь не читалась как правило головоломки.
+  // У дел главы улики — проверенные факты; спорные показания идут отдельным
+  // блоком ниже, чтобы ложь не читалась как правило головоломки.
   if (source.intro) cluesBox.append(el('div', { class: 'clues-title' }, 'Факты'));
   for (const clue of source.clues) {
     cluesBox.append(el('div', { class: 'clue' }, el('b', {}, '•'), el('span', {}, clue.text)));
   }
+  const testimoniesBox = source.contradiction ? testimoniesBlock(source.contradiction) : null;
 
   const gridsBox = el('div', { class: 'grids-stack' });
   const grids: Array<ReturnType<typeof renderPairGrid>> = [];
@@ -371,7 +393,10 @@ async function startCase(source: Case): Promise<void> {
       'div',
       { class: 'grids-goal' },
       `Цель: в ${answerCount === 2 ? 'двух верхних таблицах' : `${answerCount} верхних таблицах`} ` +
-        'поставьте по одной ✓ в каждой строке. Когда всё верно, дело раскроется само.',
+        'поставьте по одной ✓ в каждой строке. ' +
+        (source.contradiction
+          ? 'Когда всё верно, останется сверить показания с таблицами.'
+          : 'Когда всё верно, дело раскроется само.'),
     ),
   );
 
@@ -417,6 +442,7 @@ async function startCase(source: Case): Promise<void> {
       { class: 'case-scroll' },
       ...(source.intro ? [el('div', { class: 'case-intro' }, source.intro), toGridsBtn] : []),
       cluesBox,
+      ...(testimoniesBox ? [testimoniesBox] : []),
       gridsBox,
     ),
     hintBar,
@@ -564,6 +590,19 @@ async function startCase(source: Case): Promise<void> {
       if (value === 'yes' && !groundTruthYes.has(key)) return;
     }
     solved = true;
+    const step = source.contradiction;
+    if (step) {
+      // Таблицы решены, но дело — ещё нет: впереди сверка показаний. Отметки
+      // сохраняем вместе с флагом, чтобы вернуться прямо к этому шагу.
+      app.save.data.progress[source.id] = { marks: { ...marks }, hintsUsed, gridSolved: true };
+      app.save.markDirty();
+      app.track('case_grid_solved', { caseId: source.id, hintsUsed, markCount });
+      setTimeout(() => {
+        if (left) return;
+        showContradiction(source, step, solution, hintsUsed, hadMistake);
+      }, 500);
+      return;
+    }
     delete app.save.data.progress[source.id]; // дело раскрыто — возобновлять нечего
     app.save.markDirty();
     app.track('case_complete', { caseId: source.id, hintsUsed, markCount });
@@ -581,7 +620,8 @@ async function startCase(source: Case): Promise<void> {
       // Раунд засчитывается для политики рекламы только при настоящем
       // завершении. Ушёл на середине — гейм-плей стопаем и сохраняем,
       // но это не партия, и в счётчик показов она попадать не должна.
-      void (solved ? app.endRound() : app.abandonRound());
+      // У дела с шагом «противоречие» решённые таблицы — ещё не конец партии.
+      void (solved && !source.contradiction ? app.endRound() : app.abandonRound());
       showPlot();
     });
     return btn;
@@ -607,6 +647,97 @@ function buildGroundTruthYes(source: Case, solution: Solution): Set<string> {
   return yes;
 }
 
+// --- экран 2б: противоречие в показаниях ---------------------------------------
+
+/** Показания отдельно от фактов: подписаны как слова, которые ещё нужно проверить. */
+function testimoniesBlock(step: Contradiction): HTMLElement {
+  const box = el(
+    'div',
+    { class: 'testimonies' },
+    el('div', { class: 'testimonies-title' }, 'Показания — проверьте по фактам'),
+    el(
+      'div',
+      { class: 'testimonies-note' },
+      'Это слова соседей, а не факты. Для таблиц они не нужны, и кто-то из соседей говорит неправду.',
+    ),
+  );
+  for (const t of step.testimonies) {
+    box.append(el('div', { class: 'testimony' }, el('b', {}, t.who.value), el('span', {}, t.text)));
+  }
+  return box;
+}
+
+/**
+ * После таблиц игрок выбирает, чьи слова расходятся с фактами. Ответ
+ * сверяется с решением сетки (testimonyHolds), а не с пометкой автора.
+ * Неверный выбор — не проигрыш: игра показывает, что о человеке установили
+ * таблицы, и предлагает подумать ещё. Подсказок здесь нет — итог таблиц
+ * на экране и объяснение после ответа и есть помощь.
+ */
+function showContradiction(
+  source: Case,
+  step: Contradiction,
+  solution: Solution,
+  hintsUsed: number,
+  hadMistake: boolean,
+): void {
+  let wrong = 0;
+  const feedback = el('div', { class: 'step-feedback', hidden: true });
+  const options = el('div', { class: 'step-options' });
+
+  for (const t of step.testimonies) {
+    const btn = el('button', { class: 'btn ghost', type: 'button' }, t.who.value) as HTMLButtonElement;
+    btn.addEventListener('click', () => {
+      const correct = !testimonyHolds(source, solution, t);
+      app.track('chapter_step', { caseId: source.id, step: 'contradiction', correct });
+      feedback.hidden = false;
+      if (!correct) {
+        wrong += 1;
+        btn.disabled = true;
+        feedback.className = 'step-feedback';
+        feedback.textContent =
+          `${t.who.value}: ${t.text} Это сходится с фактами. По таблицам: ${t.who.value} — ${factsAbout(source, solution, t)}. ` +
+          'Сверьте остальные показания.';
+        return;
+      }
+      for (const b of options.querySelectorAll('button')) b.disabled = true;
+      btn.classList.add('chosen');
+      feedback.className = 'step-feedback correct';
+      feedback.textContent = `Верно. ${step.resolution}`;
+      app.track('case_complete', { caseId: source.id, hintsUsed, wrongAnswers: wrong });
+      const next = el('button', { class: 'btn primary', type: 'button' }, 'К развязке') as HTMLButtonElement;
+      next.addEventListener('click', () => void finishCase(source, solution, hintsUsed, hadMistake));
+      feedback.append(el('div', { class: 'step-next' }, next));
+      next.scrollIntoView({ block: 'nearest' });
+    });
+    options.append(btn);
+  }
+
+  const back = el('button', { class: 'btn ghost', type: 'button' }, 'Участок') as HTMLButtonElement;
+  back.addEventListener('click', () => {
+    app.track('case_exit', { caseId: source.id, solved: false, step: 'contradiction' });
+    void app.abandonRound();
+    showPlot();
+  });
+
+  const screen = el(
+    'div',
+    { class: 'screen case step' },
+    el('div', { class: 'topbar' }, el('span', { class: 'title' }, source.title), el('span', { class: 'spacer' }), back),
+    el(
+      'div',
+      { class: 'case-scroll' },
+      el('div', { class: 'step-title' }, 'Что установили таблицы'),
+      caseFileSummary(source, solution),
+      testimoniesBlock(step),
+      el('div', { class: 'step-question' }, step.question),
+      options,
+      feedback,
+    ),
+  );
+  root.replaceChildren(screen);
+}
+
 // --- экран 3: развязка --------------------------------------------------------
 
 async function finishCase(
@@ -618,6 +749,12 @@ async function finishCase(
   const s = app.save.data;
   const isNew = !s.casesCompleted.includes(source.id);
   let newAchievements: ReturnType<typeof checkNewAchievements> = [];
+
+  // У дела с шагом «противоречие» отметки хранились до верного ответа.
+  if (s.progress[source.id]) {
+    delete s.progress[source.id];
+    app.save.markDirty();
+  }
 
   if (isNew) {
     s.casesCompleted.push(source.id);
@@ -648,6 +785,7 @@ async function finishCase(
     caseFileSummary(source, solution),
     el('div', { class: 'reveal-text' }, source.epilogue),
   ];
+  const nextCase = nextChapterCase(source.id);
   if (source.finding) {
     children.push(
       el(
@@ -655,7 +793,7 @@ async function finishCase(
         { class: 'finding' },
         el('b', {}, `🔎 ${source.finding.title}`),
         el('p', {}, source.finding.text),
-        el('span', { class: 'finding-next' }, 'Продолжение следует.'),
+        el('span', { class: 'finding-next' }, nextCase ? `Дальше — дело «${shortTitle(nextCase)}».` : 'Продолжение следует.'),
       ),
     );
   }
@@ -674,7 +812,7 @@ async function finishCase(
     }
   }
 
-  children.push(continueButton());
+  children.push(continueButton(source, nextCase));
 
   const screen = el('div', { class: 'screen reveal' }, ...children);
   root.replaceChildren(screen);
@@ -828,14 +966,36 @@ async function buy(item: ShopItem, btn: HTMLButtonElement): Promise<void> {
   }
 }
 
-function continueButton(): HTMLElement {
+/** «Шланг у водокачки» вместо «Глава 1. Шланг у водокачки» — для ссылок на дело в тексте. */
+function shortTitle(c: Case): string {
+  return c.title.replace(/^Глава \d+\.\s*/, '');
+}
+
+/**
+ * У дела главы с продолжением главная кнопка ведёт сразу в следующее дело:
+ * глава проверяет, хочется ли узнать, что дальше, — и путь туда не должен
+ * идти через участок. Участок остаётся второй кнопкой.
+ */
+function continueButton(source: Case, nextCase?: Case): HTMLElement {
   const wrap = el('div', { class: 'controls' });
-  const btn = el('button', { class: 'btn primary', type: 'button' }, 'Вернуться на участок') as HTMLButtonElement;
+  const btn = el(
+    'button',
+    { class: `btn ${nextCase ? 'ghost' : 'primary'}`, type: 'button' },
+    nextCase ? 'Участок' : 'Вернуться на участок',
+  ) as HTMLButtonElement;
   btn.addEventListener('click', () => {
     app.track('app_exit_to_plot');
     showPlot();
   });
   wrap.append(btn);
+  if (nextCase) {
+    const next = el('button', { class: 'btn primary next-case', type: 'button' }, 'Следующее дело →') as HTMLButtonElement;
+    next.addEventListener('click', () => {
+      app.track('next_case', { from: source.id, to: nextCase.id });
+      void startCase(nextCase);
+    });
+    wrap.append(next);
+  }
   return wrap;
 }
 

@@ -1,10 +1,13 @@
 /**
- * Глава 1 «Тихая вода», дело 1 «Шланг у водокачки» — в настоящем браузере.
+ * Глава 1 «Тихая вода», дела 1 «Шланг у водокачки» и 2 «Чей ключ» — в настоящем браузере.
  *
  * Что проверяем: старые сохранения (v3 и v1) загружаются, шесть прежних дел и
  * покупки на месте, новое дело появляется седьмым; дело проходится подсказками
  * до развязки с находкой; вступление, факты, сетки и развязка не ломают вёрстку
  * на телефоне и на десктопе (геометрия, а не только отсутствие прокрутки).
+ * Дело 2: заперто до раскрытия дела 1, открывается кнопкой с развязки дела 1,
+ * показания отдельно от фактов, шаг «противоречие» (неверный ответ объясняется,
+ * прогресс шага переживает перезагрузку), развязка с находкой.
  *
  * Запуск: node tools/playtest-chapter.cjs <url-web-сборки>
  */
@@ -13,7 +16,7 @@ const { chromium } = require('playwright');
 const BASE = process.argv[2] || 'http://127.0.0.1:4175/';
 const KEY = 'studio:dachnye-tainy';
 const OLD_SIX = ['tutorial-1', 'second-1', 'third-1', 'fourth-1', 'fifth-1', 'sixth-1'];
-const TITLE = /Шланг у водокачки/;
+const TITLE = /Глава 1\. Шланг у водокачки/;
 
 function assert(cond, message) {
   if (!cond) throw new Error('ПРОВАЛ: ' + message);
@@ -65,19 +68,38 @@ async function clickYes(page, a, b) {
   for (let attempt = 0; attempt < 3; attempt += 1) {
     // Дело раскрывается, как только сетка однозначна, и через ~0,5 с экран
     // сменяется развязкой — клик может застать клетку уже отсоединённой.
-    if ((await page.locator('.reveal').count()) > 0 || (await cell.count()) === 0) return;
+    if ((await page.locator('.reveal, .step').count()) > 0 || (await cell.count()) === 0) return;
     if (await cell.evaluate((el) => el.classList.contains('yes')).catch(() => true)) return;
     await cell.click({ timeout: 2000 }).catch(() => {});
   }
 }
 
-async function solve(page) {
-  for (const [a, b] of SOLUTION_YES) {
-    if ((await page.locator('.reveal').count()) > 0) return;
+async function solve(page, pairs = SOLUTION_YES, doneSel = '.reveal') {
+  for (const [a, b] of pairs) {
+    if ((await page.locator(doneSel).count()) > 0) return;
     await clickYes(page, a, b);
   }
-  await page.waitForSelector('.reveal', { timeout: 5000 });
+  await page.waitForSelector(doneSel, { timeout: 5000 });
 }
+
+/** Дело 2: таблицы ответа «соседи — где в 20:00» и «соседи — чем подтверждено». */
+const KEY_SOLUTION_YES = [
+  ['Геннадий Ильич', 'правление'], ['Игорь', 'баня'], ['Настя', 'речка'], ['Рома', 'склад'],
+  ['Геннадий Ильич', 'журнал склада'], ['Игорь', 'сосед'], ['Настя', 'чек магазина'], ['Рома', 'видео Насти'],
+];
+const KEY_TITLE = /Чей ключ/;
+const HOSE_DONE = {
+  v: 3,
+  t: Date.now(),
+  data: { casesCompleted: ['ch1-hose'], progress: {}, stars: { 'ch1-hose': 3 }, achievements: ['first_case'], purchases: {}, onboardingSeen: true },
+};
+
+async function openKeyCase(page) {
+  await page.getByRole('button', { name: KEY_TITLE }).click();
+  await page.waitForSelector('.case');
+}
+
+const saveOf = (page) => page.evaluate((k) => JSON.parse(localStorage.getItem(k)), KEY);
 
 /** Пары блоков, которые не должны пересекаться, и выход за ширину окна. */
 async function geometry(page, pairs) {
@@ -123,11 +145,13 @@ async function geometry(page, pairs) {
     };
     const { context, page } = await openWithSave(browser, v3);
     const cards = page.locator('.case-card');
-    assert((await cards.count()) === 7, 'на участке семь дел');
+    assert((await cards.count()) === 8, 'на участке восемь дел');
     for (let i = 0; i < 6; i += 1) {
       assert((await cards.nth(i).innerText()).includes('Раскрыто'), `прежнее дело ${i + 1} осталось раскрытым`);
     }
     assert((await cards.nth(6).innerText()).includes('Ждёт расследования'), 'новое дело седьмым и ждёт расследования');
+    assert((await cards.nth(7).innerText()).includes('Сначала раскройте «Шланг у водокачки»'), 'дело 2 восьмым и заперто до дела 1');
+    assert(await cards.nth(7).isDisabled(), 'запертую карточку нельзя нажать');
     const saved = await page.evaluate((k) => JSON.parse(localStorage.getItem(k)), KEY);
     assert(saved.data.purchases.noAds === true, 'покупка «Без рекламы» сохранилась');
     assert(saved.data.achievements.includes('all_cases'), 'полученное достижение «Все тайны участка» не отозвано');
@@ -144,7 +168,7 @@ async function geometry(page, pairs) {
     };
     const { context, page } = await openWithSave(browser, v1);
     const cards = page.locator('.case-card');
-    assert((await cards.count()) === 7, 'семь дел после миграции v1');
+    assert((await cards.count()) === 8, 'восемь дел после миграции v1');
     assert((await cards.nth(1).innerText()).includes('Раскрыто'), 'раскрытые в v1 дела остались раскрытыми');
     assert(page.errors.length === 0, 'без ошибок: ' + page.errors.join('; '));
     await context.close();
@@ -181,7 +205,8 @@ async function geometry(page, pairs) {
     const finding = page.locator('.finding');
     assert(await finding.isVisible(), 'находка показана на развязке');
     assert((await finding.innerText()).includes('Склад правления'), 'находка — бирка склада правления');
-    assert((await finding.innerText()).includes('Продолжение следует'), 'честно сказано, что продолжение впереди');
+    assert((await finding.innerText()).includes('Дальше — дело «Чей ключ»'), 'находка называет следующее дело');
+    assert(await page.locator('.next-case').isVisible(), 'на развязке есть кнопка «Следующее дело»');
     const saved = await page.evaluate((k) => JSON.parse(localStorage.getItem(k)), KEY);
     assert(saved.data.casesCompleted.includes('ch1-hose'), 'дело записано в раскрытые');
     assert(page.errors.length === 0, 'без ошибок: ' + page.errors.join('; '));
@@ -246,6 +271,102 @@ async function geometry(page, pairs) {
     assert(revealIssues.length === 0, `${viewport.width}×${viewport.height}: развязка и находка без наложений` + (revealIssues.length ? ': ' + revealIssues.join('; ') : ''));
     await page.locator('.finding').scrollIntoViewIfNeeded();
     assert(await page.locator('.finding').isVisible(), `${viewport.width}×${viewport.height}: находка достижима прокруткой`);
+    assert(page.errors.length === 0, 'без ошибок: ' + page.errors.join('; '));
+    await context.close();
+  }
+
+  console.log('\n=== 5. Дело 2 «Чей ключ»: переход с развязки дела 1, противоречие, сохранение шага ===');
+  {
+    const { context, page } = await openWithSave(browser, null);
+    assert(await page.getByRole('button', { name: KEY_TITLE }).isDisabled(), 'на новом сохранении дело 2 заперто');
+    await openChapterCase(page);
+    await solve(page);
+    await page.locator('.next-case').click();
+    await page.waitForSelector('.case');
+    assert((await page.locator('.case .topbar .title').innerText()).includes('Чей ключ'), 'кнопка «Следующее дело» открывает дело 2');
+    assert((await page.locator('.case-intro').innerText()).includes('Кто был у склада в 20:00?'), 'вступление дела 2 с вопросом');
+    assert((await page.locator('.clues .clue').count()) === 9, 'девять фактов');
+    assert(await page.locator('.testimonies').isVisible(), 'показания на экране дела');
+    assert((await page.locator('.clues .testimonies, .clues .testimony').count()) === 0, 'показания не внутри блока фактов');
+    assert((await page.locator('.testimonies-title').innerText()).includes('Показания — проверьте по фактам'), 'показания подписаны отдельно от фактов');
+    assert((await page.locator('.testimonies .testimony').count()) === 4, 'по показанию от каждого из четверых');
+    assert((await page.locator('.grids-goal').innerText()).includes('останется сверить показания'), 'цель над таблицами говорит, что после них будет шаг');
+    assert(!(await page.locator('.clues').innerText()).includes('спросите кого хотите'), 'слова Ромы не попали в факты');
+
+    await page.locator('.hint-btn').click();
+    const hint = await page.locator('.hint-text').innerText();
+    assert(hint.length > 20 && !/Рома[^.]*склад/.test(hint), 'первая подсказка дела 2 объясняет шаг, не выдавая ответ');
+
+    await solve(page, KEY_SOLUTION_YES, '.step');
+    assert((await page.locator('.reveal').count()) === 0, 'решённые таблицы ещё не раскрывают дело — впереди сверка показаний');
+    assert((await page.locator('.step-question').innerText()).includes('чьи слова расходятся с фактами'), 'вопрос шага на экране');
+    const summary = await page.locator('.step .case-file-row:not(.case-file-head)').allInnerTexts();
+    assert(summary.some((r) => /Рома[\s\S]*склад[\s\S]*видео Насти/.test(r)), 'на шаге виден итог таблиц');
+    let saved = await saveOf(page);
+    assert(saved.data.progress['ch1-key']?.gridSolved === true && !saved.data.casesCompleted.includes('ch1-key'), 'в сохранении: таблицы решены, дело ещё не раскрыто');
+
+    await page.getByRole('button', { name: 'Игорь', exact: true }).click();
+    const fb = await page.locator('.step-feedback').innerText();
+    assert(fb.includes('сходится с фактами') && fb.includes('баня') && fb.includes('сосед'), 'неверный ответ объяснён фактами из таблиц: ' + fb);
+    assert(await page.getByRole('button', { name: 'Игорь', exact: true }).isDisabled(), 'проверенный вариант погашен');
+    assert((await page.locator('.reveal').count()) === 0, 'неверный ответ — не проигрыш и не развязка');
+
+    // Уход и перезагрузка: шаг не теряется, таблицы не надо заполнять заново.
+    await page.locator('.step .topbar .btn').click();
+    await page.reload({ waitUntil: 'networkidle' });
+    await page.waitForSelector('.case-list');
+    assert((await page.getByRole('button', { name: KEY_TITLE }).innerText()).includes('осталось сверить показания'), 'после перезагрузки карточка говорит, что осталось');
+    await page.getByRole('button', { name: KEY_TITLE }).click();
+    await page.waitForSelector('.step');
+    assert((await page.locator('.grid-block').count()) === 0, 'возврат сразу на шаг «противоречие», без таблиц');
+
+    await page.getByRole('button', { name: 'Рома', exact: true }).click();
+    const ok = await page.locator('.step-feedback.correct').innerText();
+    assert(ok.startsWith('Верно') && ok.includes('видео Насти'), 'верный ответ с объяснением');
+    await page.getByRole('button', { name: 'К развязке' }).click();
+    await page.waitForSelector('.reveal');
+    assert((await page.locator('.reveal-text').innerText()).includes('копии'), 'развязка дела 2: у Ромы копии ключей');
+    const finding = await page.locator('.finding').innerText();
+    assert(finding.includes('Правление') && finding.includes('Продолжение следует'), 'находка — кольцо «Правление», продолжение впереди');
+    assert((await page.locator('.next-case').count()) === 0, 'кнопки следующего дела нет — дела 3 пока нет');
+    saved = await saveOf(page);
+    assert(saved.data.casesCompleted.includes('ch1-key') && !saved.data.progress['ch1-key'], 'дело 2 раскрыто, незаконченный прогресс удалён');
+    assert(saved.data.stars['ch1-key'] === 2, 'звёзды дела 2 — по подсказкам таблиц (одна подсказка → 2)');
+    assert(page.errors.length === 0, 'без ошибок: ' + page.errors.join('; '));
+    await context.close();
+  }
+
+  console.log('\n=== 6. Дело 2: вёрстка экрана дела и шага ===');
+  for (const viewport of [
+    { width: 360, height: 640 },
+    { width: 390, height: 844 },
+    { width: 1000, height: 700 },
+  ]) {
+    const { context, page } = await openWithSave(browser, HOSE_DONE, viewport);
+    await openKeyCase(page);
+    const size = `${viewport.width}×${viewport.height}`;
+    const caseIssues = await geometry(page, [
+      ['.case-intro', '.clues'],
+      ['.clues', '.testimonies'],
+      ['.testimonies', '.grids-stack'],
+    ]);
+    assert(caseIssues.length === 0, `${size}: факты, показания и таблицы без наложений` + (caseIssues.length ? ': ' + caseIssues.join('; ') : ''));
+    await solve(page, KEY_SOLUTION_YES, '.step');
+    await page.getByRole('button', { name: 'Настя', exact: true }).click();
+    const stepIssues = await geometry(page, [
+      ['.step .case-file', '.testimonies'],
+      ['.testimonies', '.step-question'],
+      ['.step-options', '.step-feedback'],
+    ]);
+    assert(stepIssues.length === 0, `${size}: шаг «противоречие» без наложений` + (stepIssues.length ? ': ' + stepIssues.join('; ') : ''));
+    const heights = await page.locator('.step-options .btn').evaluateAll((ns) => ns.map((n) => n.getBoundingClientRect().height));
+    assert(heights.every((h) => h >= 44), `${size}: варианты ответа не меньше 44px`);
+    await page.getByRole('button', { name: 'Рома', exact: true }).click();
+    const next = page.getByRole('button', { name: 'К развязке' });
+    await next.scrollIntoViewIfNeeded();
+    assert(await next.isVisible(), `${size}: кнопка «К развязке» достижима`);
+    // Снимок для просмотра глазами — только если явно задана папка.
+    if (process.env.SHOT_DIR) await page.screenshot({ path: `${process.env.SHOT_DIR}/key-step-${size}.png`, fullPage: true });
     assert(page.errors.length === 0, 'без ошибок: ' + page.errors.join('; '));
     await context.close();
   }

@@ -555,3 +555,99 @@
 .case-file-row.case-file-head b {
   color: var(--ink-3);
 }
+
+/* Глава: запертое дело — видно, что глава продолжается, но открыть его
+   можно только после предыдущего. */
+.case-card.locked {
+  cursor: default;
+  opacity: 0.7;
+  box-shadow: none;
+}
+
+.case-card.locked .stamp {
+  background: var(--surface-2);
+}
+
+/* Показания — отдельно от фактов и другой рамкой: это слова, а не правила
+   головоломки. Пунктир у фактов, сплошная линия слева у показаний. */
+.testimonies {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border-left: 3px solid var(--stamp);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ink-2);
+}
+
+.testimonies-title {
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.testimonies-note {
+  color: var(--ink-3);
+}
+
+.testimony b {
+  color: var(--ink);
+  margin-right: 6px;
+}
+
+/* Шаг «чьи слова расходятся с фактами». */
+.step .case-file {
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+}
+
+.step-title,
+.step-question {
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.5;
+  color: var(--ink);
+}
+
+.step-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--gap-2);
+}
+
+.step-options .btn {
+  min-height: 44px;
+}
+
+.step-options .btn.chosen {
+  border-color: var(--stamp);
+  color: var(--stamp);
+}
+
+.step-feedback {
+  padding: 10px 12px;
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--ink);
+}
+
+.step-feedback.correct {
+  background: var(--felt-soft);
+}
+
+.step-feedback[hidden] {
+  display: none;
+}
+
+.step-next {
+  margin-top: var(--gap-2);
+  display: flex;
+}
+
+.step-next .btn {
+  flex: 1;
+}

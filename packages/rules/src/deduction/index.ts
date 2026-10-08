@@ -3,12 +3,14 @@ export type {
   Category,
   Clue,
   ClueKind,
+  Contradiction,
   Deduction,
   HintReason,
   MarkValue,
   PlayerMarks,
   Ref,
   Solution,
+  Testimony,
 } from './types';
 
 export { buildModel, indexOf, markKey, positionOf, resolveOrder, subjectOf } from './model';
