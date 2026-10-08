@@ -290,6 +290,8 @@ async function geometry(page, pairs) {
     assert((await page.locator('.clues .testimonies, .clues .testimony').count()) === 0, 'показания не внутри блока фактов');
     assert((await page.locator('.testimonies-title').innerText()).includes('Показания — проверьте по фактам'), 'показания подписаны отдельно от фактов');
     assert((await page.locator('.testimonies .testimony').count()) === 4, 'по показанию от каждого из четверых');
+    const chairman = await page.locator('.testimonies .testimony').first().innerText();
+    assert(chairman.includes('«В 20:00 я был в правлении»') && !/весь вечер/i.test(chairman), 'председатель говорит о 20:00, а не о «весь вечер»');
     assert((await page.locator('.grids-goal').innerText()).includes('останется сверить показания'), 'цель над таблицами говорит, что после них будет шаг');
     assert(!(await page.locator('.clues').innerText()).includes('спросите кого хотите'), 'слова Ромы не попали в факты');
 
@@ -307,7 +309,8 @@ async function geometry(page, pairs) {
 
     await page.getByRole('button', { name: 'Игорь', exact: true }).click();
     const fb = await page.locator('.step-feedback').innerText();
-    assert(fb.includes('сходится с фактами') && fb.includes('баня') && fb.includes('сосед'), 'неверный ответ объяснён фактами из таблиц: ' + fb);
+    assert(fb.includes('Слова о месте в 20:00 совпадают с таблицами: Игорь — баня'), 'неверный ответ: совпадает только место в 20:00: ' + fb);
+    assert(fb.includes('Остальное в этих словах таблицы не проверяют') && !fb.includes('сходится с фактами') && !fb.includes('сосед'), 'реплика целиком не подтверждается (ключ в кармане таблица не устанавливает)');
     assert(await page.getByRole('button', { name: 'Игорь', exact: true }).isDisabled(), 'проверенный вариант погашен');
     assert((await page.locator('.reveal').count()) === 0, 'неверный ответ — не проигрыш и не развязка');
 

@@ -11,7 +11,7 @@ import {
 } from '@studio/rules';
 import type { PlayerMarks } from '@studio/rules';
 import { CASE_REQUIRES, cases, nextChapterCase, tutorialCase } from '../src/cases';
-import { factsAbout, falseTestimonies, testimonyHolds } from '../src/contradiction';
+import { claimedFact, falseTestimonies, testimonyHolds } from '../src/contradiction';
 
 /**
  * Контентные тесты: каждое выпускаемое дело обязано быть корректным,
@@ -209,10 +209,19 @@ describe('глава 1, дело 2 «Чей ключ»', () => {
       expect(falseTestimonies(source, swapped).map((t) => t.who.value)).toEqual(['Игорь']);
     });
 
-    it('объяснение неверного ответа берётся из таблиц', () => {
+    it('объяснение неверного ответа подтверждает только место в 20:00, а не реплику целиком', () => {
       const igor = step.testimonies.find((t) => t.who.value === 'Игорь')!;
       expect(testimonyHolds(source, solution, igor)).toBe(true);
-      expect(factsAbout(source, solution, igor)).toBe('баня, сосед');
+      expect(claimedFact(source, solution, igor)).toBe('баня');
+      expect(step.claimTopic).toBe('о месте в 20:00');
+    });
+
+    it('каждое показание утверждает место именно в 20:00 — то, что проверяет таблица', () => {
+      for (const t of step.testimonies) {
+        expect(t.claim.category, t.text).toBe('место');
+        expect(t.text, 'нет времени, которое проверяет таблица').toMatch(/в 20:00|в восемь/i);
+        expect(t.text).not.toMatch(/весь вечер/i);
+      }
     });
 
     it('развязка и находка ведут к делу 3', () => {

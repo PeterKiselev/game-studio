@@ -4,7 +4,7 @@ import type { Case, Contradiction, PlayerMarks, Ref, Solution } from '@studio/ru
 import { dialog, el, toast } from '@studio/ui';
 import { renderPairGrid } from './grid';
 import { CASE_REQUIRES, PLOT_CASE_IDS, cases, nextChapterCase, tutorialCase } from './cases';
-import { factsAbout, testimonyHolds } from './contradiction';
+import { claimedFact, testimonyHolds } from './contradiction';
 import { ACHIEVEMENTS, checkNewAchievements, starsFor } from './achievements';
 import { SHOP_ITEMS, SKU_NO_ADS, SKU_UNLIMITED_HINTS, buyLabel, votes } from './shop';
 import type { ShopItem } from './shop';
@@ -696,8 +696,8 @@ function showContradiction(
         btn.disabled = true;
         feedback.className = 'step-feedback';
         feedback.textContent =
-          `${t.who.value}: ${t.text} Это сходится с фактами. По таблицам: ${t.who.value} — ${factsAbout(source, solution, t)}. ` +
-          'Сверьте остальные показания.';
+          `${t.who.value}: ${t.text} Слова ${step.claimTopic} совпадают с таблицами: ${t.who.value} — ${claimedFact(source, solution, t)}. ` +
+          'Остальное в этих словах таблицы не проверяют. Сверьте другие показания.';
         return;
       }
       for (const b of options.querySelectorAll('button')) b.disabled = true;

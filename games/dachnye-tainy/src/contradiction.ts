@@ -21,14 +21,14 @@ export function falseTestimonies(source: Case, solution: Solution): Testimony[] 
 }
 
 /**
- * Что о говорящем установили таблицы: «баня, сосед» — значения по порядку категорий.
- * Объяснение строится из решения, а не пишется вручную под каждый неверный ответ.
+ * Что таблицы установили о говорящем ровно в той категории, о которой его
+ * показание: для «я был в бане» — место, «баня». Остальные категории и
+ * остальное в реплике сюда не входят: объяснение подтверждает только то,
+ * что таблица действительно проверяет. Строится из решения, не вручную.
  */
-export function factsAbout(source: Case, solution: Solution, t: Testimony): string {
+export function claimedFact(source: Case, solution: Solution, t: Testimony): string {
   const model = buildModel(source);
   const subject = subjectOf(model, solution, t.who);
-  return source.categories
-    .filter((cat) => cat.id !== t.who.category)
-    .map((cat) => cat.values[solution[cat.id][subject]])
-    .join(', ');
+  const category = source.categories.find((cat) => cat.id === t.claim.category)!;
+  return category.values[solution[category.id][subject]];
 }
