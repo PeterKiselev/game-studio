@@ -298,6 +298,14 @@
   justify-content: center;
 }
 
+.grid-table .h.short {
+  writing-mode: horizontal-tb;
+  align-items: flex-end;
+  font-size: 13px;
+  font-weight: 600;
+  min-height: 28px;
+}
+
 .grid-table .row-label {
   color: var(--ink-2);
   display: flex;

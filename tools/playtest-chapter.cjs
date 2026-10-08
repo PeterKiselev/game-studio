@@ -370,6 +370,28 @@ async function geometry(page, pairs) {
     await context.close();
   }
 
+  console.log('\n=== 5в. Теплица: позиции 1–4 и перенос старых отметок «первой/третьей» ===');
+  {
+    const old = JSON.parse(JSON.stringify(HOSE_DONE));
+    old.data.progress['third-1'] = {
+      marks: { 'время|первой~персонажи|Аня': 'yes', 'места|чердак~время|третьей': 'no' },
+      hintsUsed: 0,
+    };
+    const { context, page } = await openWithSave(browser, old);
+    await page.getByRole('button', { name: /Кто был в теплице/ }).click();
+    await page.waitForSelector('.case');
+    const heads = await page.locator('.grid-block').first().innerText();
+    assert(!/первой|вторым|третьей|четвёртым/.test(heads), 'в таблицах нет позиций с родовыми окончаниями');
+    const facts = await page.locator('.clues').innerText();
+    assert(!/Вышедшая|Тот, кто|одна за другим/.test(facts), 'улики о порядке без указания пола');
+    assert(await page.locator('button[aria-label="Аня — 1"].yes, button[aria-label="1 — Аня"].yes').count() === 1, 'старая отметка «Аня — первой» перенесена в «Аня — 1»');
+    assert(await page.locator('button[aria-label="чердак — 3"].no, button[aria-label="3 — чердак"].no').count() === 1, 'старая отметка «чердак — третьей» перенесена в «чердак — 3»');
+    const saved = await saveOf(page);
+    assert(!JSON.stringify(saved.data.progress['third-1']).includes('первой'), 'в сохранении ключи уже новые');
+    assert(page.errors.length === 0, 'без ошибок: ' + page.errors.join('; '));
+    await context.close();
+  }
+
   console.log('\n=== 6. Дело 2: вёрстка экрана дела и шага ===');
   for (const viewport of [
     { width: 360, height: 640 },

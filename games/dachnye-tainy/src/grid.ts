@@ -41,8 +41,11 @@ export function renderPairGrid(
   const cellButtons = new Map<string, HTMLButtonElement>();
 
   table.append(el('div', { class: 'corner' }));
+  // Слова в заголовках колонок повёрнуты, чтобы влезли в 34 px; короткие
+  // подписи (номера 1–4, часы) читаются лучше прямо.
+  const short = colCat.values.every((v) => v.length <= 4);
   for (const colValue of colCat.values) {
-    table.append(el('div', { class: 'h' }, colValue));
+    table.append(el('div', { class: short ? 'h short' : 'h' }, colValue));
   }
 
   for (const rowValue of rowCat.values) {

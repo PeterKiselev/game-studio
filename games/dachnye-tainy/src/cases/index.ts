@@ -7,6 +7,7 @@ import { sixthCase } from './sixth';
 import { chapter1HoseCase } from './chapter1-hose';
 import { chapter1KeyCase } from './chapter1-key';
 import type { Case } from '@studio/rules';
+import type { ValueRenames } from '../progress';
 
 /**
  * Содержание дел живёт в пакете игры, движок — в @studio/rules. Лестница
@@ -40,6 +41,18 @@ export const cases: Case[] = [
  */
 export const CASE_REQUIRES: Readonly<Record<string, string>> = {
   'ch1-key': 'ch1-hose',
+};
+
+/**
+ * Позиции порядка раньше назывались «первой, вторым, третьей, четвёртым» —
+ * окончания выдавали, где женщины, а где мужчины. Теперь это «1–4»; старые
+ * незаконченные отметки переносятся на новые имена (progress.ts renameMarks).
+ */
+const ORDER_RENAME = { время: { первой: '1', вторым: '2', третьей: '3', четвёртым: '4' } };
+export const VALUE_RENAMES: Readonly<Record<string, ValueRenames>> = {
+  'third-1': ORDER_RENAME,
+  'fifth-1': ORDER_RENAME,
+  'sixth-1': ORDER_RENAME,
 };
 
 /** Следующее дело главы — для кнопки на развязке; undefined, если продолжения пока нет. */

@@ -3,9 +3,9 @@ import { markKey, nextHint, uniqueSolution } from '@studio/rules';
 import type { Case, Contradiction, PlayerMarks, Ref, Solution } from '@studio/rules';
 import { dialog, el, toast } from '@studio/ui';
 import { renderPairGrid } from './grid';
-import { CASE_REQUIRES, PLOT_CASE_IDS, cases, nextChapterCase, tutorialCase } from './cases';
+import { CASE_REQUIRES, PLOT_CASE_IDS, VALUE_RENAMES, cases, nextChapterCase, tutorialCase } from './cases';
 import { claimedFact, testimonyHolds } from './contradiction';
-import { marksFitCase } from './progress';
+import { marksFitCase, renameMarks } from './progress';
 import { ACHIEVEMENTS, checkNewAchievements, starsFor } from './achievements';
 import { SHOP_ITEMS, SKU_NO_ADS, SKU_UNLIMITED_HINTS, buyLabel, votes } from './shop';
 import type { ShopItem } from './shop';
@@ -345,6 +345,16 @@ async function startCase(source: Case): Promise<void> {
   );
 
   let saved: CaseProgress | undefined = app.save.data.progress[source.id];
+  const renames = VALUE_RENAMES[source.id];
+  if (saved && renames) {
+    // Переименованные значения (порядок «первой» → «1») — переносим отметки.
+    const marks = renameMarks(saved.marks, renames);
+    if (JSON.stringify(marks) !== JSON.stringify(saved.marks)) {
+      saved = { ...saved, marks };
+      app.save.data.progress[source.id] = saved;
+      app.save.markDirty();
+    }
+  }
   if (saved && !marksFitCase(source, saved.marks)) {
     // Отметки от прежней версии дела — начинаем таблицы заново (см. progress.ts).
     app.track('case_progress_reset', { caseId: source.id });

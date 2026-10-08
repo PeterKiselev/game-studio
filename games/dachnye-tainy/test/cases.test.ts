@@ -10,9 +10,9 @@ import {
   validateCase,
 } from '@studio/rules';
 import type { PlayerMarks } from '@studio/rules';
-import { CASE_REQUIRES, cases, nextChapterCase, tutorialCase } from '../src/cases';
+import { CASE_REQUIRES, VALUE_RENAMES, cases, nextChapterCase, tutorialCase } from '../src/cases';
 import { claimedFact, falseTestimonies, testimonyHolds } from '../src/contradiction';
-import { marksFitCase } from '../src/progress';
+import { marksFitCase, renameMarks } from '../src/progress';
 
 /**
  * Контентные тесты: каждое выпускаемое дело обязано быть корректным,
@@ -281,5 +281,70 @@ describe('незаконченный прогресс от прежней вер
       [markKey(ref('персонажи', 'Настя'), ref('подтверждение', 'чек магазина'))]: 'yes',
     };
     expect(marksFitCase(source, marks)).toBe(false);
+  });
+});
+
+describe('дела с порядком не выдают пол через окончания', () => {
+  // Все дела с порядком; у дел главы порядок — часы, он и раньше был нейтральным.
+  const ordered = cases.filter((c) => c.categories.some((cat) => cat.ordered));
+  const renamed = cases.filter((c) => ['third-1', 'fifth-1', 'sixth-1'].includes(c.id));
+
+  it('исправлены теплица, рынок и костёр; переименования только у них', () => {
+    expect(renamed).toHaveLength(3);
+    expect(Object.keys(VALUE_RENAMES).sort()).toEqual(['fifth-1', 'sixth-1', 'third-1']);
+  });
+
+  it.each(renamed.map((c) => [c.id, c] as const))('%s: позиции названы числами 1–4', (_id, source) => {
+    const order = source.categories.find((cat) => cat.ordered)!;
+    expect(order.values).toEqual(['1', '2', '3', '4']);
+    expect(order.title).toMatch(/^Порядок /);
+  });
+
+  /**
+   * Сторож формулировок: ни порядковых форм с родом («третьей», «вторым»),
+   * ни причастий («вышедшая»), ни «та/тот, кто» в уликах. Развязки не
+   * проверяем — там ответ уже известен.
+   */
+  it.each(ordered.flatMap((c) => c.clues.map((clue) => [c.id, clue.text] as const)))('%s: «%s»', (_id, text) => {
+    expect(text).not.toMatch(/(перв|втор|трет|четвёрт)(ой|ым|ая|ий|ья|ьей|ьим)\b|вышедш|пришедш|вернувш|\b(та|тот), кто|одна за другим|один за другой/i);
+  });
+
+  it('решения прежние: третьими были Вика, Настя и Оля', () => {
+    const third = (id: string) => describeSolution(cases.find((c) => c.id === id)!, uniqueSolution(cases.find((c) => c.id === id)!)!);
+    expect(third('third-1')).toEqual([
+      'Аня — где были: чердак, порядок выхода: 1',
+      'Борис — где были: погреб, порядок выхода: 2',
+      'Вика — где были: теплица, порядок выхода: 3',
+      'Гриша — где были: курятник, порядок выхода: 4',
+    ]);
+    expect(third('fifth-1')).toEqual([
+      'Зоя — что купили: семена, порядок возвращения: 1',
+      'Игорь — что купили: гвозди, порядок возвращения: 2',
+      'Настя — что купили: мёд, порядок возвращения: 3',
+      'Рома — что купили: творог, порядок возвращения: 4',
+    ]);
+    expect(third('sixth-1')).toEqual([
+      'Ксюша — где сидели: у бревна, порядок прихода: 1',
+      'Влад — где сидели: на траве, порядок прихода: 2',
+      'Оля — где сидели: на раскладушке, порядок прихода: 3',
+      'Митя — где сидели: на камне, порядок прихода: 4',
+    ]);
+  });
+
+  it('старые отметки «первой/третьей» переносятся на «1/3», а не теряются', () => {
+    const source = cases.find((c) => c.id === 'third-1')!;
+    const old: PlayerMarks = {
+      'время|первой~персонажи|Аня': 'yes',
+      'места|чердак~время|третьей': 'no',
+      'места|погреб~персонажи|Борис': 'yes',
+    };
+    expect(marksFitCase(source, old)).toBe(false);
+    const moved = renameMarks(old, VALUE_RENAMES['third-1']);
+    expect(moved).toEqual({
+      [markKey({ category: 'время', value: '1' }, { category: 'персонажи', value: 'Аня' })]: 'yes',
+      [markKey({ category: 'места', value: 'чердак' }, { category: 'время', value: '3' })]: 'no',
+      'места|погреб~персонажи|Борис': 'yes',
+    });
+    expect(marksFitCase(source, moved)).toBe(true);
   });
 });
