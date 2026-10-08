@@ -12,6 +12,7 @@ import {
 import type { PlayerMarks } from '@studio/rules';
 import { CASE_REQUIRES, cases, nextChapterCase, tutorialCase } from '../src/cases';
 import { claimedFact, falseTestimonies, testimonyHolds } from '../src/contradiction';
+import { marksFitCase } from '../src/progress';
 
 /**
  * Контентные тесты: каждое выпускаемое дело обязано быть корректным,
@@ -143,16 +144,35 @@ describe('глава 1, дело 2 «Чей ключ»', () => {
     expect(describeSolution(source, solution)).toEqual([
       'Геннадий Ильич — где в 20:00: правление, чем подтверждено: журнал склада',
       'Игорь — где в 20:00: баня, чем подтверждено: сосед',
-      'Настя — где в 20:00: речка, чем подтверждено: чек магазина',
+      'Настя — где в 20:00: речка, чем подтверждено: прокат лодки',
       'Рома — где в 20:00: склад, чем подтверждено: видео Насти',
     ]);
   });
 
-  it('ни одна улика не лишняя: без любой из них решение перестаёт быть единственным', () => {
-    source.clues.forEach((_, i) => {
+  /** Связки «подтверждение — место»: любая выводится из трёх остальных, но все явные. */
+  const isLink = (clue: (typeof source.clues)[number]): boolean =>
+    clue.kind === 'same' && clue.a.category === 'подтверждение' && clue.b.category === 'место';
+
+  it('у каждого подтверждения явно сказано, какое место в 20:00 оно доказывает', () => {
+    const links = source.clues.filter(isLink);
+    expect(links.map((c) => `${c.a.value} → ${c.b.value}`).sort()).toEqual(
+      ['видео Насти → склад', 'журнал склада → правление', 'прокат лодки → речка', 'сосед → баня'],
+    );
+    for (const clue of links) expect(clue.text, clue.text).toMatch(/в 20:00/);
+  });
+
+  it('все факты, кроме явных связок, необходимы: без любого решение перестаёт быть единственным', () => {
+    source.clues.forEach((clue, i) => {
+      if (isLink(clue)) return;
       const without = { ...source, clues: source.clues.filter((__, j) => j !== i) };
-      expect(countSolutions(without), `улика ${i + 1} лишняя`).toBe(2);
+      expect(countSolutions(without), `факт ${i + 1} лишний`).toBe(2);
     });
+    // Без всех четырёх связок решение не единственно — они работают, а не украшают.
+    expect(countSolutions({ ...source, clues: source.clues.filter((c) => !isLink(c)) })).toBe(2);
+  });
+
+  it('прежнего «чека магазина» нет нигде: ни в значениях, ни в фактах, ни в показаниях', () => {
+    expect(JSON.stringify(source)).not.toMatch(/чек|магазин|продавщ/);
   });
 
   it('подсказки доводят дело до конца: 3 сетки по 16 клеток', () => {
@@ -242,5 +262,24 @@ describe('глава 1, дело 2 «Чей ключ»', () => {
 
   it('у остальных дел шага «противоречие» нет — они раскрываются как раньше', () => {
     expect(cases.filter((c) => c.contradiction).map((c) => c.id)).toEqual(['ch1-key']);
+  });
+});
+
+describe('незаконченный прогресс от прежней версии дела', () => {
+  const source = cases.find((c) => c.id === 'ch1-key')!;
+  const ref = (category: string, value: string) => ({ category, value });
+
+  it('отметки с текущими значениями подходят', () => {
+    const marks: PlayerMarks = { [markKey(ref('персонажи', 'Настя'), ref('подтверждение', 'прокат лодки'))]: 'yes' };
+    expect(marksFitCase(source, marks)).toBe(true);
+    expect(marksFitCase(source, {})).toBe(true);
+  });
+
+  it('отметка с прежним значением «чек магазина» — прогресс не подходит', () => {
+    const marks: PlayerMarks = {
+      [markKey(ref('персонажи', 'Рома'), ref('место', 'склад'))]: 'yes',
+      [markKey(ref('персонажи', 'Настя'), ref('подтверждение', 'чек магазина'))]: 'yes',
+    };
+    expect(marksFitCase(source, marks)).toBe(false);
   });
 });

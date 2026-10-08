@@ -5,6 +5,7 @@ import { dialog, el, toast } from '@studio/ui';
 import { renderPairGrid } from './grid';
 import { CASE_REQUIRES, PLOT_CASE_IDS, cases, nextChapterCase, tutorialCase } from './cases';
 import { claimedFact, testimonyHolds } from './contradiction';
+import { marksFitCase } from './progress';
 import { ACHIEVEMENTS, checkNewAchievements, starsFor } from './achievements';
 import { SHOP_ITEMS, SKU_NO_ADS, SKU_UNLIMITED_HINTS, buyLabel, votes } from './shop';
 import type { ShopItem } from './shop';
@@ -222,7 +223,9 @@ function showPlot(): void {
     let status = 'Ждёт расследования';
     if (done) status = `Раскрыто · ${'⭐'.repeat(earned ?? 0)}`;
     else if (locked && requiredCase) status = `Сначала раскройте «${shortTitle(requiredCase)}»`;
-    else if (s.progress[c.id]?.gridSolved) status = 'Таблицы готовы — осталось сверить показания';
+    else if (s.progress[c.id]?.gridSolved && marksFitCase(c, s.progress[c.id].marks)) {
+      status = 'Таблицы готовы — осталось сверить показания';
+    }
     const card = el(
       'button',
       { class: `case-card${locked ? ' locked' : ''}`, type: 'button', disabled: locked },
@@ -341,7 +344,14 @@ async function startCase(source: Case): Promise<void> {
     [...groundTruthYes].filter((key) => key.startsWith(`${source.anchor}|`) || key.includes(`~${source.anchor}|`)),
   );
 
-  const saved = app.save.data.progress[source.id];
+  let saved: CaseProgress | undefined = app.save.data.progress[source.id];
+  if (saved && !marksFitCase(source, saved.marks)) {
+    // Отметки от прежней версии дела — начинаем таблицы заново (см. progress.ts).
+    app.track('case_progress_reset', { caseId: source.id });
+    delete app.save.data.progress[source.id];
+    app.save.markDirty();
+    saved = undefined;
+  }
   if (saved?.gridSolved && source.contradiction) {
     showContradiction(source, source.contradiction, solution, saved.hintsUsed, false);
     return;

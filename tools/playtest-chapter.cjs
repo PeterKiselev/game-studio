@@ -85,7 +85,7 @@ async function solve(page, pairs = SOLUTION_YES, doneSel = '.reveal') {
 /** Дело 2: таблицы ответа «соседи — где в 20:00» и «соседи — чем подтверждено». */
 const KEY_SOLUTION_YES = [
   ['Геннадий Ильич', 'правление'], ['Игорь', 'баня'], ['Настя', 'речка'], ['Рома', 'склад'],
-  ['Геннадий Ильич', 'журнал склада'], ['Игорь', 'сосед'], ['Настя', 'чек магазина'], ['Рома', 'видео Насти'],
+  ['Геннадий Ильич', 'журнал склада'], ['Игорь', 'сосед'], ['Настя', 'прокат лодки'], ['Рома', 'видео Насти'],
 ];
 const KEY_TITLE = /Чей ключ/;
 const HOSE_DONE = {
@@ -285,7 +285,11 @@ async function geometry(page, pairs) {
     await page.waitForSelector('.case');
     assert((await page.locator('.case .topbar .title').innerText()).includes('Чей ключ'), 'кнопка «Следующее дело» открывает дело 2');
     assert((await page.locator('.case-intro').innerText()).includes('Кто был у склада в 20:00?'), 'вступление дела 2 с вопросом');
-    assert((await page.locator('.clues .clue').count()) === 9, 'девять фактов');
+    assert((await page.locator('.clues .clue').count()) === 10, 'десять фактов');
+    const facts = await page.locator('.clues').innerText();
+    assert(!/чек|магазин/.test(facts), 'чека магазина больше нет');
+    assert(facts.includes('прокат лодки подтверждает того, кто в 20:00 был на речке'), 'связь «прокат лодки — речка в 20:00» объяснена явно');
+    assert(facts.includes('запись с подписью, сделанная ровно в 20:00'), 'журнал склада доказывает присутствие записью в 20:00, а не тем, где он лежит');
     assert(await page.locator('.testimonies').isVisible(), 'показания на экране дела');
     assert((await page.locator('.clues .testimonies, .clues .testimony').count()) === 0, 'показания не внутри блока фактов');
     assert((await page.locator('.testimonies-title').innerText()).includes('Показания — проверьте по фактам'), 'показания подписаны отдельно от фактов');
@@ -335,6 +339,33 @@ async function geometry(page, pairs) {
     saved = await saveOf(page);
     assert(saved.data.casesCompleted.includes('ch1-key') && !saved.data.progress['ch1-key'], 'дело 2 раскрыто, незаконченный прогресс удалён');
     assert(saved.data.stars['ch1-key'] === 2, 'звёзды дела 2 — по подсказкам таблиц (одна подсказка → 2)');
+    assert(page.errors.length === 0, 'без ошибок: ' + page.errors.join('; '));
+    await context.close();
+  }
+
+  console.log('\n=== 5б. Дело 2: незаконченный прогресс со старым значением «чек магазина» ===');
+  for (const gridSolved of [false, true]) {
+    const stale = JSON.parse(JSON.stringify(HOSE_DONE));
+    stale.data.progress['ch1-key'] = {
+      marks: {
+        'место|склад~персонажи|Рома': 'yes',
+        'персонажи|Настя~подтверждение|чек магазина': 'yes',
+      },
+      hintsUsed: 1,
+      ...(gridSolved ? { gridSolved: true } : {}),
+    };
+    const { context, page } = await openWithSave(browser, stale);
+    const label = gridSolved ? 'с флагом «таблицы решены»' : 'частичные отметки';
+    const card = await page.getByRole('button', { name: KEY_TITLE }).innerText();
+    assert(!card.includes('осталось сверить показания'), `${label}: карточка не обещает шаг по старым таблицам`);
+    await openKeyCase(page);
+    assert((await page.locator('.step').count()) === 0 && (await page.locator('.grid-block').count()) === 3, `${label}: открываются таблицы, а не шаг «противоречие»`);
+    assert((await page.locator('.grid-block .cell.yes').count()) === 0, `${label}: старые отметки сброшены, сетка чистая`);
+    const saved = await saveOf(page);
+    assert(!saved.data.progress['ch1-key'] || !JSON.stringify(saved.data.progress['ch1-key']).includes('чек'), `${label}: в сохранении не осталось старых ключей`);
+    assert(saved.data.casesCompleted.includes('ch1-hose'), `${label}: раскрытое дело 1 не затронуто`);
+    await solve(page, KEY_SOLUTION_YES, '.step');
+    assert(await page.locator('.step-question').isVisible(), `${label}: после сброса дело проходится до шага`);
     assert(page.errors.length === 0, 'без ошибок: ' + page.errors.join('; '));
     await context.close();
   }
