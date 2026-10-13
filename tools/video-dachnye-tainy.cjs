@@ -63,6 +63,14 @@ async function recordGameplay(browser, viewport, dir) {
   await pause(1000); // участок и список дел — зритель понимает, где он
 
   await page.getByRole('button', { name: /Чей пирог остался в беседке/ }).click();
+  // Кадр вступления: дать рассмотреть картинку и подпись.
+  try {
+    await page.locator('.story').waitFor({ timeout: 2000 });
+    await pause(1800);
+    await page.getByRole('button', { name: 'К расследованию' }).click();
+  } catch {
+    /* вступления нет */
+  }
   // Обучающий диалог: показать, что игра сама объясняет цель и жест ✓/✕.
   const onboarding = page.getByRole('button', { name: 'Понятно, начинаем' });
   try {

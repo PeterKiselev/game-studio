@@ -45,6 +45,12 @@ async function openGame(browser, viewport, colorScheme) {
 
 async function openCase(page, title) {
   await page.getByRole('button', { name: title }).click();
+  // Первые дела открываются с кадром вступления — пропускаем его, как игрок.
+  try {
+    await page.locator('.story').getByRole('button', { name: 'Пропустить' }).click({ timeout: 1000 });
+  } catch {
+    /* вступления нет или его уже видели */
+  }
   try {
     await page.getByRole('button', { name: 'Понятно, начинаем' }).click({ timeout: 1000 });
   } catch {

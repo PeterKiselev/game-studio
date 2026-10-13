@@ -22,6 +22,17 @@ export const tutorialCase: Case = {
   title: 'Чей пирог остался в беседке',
   anchor: 'персонажи',
 
+  // Кадр — атмосфера: беседка и пирог уже названы в заголовке, людей в кадре
+  // нет, подпись без имён. Ответ остаётся за уликами.
+  story: [
+    {
+      image: new URL('../story/tutorial-pie-1.webp', import.meta.url).href,
+      alt: 'Беседка в цветущем саду, на столе стоит пирог.',
+      caption: 'Полдень в СНТ «Рябинка». В беседке на столе остался чей-то пирог. Чей он?',
+    },
+  ],
+  cover: new URL('../story/cover-tutorial-pie.webp', import.meta.url).href,
+
   categories: [
     {
       id: 'персонажи',

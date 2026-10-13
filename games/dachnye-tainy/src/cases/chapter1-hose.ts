@@ -28,6 +28,7 @@ export const chapter1HoseCase: Case = {
    * пропустить, а условия нужны для решения всегда. Картинки — атмосфера, не
    * улики: у шланга никого нет, бирки, часов и отметок уровня не видно.
    */
+  cover: new URL('../story/cover-ch1-hose.webp', import.meta.url).href,
   story: [
     {
       image: new URL('../story/ch1-hose-1.webp', import.meta.url).href,

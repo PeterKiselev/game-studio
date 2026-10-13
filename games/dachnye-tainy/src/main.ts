@@ -235,7 +235,7 @@ function showPlot(): void {
     const card = el(
       'button',
       { class: `case-card${locked ? ' locked' : ''}`, type: 'button', disabled: locked },
-      el('div', { class: 'stamp' }, done ? '✓' : locked ? '🔒' : '?'),
+      caseCardMark(c, done ? '✓' : locked ? '🔒' : '?'),
       el('div', { class: 'text' }, el('b', {}, c.title), el('span', {}, status)),
     ) as HTMLButtonElement;
     if (!locked) card.addEventListener('click', () => void startCase(c));
@@ -293,6 +293,18 @@ function showPlot(): void {
 
   const screen = el('div', { class: 'screen plot' }, ...screenChildren);
   root.replaceChildren(screen);
+}
+
+/**
+ * Левая часть карточки дела. С обложкой — маленькая картинка и печать
+ * статуса в её углу (статус и звёзды остаются текстом справа); без
+ * обложки — прежняя круглая печать. Картинка декоративная: alt пустой,
+ * название дела уже в тексте кнопки.
+ */
+function caseCardMark(c: Case, stamp: string): HTMLElement {
+  if (!c.cover) return el('div', { class: 'stamp' }, stamp);
+  const img = el('img', { class: 'cover-image', src: c.cover, alt: '', width: 192, height: 144, decoding: 'async' });
+  return el('div', { class: 'cover' }, img, el('div', { class: 'stamp badge' }, stamp));
 }
 
 /**
@@ -369,7 +381,7 @@ function showStory(source: Case, returnFocus?: HTMLElement): Promise<void> {
       img.src = frame.image;
       img.alt = frame.alt;
       caption.textContent = frame.caption;
-      counter.textContent = `${index + 1} / ${frames.length}`;
+      counter.textContent = frames.length > 1 ? `${index + 1} / ${frames.length}` : '';
       next.textContent = index === frames.length - 1 ? 'К расследованию' : 'Дальше';
       // Следующий кадр подгружаем заранее, чтобы перелистывание не ждало сеть.
       if (frames[index + 1]) new Image().src = frames[index + 1].image;
@@ -574,7 +586,7 @@ async function openCase(source: Case): Promise<void> {
     el(
       'div',
       { class: 'case-scroll' },
-      ...(source.intro ? [introBlock(source), toGridsBtn] : []),
+      ...(source.intro ? [introBlock(source), toGridsBtn] : source.story ? [replayButton(source)] : []),
       cluesBox,
       ...(testimoniesBox ? [testimoniesBox] : []),
       gridsBox,
@@ -784,15 +796,18 @@ function buildGroundTruthYes(source: Case, solution: Solution): Set<string> {
 /** Условия дела; у дела с кадрами — ещё кнопка повторить вступление. */
 function introBlock(source: Case): HTMLElement {
   const box = el('div', { class: 'case-intro' }, source.intro ?? '');
-  if (source.story) {
-    const replay = el('button', { class: 'btn ghost story-replay', type: 'button' }, '📖 Вступление') as HTMLButtonElement;
-    replay.addEventListener('click', () => {
-      app.track('story_replay', { caseId: source.id });
-      void showStory(source, replay);
-    });
-    box.append(replay);
-  }
+  if (source.story) box.append(replayButton(source));
   return box;
+}
+
+/** «📖 Вступление»: повтор кадров поверх дела, фокус потом возвращается сюда. */
+function replayButton(source: Case): HTMLButtonElement {
+  const replay = el('button', { class: 'btn ghost story-replay', type: 'button' }, '📖 Вступление') as HTMLButtonElement;
+  replay.addEventListener('click', () => {
+    app.track('story_replay', { caseId: source.id });
+    void showStory(source, replay);
+  });
+  return replay;
 }
 
 // --- экран 2б: противоречие в показаниях ---------------------------------------

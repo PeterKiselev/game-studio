@@ -374,7 +374,32 @@ describe('иллюстрированное вступление дела 1', () 
     expect(source.intro).toMatch(/Кто принёс шланг\?/);
   });
 
-  it('кадры есть только у дела 1', () => {
-    expect(cases.filter((c) => c.story).map((c) => c.id)).toEqual(['ch1-hose']);
+  it('кадры есть у первых двух дел и у дела 1 главы', () => {
+    expect(cases.filter((c) => c.story).map((c) => c.id)).toEqual(['tutorial-1', 'second-1', 'ch1-hose']);
+  });
+});
+
+describe('кадры первых двух дел', () => {
+  it.each(['tutorial-1', 'second-1'])('%s: один кадр с короткой подписью и обложка', (id) => {
+    const source = cases.find((c) => c.id === id)!;
+    expect(source.story).toHaveLength(1);
+    const [frame] = source.story!;
+    expect(frame.image).toMatch(/\.webp/);
+    expect(frame.alt.length).toBeGreaterThan(10);
+    expect(frame.caption.length).toBeLessThanOrEqual(110);
+    expect(source.cover).toMatch(/cover-.*\.webp/);
+  });
+
+  it.each(['tutorial-1', 'second-1'])('%s: подпись и описание без ответа — ни одного имени соседа', (id) => {
+    const source = cases.find((c) => c.id === id)!;
+    const names = source.categories.find((c) => c.id === source.anchor)!.values;
+    const text = `${source.story![0].caption} ${source.story![0].alt}`;
+    for (const name of names) expect(text, name).not.toContain(name.slice(0, 4));
+    // «хозяин», «хозяйка», «он принёс» и т. п. выдали бы пол владельца.
+    expect(text).not.toMatch(/хозя|принёс|принесла|оставил|оставила/i);
+  });
+
+  it('у всех дел с кадрами есть обложка карточки', () => {
+    for (const c of cases.filter((x) => x.story)) expect(c.cover, c.id).toBeTruthy();
   });
 });

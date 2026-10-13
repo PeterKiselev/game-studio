@@ -269,6 +269,12 @@ async function settle(page, ms = 700) {
     const state = delayed([HINTS]);
     const { context, page } = await open(browser, RESTORE, VK_LAUNCH, { state, ads: true });
     await page.getByRole('button', { name: /Чей пирог остался в беседке/ }).click();
+    // Первые дела открываются с кадром вступления — пропускаем его, как игрок.
+    try {
+      await page.locator('.story').getByRole('button', { name: 'Пропустить' }).click({ timeout: 1000 });
+    } catch {
+      /* вступления нет или его уже видели */
+    }
     try {
       await page.getByRole('button', { name: 'Понятно, начинаем' }).click({ timeout: 1500 });
     } catch {

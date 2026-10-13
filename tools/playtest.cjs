@@ -152,6 +152,12 @@ async function openCase(page, title = /Чей пирог остался в бе�
   // диалога уже не будет: onboardingSeen сохраняется в save. Короткий
   // таймаут вместо count() — click() синхронно вставляет overlay ДО
   // await внутри maybeShowOnboarding, но ждать явно надёжнее, чем гонка.
+  // Первые дела открываются с кадром вступления — пропускаем его, как игрок.
+  try {
+    await page.locator('.story').getByRole('button', { name: 'Пропустить' }).click({ timeout: 1000 });
+  } catch {
+    /* вступления нет или его уже видели */
+  }
   try {
     await page.getByRole('button', { name: 'Понятно, начинаем' }).click({ timeout: 1000 });
   } catch {

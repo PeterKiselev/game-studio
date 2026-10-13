@@ -628,6 +628,136 @@ async function geometry(page, pairs) {
     await context.close();
   }
 
+  console.log('\n=== 9. Первые два дела: обложки карточек, по одному кадру, клавиатура, сохранения ===');
+  {
+    // Старый игрок: обучающее дело раскрыто на 3 звезды, второе начато, есть покупка.
+    const old = JSON.parse(JSON.stringify(HOSE_DONE));
+    old.data.casesCompleted = ['tutorial-1', 'ch1-hose'];
+    old.data.stars = { 'tutorial-1': 3, 'ch1-hose': 2 };
+    old.data.progress['second-1'] = { marks: { 'места|забор~персонажи|Пётр': 'no' }, hintsUsed: 1 };
+    old.data.purchases = { unlimitedHints: true };
+    const { context, page } = await openWithSave(browser, old);
+    const before = await saveOf(page);
+    const cardOf = (re) => page.locator('.case-card', { hasText: re });
+    assert((await page.locator('.case-card .cover-image').count()) === 3, 'обложки у трёх дел с картинками');
+    await page.waitForFunction(() => [...document.querySelectorAll('.cover-image')].every((i) => i.complete && i.naturalWidth > 0));
+    const pie = cardOf(/Чей пирог/);
+    assert((await pie.innerText()).includes('Раскрыто · ⭐⭐⭐') && (await pie.locator('.stamp.badge').innerText()).trim() === '✓', 'обучающее дело: статус, звёзды и печать ✓ на обложке');
+    assert((await cardOf(/Чей велосипед/).innerText()).includes('Ждёт расследования'), 'начатое второе дело — прежний статус');
+    assert((await cardOf(/Шланг у водокачки/).innerText()).includes('Раскрыто · ⭐⭐'), 'дело главы: статус и звёзды на месте');
+    assert((await cardOf(/Чей самовар/).locator('.cover').count()) === 0 && (await cardOf(/Чей самовар/).locator('.stamp').count()) === 1, 'дела без картинки — прежняя печать без обложки');
+    const key = cardOf(/Чей ключ/);
+    assert((await key.locator('.cover').count()) === 0 && (await key.locator('.stamp').innerText()).trim() === '?' && (await key.innerText()).includes('Ждёт расследования'), 'дело 2 главы (открыто после дела 1) — прежняя печать «?» и статус');
+
+    // Второе дело: один кадр, клавиатура заперта в окне, прогресс цел.
+    await cardOf(/Чей велосипед/).click();
+    const story = page.locator('.story');
+    await story.waitFor();
+    assert((await story.locator('.story-counter').innerText()).trim() === '', 'один кадр — без счётчика «1 / 1»');
+    assert((await story.locator('.story-controls .btn').innerText()).trim() === 'К расследованию', 'единственная кнопка — «К расследованию»');
+    const caption = await story.locator('.story-caption').innerText();
+    assert(caption.includes('велосипед') && !/Настя|Пётр|Женя/.test(caption), 'подпись без имён: ' + caption);
+    for (let i = 0; i < 5; i += 1) {
+      await page.keyboard.press('Tab');
+      assert(await page.evaluate(() => !!document.activeElement?.closest('.story')), `Tab ×${i + 1}: фокус внутри кадра`);
+    }
+    await page.keyboard.press('Shift+Tab');
+    assert(await page.evaluate(() => !!document.activeElement?.closest('.story')), 'Shift+Tab: фокус внутри кадра');
+    await story.locator('.story-controls .btn').click();
+    await page.waitForSelector('.case');
+    assert((await page.locator('button[aria-label="Пётр — забор"].no').count()) === 1, 'незаконченная отметка второго дела на месте');
+    const replay = page.getByRole('button', { name: '📖 Вступление' });
+    assert((await replay.count()) === 1, 'у дела без текста вступления есть кнопка повтора');
+    await replay.focus();
+    await page.keyboard.press('Enter');
+    await story.waitFor();
+    await page.keyboard.press('Escape');
+    assert(await replay.evaluate((n) => n === document.activeElement), 'после повтора фокус на кнопке «Вступление»');
+
+    let saved = await saveOf(page);
+    assert(saved.data.storySeen?.includes('second-1') && !saved.data.storySeen.includes('tutorial-1'), 'просмотр записан только для второго дела');
+    assert(JSON.stringify(saved.data.progress['second-1']) === JSON.stringify(before.data.progress['second-1']), 'прогресс второго дела не изменился');
+    assert(JSON.stringify(saved.data.stars) === JSON.stringify(before.data.stars) && saved.data.purchases.unlimitedHints === true, 'звёзды и покупка не изменились');
+
+    // Раскрытое обучающее дело: кадр показывается один раз и ему (по storySeen), «Пропустить».
+    await page.locator('.case .topbar .btn').click();
+    await cardOf(/Чей пирог/).click();
+    await story.waitFor();
+    assert((await story.locator('.story-caption').innerText()).includes('пирог'), 'кадр обучающего дела');
+    await story.getByRole('button', { name: 'Пропустить' }).click();
+    await page.waitForSelector('.case');
+    await page.locator('.case .topbar .btn').click();
+    await page.reload({ waitUntil: 'networkidle' });
+    await page.waitForSelector('.case-list');
+    for (const re of [/Чей пирог/, /Чей велосипед/]) {
+      await cardOf(re).click();
+      await page.waitForSelector('.case');
+      assert((await story.count()) === 0, `${re}: второй раз кадр сам не показывается`);
+      await page.locator('.case .topbar .btn').click();
+    }
+    saved = await saveOf(page);
+    assert(JSON.stringify(saved.data.casesCompleted) === JSON.stringify(before.data.casesCompleted), 'раскрытые дела не изменились');
+    assert(page.errors.length === 0, 'без ошибок: ' + page.errors.join('; '));
+    await context.close();
+  }
+  {
+    // Новый игрок: кадр обучающего дела — первым, потом обучение, потом дело.
+    const { context, page } = await openWithSave(browser, null);
+    await page.locator('.case-card', { hasText: /Чей пирог/ }).click();
+    await page.locator('.story').waitFor();
+    assert((await page.locator('.dialog').count()) === 0, 'новый игрок: сначала кадр, потом обучение');
+    await page.keyboard.press('Enter'); // фокус на «К расследованию»
+    await page.getByRole('button', { name: 'Понятно, начинаем' }).click();
+    await page.waitForSelector('.case');
+    assert((await page.locator('.case .topbar .title').innerText()).includes('Чей пирог'), 'открыто обучающее дело');
+    await context.close();
+  }
+
+  console.log('\n=== 10. Обложки и одиночный кадр: мобильная вёрстка ===');
+  for (const viewport of [
+    { width: 360, height: 640 },
+    { width: 390, height: 844 },
+    { width: 1000, height: 700 },
+  ]) {
+    const size = `${viewport.width}×${viewport.height}`;
+    const { context, page } = await openWithSave(browser, null, viewport);
+    const bad = await page.evaluate(() => {
+      const out = [];
+      if (document.documentElement.scrollWidth > window.innerWidth + 1) out.push('горизонтальная прокрутка');
+      for (const card of document.querySelectorAll('.case-card')) {
+        const c = card.getBoundingClientRect();
+        const mark = (card.querySelector('.cover') || card.querySelector('.stamp')).getBoundingClientRect();
+        const text = card.querySelector('.text').getBoundingClientRect();
+        const name = card.querySelector('b').textContent;
+        if (c.right > window.innerWidth + 1) out.push(`${name}: шире окна`);
+        if (mark.right > text.left + 1) out.push(`${name}: обложка наезжает на текст`);
+        if (mark.top < c.top - 1 || mark.bottom > c.bottom + 1) out.push(`${name}: обложка выходит из карточки`);
+      }
+      return out;
+    });
+    assert(bad.length === 0, `${size}: карточки с обложками без наложений` + (bad.length ? ': ' + bad.join('; ') : ''));
+    const hit = await page.locator('.case-card').first().boundingBox();
+    assert(hit.height >= 44, `${size}: карточка не ниже 44px`);
+    if (process.env.SHOT_DIR) await page.screenshot({ path: `${process.env.SHOT_DIR}/plot-covers-${size}.png` });
+
+    await page.locator('.case-card', { hasText: /Чей велосипед/ }).click();
+    await page.locator('.story').waitFor();
+    await page.waitForFunction(() => document.querySelector('.story-image')?.naturalWidth > 0);
+    await page.evaluate(() => document.querySelector('.story-image').decode());
+    assert(await page.evaluate(() => document.querySelector('.story-image').naturalWidth === 1080), `${size}: картинка кадра загружена`);
+    const issues = await geometry(page, [
+      ['.story .topbar', '.story-frame'],
+      ['.story-frame', '.story-caption'],
+      ['.story-caption', '.story-controls'],
+    ]);
+    assert(issues.length === 0, `${size}: одиночный кадр без наложений` + (issues.length ? ': ' + issues.join('; ') : ''));
+    const btn = await page.locator('.story-controls .btn').boundingBox();
+    assert(btn.y + btn.height <= viewport.height && btn.height >= 44, `${size}: «К расследованию» видна без прокрутки`);
+    if (process.env.SHOT_DIR) await page.screenshot({ path: `${process.env.SHOT_DIR}/story-bike-${size}.png` });
+    assert(page.errors.length === 0, 'без ошибок: ' + page.errors.join('; '));
+    await context.close();
+  }
+
   await browser.close();
   console.log('\nВСЕ ПРОВЕРКИ ПРОШЛИ');
 })().catch((err) => {
