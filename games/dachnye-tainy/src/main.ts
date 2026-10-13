@@ -320,14 +320,13 @@ async function maybeShowOnboarding(): Promise<void> {
 // --- экран 2: расследование --------------------------------------------------
 
 /**
- * Вступление показывается само один раз — перед первым открытием дела. Кто
- * уже раскрыл дело или начал его до появления кадров, их не увидит
- * навязанно: для них есть кнопка «Вступление» на экране дела.
+ * Вступление показывается само один раз — при открытии дела, если его ещё
+ * нет в storySeen. Это касается и тех, кто начал или раскрыл дело до
+ * появления кадров: прогресс при этом не трогается, а «Пропустить» сразу
+ * ведёт к делу. Дальше — только по кнопке «Вступление».
  */
 async function startCase(source: Case): Promise<void> {
-  const s = app.save.data;
-  const fresh = !s.casesCompleted.includes(source.id) && !s.progress[source.id];
-  if (source.story && fresh && !s.storySeen?.includes(source.id)) {
+  if (source.story && !app.save.data.storySeen?.includes(source.id)) {
     await showStory(source);
   }
   await openCase(source);

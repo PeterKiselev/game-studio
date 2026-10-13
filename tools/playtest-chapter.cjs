@@ -491,20 +491,54 @@ async function geometry(page, pairs) {
     assert(saved.data.storySeen?.includes('ch1-hose'), '«Пропустить» тоже считается просмотром');
     await context.close();
   }
-  for (const [label, envelope] of [
-    ['раскрывшему дело 1 до появления кадров', HOSE_DONE],
+  // Старые игроки: кадры показываются один раз и им, прогресс и покупки не трогаются.
+  for (const [label, envelope, expectMark, finishBy] of [
+    ['раскрывшему дело 1 до появления кадров', (() => {
+      const e = JSON.parse(JSON.stringify(HOSE_DONE));
+      e.data.purchases = { noAds: true };
+      return e;
+    })(), null, 'skip'],
     ['начавшему дело 1 до появления кадров', (() => {
       const e = JSON.parse(JSON.stringify(HOSE_DONE));
       e.data.casesCompleted = [];
-      e.data.progress['ch1-hose'] = { marks: { 'ноша|ведро~персонажи|Зоя': 'yes' }, hintsUsed: 0 };
+      e.data.stars = {};
+      e.data.progress['ch1-hose'] = { marks: { 'ноша|ведро~персонажи|Зоя': 'yes' }, hintsUsed: 1 };
       return e;
-    })()],
+    })(), 'Зоя — ведро', 'done'],
   ]) {
     const { context, page } = await openWithSave(browser, envelope);
+    const before = await saveOf(page);
+    await page.getByRole('button', { name: TITLE }).click();
+    const story = page.locator('.story');
+    await story.waitFor();
+    assert((await story.locator('.story-counter').innerText()).trim() === '1 / 3', `${label}: кадры показаны при открытии дела`);
+    if (finishBy === 'skip') {
+      await story.getByRole('button', { name: 'Пропустить' }).click();
+    } else {
+      for (let i = 0; i < 3; i += 1) await story.locator('.story-controls .btn').click();
+    }
+    await page.waitForSelector('.case');
+    if (expectMark) {
+      assert((await page.locator(`button[aria-label="${expectMark}"].yes`).count()) === 1, `${label}: незаконченные отметки на месте`);
+    }
+    const after = await saveOf(page);
+    assert(after.data.storySeen?.includes('ch1-hose'), `${label}: просмотр записан`);
+    assert(JSON.stringify(after.data.casesCompleted) === JSON.stringify(before.data.casesCompleted), `${label}: раскрытые дела не изменились`);
+    assert(JSON.stringify(after.data.stars) === JSON.stringify(before.data.stars), `${label}: звёзды не изменились`);
+    assert(JSON.stringify(after.data.purchases) === JSON.stringify(before.data.purchases), `${label}: покупки не изменились`);
+    assert(
+      JSON.stringify(after.data.progress['ch1-hose'] ?? null) === JSON.stringify(before.data.progress['ch1-hose'] ?? null),
+      `${label}: прогресс дела не изменился`,
+    );
+    // Второй раз — уже без кадров, но с кнопкой повтора.
+    await page.locator('.case .topbar .btn').click();
+    await page.reload({ waitUntil: 'networkidle' });
+    await page.waitForSelector('.case-list');
     await page.getByRole('button', { name: TITLE }).click();
     await page.waitForSelector('.case');
-    assert((await page.locator('.story').count()) === 0, `${label}: кадры не навязываются`);
-    assert((await page.getByRole('button', { name: '📖 Вступление' }).count()) === 1, `${label}: кадры доступны по кнопке`);
+    assert((await story.count()) === 0, `${label}: второй раз кадры сами не показываются`);
+    assert((await page.getByRole('button', { name: '📖 Вступление' }).count()) === 1, `${label}: повтор по кнопке доступен`);
+    assert(page.errors.length === 0, 'без ошибок: ' + page.errors.join('; '));
     await context.close();
   }
 
