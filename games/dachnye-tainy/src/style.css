@@ -659,3 +659,66 @@
 .step-next .btn {
   flex: 1;
 }
+
+/* Иллюстрированное вступление: кадр, подпись под ним (не поверх — контраст
+   в обеих темах), кнопки внизу под большой палец. Не шире 480 px на десктопе. */
+.story {
+  position: fixed;
+  inset: 0;
+  z-index: 45;
+  display: flex;
+  flex-direction: column;
+  /* Закрывает всё окно, а колонка с кадром — не шире 480 px по центру. */
+  padding-inline: max(0px, calc((100% - 480px) / 2));
+  background: var(--paper);
+}
+
+.story-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-3);
+  padding: var(--gap-3);
+}
+
+.story-frame {
+  aspect-ratio: 4 / 3;
+  border-radius: var(--r-lg);
+  overflow: hidden;
+  background: var(--surface-2);
+  box-shadow: var(--shadow);
+  flex: none;
+}
+
+.story-image {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.story-caption {
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.55;
+  color: var(--ink);
+}
+
+.story-controls {
+  align-items: center;
+}
+
+.story-controls .story-counter {
+  flex: none;
+  min-width: 48px;
+  font-size: 13px;
+  color: var(--ink-3);
+}
+
+.case-intro .story-replay {
+  display: block;
+  margin-top: 8px;
+  min-height: 44px;
+}

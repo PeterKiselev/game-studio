@@ -10,6 +10,7 @@ export type {
   PlayerMarks,
   Ref,
   Solution,
+  StoryFrame,
   Testimony,
 } from './types';
 

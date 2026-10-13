@@ -28,6 +28,12 @@ interface Save {
   /** Обучение цели и жесту ✓/✕ показано один раз, не перед каждым делом. */
   onboardingSeen?: boolean;
   /**
+   * Дела, чьё иллюстрированное вступление уже показано (досмотрено или
+   * пропущено). Сам показ — только при первом открытии, дальше — по кнопке.
+   * Необязательное поле: старые сохранения читаются без миграции.
+   */
+  storySeen?: string[];
+  /**
    * Звёзды за качество раскрытия (1-3, по числу подсказок), по каждому
    * делу — только за первое раскрытие. Участок растёт по сумме звёзд,
    * не по числу раскрытых дел: так переигранное без подсказок дело
@@ -313,7 +319,97 @@ async function maybeShowOnboarding(): Promise<void> {
 
 // --- экран 2: расследование --------------------------------------------------
 
+/**
+ * Вступление показывается само один раз — перед первым открытием дела. Кто
+ * уже раскрыл дело или начал его до появления кадров, их не увидит
+ * навязанно: для них есть кнопка «Вступление» на экране дела.
+ */
 async function startCase(source: Case): Promise<void> {
+  const s = app.save.data;
+  const fresh = !s.casesCompleted.includes(source.id) && !s.progress[source.id];
+  if (source.story && fresh && !s.storySeen?.includes(source.id)) {
+    await showStory(source);
+  }
+  await openCase(source);
+}
+
+/**
+ * Кадры вступления поверх текущего экрана. Promise разрешается, когда игрок
+ * дошёл до конца или нажал «Пропустить»; оба случая считаются просмотром.
+ */
+function showStory(source: Case): Promise<void> {
+  const frames = source.story ?? [];
+  return new Promise((resolve) => {
+    let index = 0;
+    const img = el('img', { class: 'story-image', width: 1080, height: 810, decoding: 'async' }) as HTMLImageElement;
+    const caption = el('p', { class: 'story-caption' });
+    caption.setAttribute('aria-live', 'polite');
+    const counter = el('span', { class: 'story-counter' });
+    const next = el('button', { class: 'btn primary', type: 'button' }) as HTMLButtonElement;
+    const skip = el('button', { class: 'btn ghost', type: 'button' }, 'Пропустить') as HTMLButtonElement;
+
+    const overlay = el(
+      'div',
+      { class: 'story' },
+      el('div', { class: 'topbar' }, el('span', { class: 'title' }, shortTitle(source)), el('span', { class: 'spacer' }), skip),
+      el('div', { class: 'story-body' }, el('div', { class: 'story-frame' }, img), caption),
+      el('div', { class: 'controls story-controls' }, counter, next),
+    );
+
+    overlay.setAttribute('role', 'dialog');
+    overlay.setAttribute('aria-label', `Вступление: ${shortTitle(source)}`);
+
+    function render(): void {
+      const frame = frames[index];
+      img.src = frame.image;
+      img.alt = frame.alt;
+      caption.textContent = frame.caption;
+      counter.textContent = `${index + 1} / ${frames.length}`;
+      next.textContent = index === frames.length - 1 ? 'К расследованию' : 'Дальше';
+      // Следующий кадр подгружаем заранее, чтобы перелистывание не ждало сеть.
+      if (frames[index + 1]) new Image().src = frames[index + 1].image;
+    }
+
+    function finish(skipped: boolean): void {
+      app.track(skipped ? 'story_skipped' : 'story_done', { caseId: source.id, frame: index + 1 });
+      const seen = (app.save.data.storySeen ??= []);
+      if (!seen.includes(source.id)) {
+        seen.push(source.id);
+        app.save.markDirty();
+      }
+      document.removeEventListener('keydown', onKey);
+      overlay.remove();
+      resolve();
+    }
+
+    function onKey(e: KeyboardEvent): void {
+      if (e.key === 'Escape') finish(true);
+      else if (e.key === 'ArrowRight') next.click();
+      else if (e.key === 'ArrowLeft' && index > 0) {
+        index -= 1;
+        render();
+      }
+    }
+
+    next.addEventListener('click', () => {
+      if (index === frames.length - 1) {
+        finish(false);
+        return;
+      }
+      index += 1;
+      render();
+    });
+    skip.addEventListener('click', () => finish(true));
+    document.addEventListener('keydown', onKey);
+
+    app.track('story_shown', { caseId: source.id });
+    render();
+    document.body.append(overlay);
+    next.focus();
+  });
+}
+
+async function openCase(source: Case): Promise<void> {
   await maybeShowOnboarding();
 
   app.track('case_start', { caseId: source.id });
@@ -460,7 +556,7 @@ async function startCase(source: Case): Promise<void> {
     el(
       'div',
       { class: 'case-scroll' },
-      ...(source.intro ? [el('div', { class: 'case-intro' }, source.intro), toGridsBtn] : []),
+      ...(source.intro ? [introBlock(source), toGridsBtn] : []),
       cluesBox,
       ...(testimoniesBox ? [testimoniesBox] : []),
       gridsBox,
@@ -665,6 +761,20 @@ function buildGroundTruthYes(source: Case, solution: Solution): Set<string> {
     }
   }
   return yes;
+}
+
+/** Условия дела; у дела с кадрами — ещё кнопка повторить вступление. */
+function introBlock(source: Case): HTMLElement {
+  const box = el('div', { class: 'case-intro' }, source.intro ?? '');
+  if (source.story) {
+    const replay = el('button', { class: 'btn ghost story-replay', type: 'button' }, '📖 Вступление') as HTMLButtonElement;
+    replay.addEventListener('click', () => {
+      app.track('story_replay', { caseId: source.id });
+      void showStory(source);
+    });
+    box.append(replay);
+  }
+  return box;
 }
 
 // --- экран 2б: противоречие в показаниях ---------------------------------------

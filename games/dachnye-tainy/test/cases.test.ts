@@ -348,3 +348,33 @@ describe('дела с порядком не выдают пол через ок�
     expect(marksFitCase(source, moved)).toBe(true);
   });
 });
+
+describe('иллюстрированное вступление дела 1', () => {
+  const source = cases.find((c) => c.id === 'ch1-hose')!;
+  const story = source.story!;
+
+  it('три кадра, у каждого картинка, описание и короткая подпись', () => {
+    expect(story).toHaveLength(3);
+    story.forEach((frame, i) => {
+      expect(frame.image).toMatch(new RegExp(`ch1-hose-${i + 1}\.webp`));
+      expect(frame.alt.length).toBeGreaterThan(10);
+      expect(frame.caption.length).toBeLessThanOrEqual(130);
+    });
+  });
+
+  it('кадры — атмосфера, не ответ и не новые улики', () => {
+    const text = story.map((f) => `${f.caption} ${f.alt}`).join(' ').toLowerCase();
+    // Ни ответа (Рома, 9:00), ни находки (бирка, склад), ни времени и уровня воды.
+    expect(text).not.toMatch(/рома|9:00|девят|бирк|склад|\d+ час|отметк|уровн/);
+  });
+
+  it('условия задачи остались в тексте дела — без кадров решать можно', () => {
+    expect(source.intro).toContain('в 6, 7, 8 и 9 часов');
+    expect(source.intro).toContain('все четыре разные');
+    expect(source.intro).toMatch(/Кто принёс шланг\?/);
+  });
+
+  it('кадры есть только у дела 1', () => {
+    expect(cases.filter((c) => c.story).map((c) => c.id)).toEqual(['ch1-hose']);
+  });
+});

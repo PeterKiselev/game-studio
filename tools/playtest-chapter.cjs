@@ -43,6 +43,12 @@ async function openWithSave(browser, envelope, viewport = { width: 420, height: 
 
 async function openChapterCase(page) {
   await page.getByRole('button', { name: TITLE }).click();
+  // На новом сохранении сначала кадры вступления — их проверяет сценарий 7.
+  try {
+    await page.locator('.story').getByRole('button', { name: 'Пропустить' }).click({ timeout: 1000 });
+  } catch {
+    /* вступление уже видели или его нет */
+  }
   try {
     await page.getByRole('button', { name: 'Понятно, начинаем' }).click({ timeout: 1000 });
   } catch {
@@ -118,7 +124,7 @@ async function geometry(page, pairs) {
       if (ix > 1 && iy > 1) out.push(`${a}×${b} ${Math.round(iy)}px`);
     }
     if (document.documentElement.scrollWidth > window.innerWidth + 1) out.push('горизонтальная прокрутка');
-    for (const sel of ['.case-intro', '.clues', '.finding', '.reveal-text']) {
+    for (const sel of ['.case-intro', '.clues', '.finding', '.reveal-text', '.story-frame', '.story-caption']) {
       const n = r(sel);
       if (n && (n.left < -1 || n.right > window.innerWidth + 1)) out.push(`${sel} шире окна`);
     }
@@ -423,6 +429,112 @@ async function geometry(page, pairs) {
     assert(await next.isVisible(), `${size}: кнопка «К развязке» достижима`);
     // Снимок для просмотра глазами — только если явно задана папка.
     if (process.env.SHOT_DIR) await page.screenshot({ path: `${process.env.SHOT_DIR}/key-step-${size}.png`, fullPage: true });
+    assert(page.errors.length === 0, 'без ошибок: ' + page.errors.join('; '));
+    await context.close();
+  }
+
+  console.log('\n=== 7. Вступление дела 1: кадры, пропуск, повтор, без повторного навязывания ===');
+  {
+    const { context, page } = await openWithSave(browser, null);
+    await page.getByRole('button', { name: TITLE }).click();
+    const story = page.locator('.story');
+    await story.waitFor();
+    assert((await page.locator('.dialog').count()) === 0, 'сначала кадры, обучение — после них');
+    const captions = [];
+    for (let i = 1; i <= 3; i += 1) {
+      assert((await story.locator('.story-counter').innerText()).trim() === `${i} / 3`, `кадр ${i} из 3`);
+      await page.waitForFunction(() => {
+        const img = document.querySelector('.story-image');
+        return img && img.complete && img.naturalWidth > 0;
+      });
+      assert((await story.locator('.story-image').getAttribute('alt')).length > 10, `у кадра ${i} есть описание`);
+      captions.push(await story.locator('.story-caption').innerText());
+      const btn = story.locator('.story-controls .btn');
+      assert((await btn.innerText()).trim() === (i < 3 ? 'Дальше' : 'К расследованию'), `кнопка кадра ${i}: «${await btn.innerText()}»`);
+      await btn.click();
+    }
+    assert(captions[0].includes('убывает вода') && captions[1].includes('брошенный шланг') && captions[2].includes('Валентина Петровна'), 'подписи по сюжету');
+    assert(!/Рома|9:00|бирк/i.test(captions.join(' ')), 'в подписях нет ответа и находки');
+    await page.getByRole('button', { name: 'Понятно, начинаем' }).click();
+    await page.waitForSelector('.case');
+    assert((await page.locator('.story').count()) === 0, 'после кадров — экран дела');
+    const intro = await page.locator('.case-intro').innerText();
+    assert(intro.includes('в 6, 7, 8 и 9 часов') && intro.includes('Кто принёс шланг?'), 'условия задачи на экране дела');
+
+    // Ручной повтор поверх дела: отметки не теряются, экран дела тот же.
+    await clickYes(page, 'Зоя', 'ведро');
+    await page.getByRole('button', { name: '📖 Вступление' }).click();
+    await story.waitFor();
+    assert((await story.locator('.story-counter').innerText()).trim() === '1 / 3', 'повтор начинается с первого кадра');
+    await page.keyboard.press('Escape');
+    assert((await page.locator('.story').count()) === 0, 'Escape закрывает вступление');
+    assert((await page.locator('button[aria-label="Зоя — ведро"].yes').count()) === 1, 'после повтора отметка на месте');
+
+    let saved = await saveOf(page);
+    assert(saved.data.storySeen?.includes('ch1-hose'), 'просмотр записан в сохранение');
+    await page.locator('.case .topbar .btn').click();
+    await page.reload({ waitUntil: 'networkidle' });
+    await page.waitForSelector('.case-list');
+    await page.getByRole('button', { name: TITLE }).click();
+    await page.waitForSelector('.case');
+    assert((await page.locator('.story').count()) === 0, 'второй раз кадры сами не показываются');
+    assert(page.errors.length === 0, 'без ошибок: ' + page.errors.join('; '));
+    await context.close();
+  }
+  {
+    const { context, page } = await openWithSave(browser, null);
+    await page.getByRole('button', { name: TITLE }).click();
+    await page.locator('.story').getByRole('button', { name: 'Пропустить' }).click();
+    await page.getByRole('button', { name: 'Понятно, начинаем' }).click();
+    await page.waitForSelector('.case');
+    const saved = await saveOf(page);
+    assert(saved.data.storySeen?.includes('ch1-hose'), '«Пропустить» тоже считается просмотром');
+    await context.close();
+  }
+  for (const [label, envelope] of [
+    ['раскрывшему дело 1 до появления кадров', HOSE_DONE],
+    ['начавшему дело 1 до появления кадров', (() => {
+      const e = JSON.parse(JSON.stringify(HOSE_DONE));
+      e.data.casesCompleted = [];
+      e.data.progress['ch1-hose'] = { marks: { 'ноша|ведро~персонажи|Зоя': 'yes' }, hintsUsed: 0 };
+      return e;
+    })()],
+  ]) {
+    const { context, page } = await openWithSave(browser, envelope);
+    await page.getByRole('button', { name: TITLE }).click();
+    await page.waitForSelector('.case');
+    assert((await page.locator('.story').count()) === 0, `${label}: кадры не навязываются`);
+    assert((await page.getByRole('button', { name: '📖 Вступление' }).count()) === 1, `${label}: кадры доступны по кнопке`);
+    await context.close();
+  }
+
+  console.log('\n=== 8. Вступление: вёрстка ===');
+  for (const viewport of [
+    { width: 360, height: 640 },
+    { width: 390, height: 844 },
+    { width: 1000, height: 700 },
+  ]) {
+    const { context, page } = await openWithSave(browser, null, viewport);
+    const size = `${viewport.width}×${viewport.height}`;
+    await page.getByRole('button', { name: TITLE }).click();
+    await page.locator('.story').waitFor();
+    await page.waitForFunction(() => document.querySelector('.story-image')?.complete);
+    for (let i = 1; i <= 3; i += 1) {
+      const issues = await geometry(page, [
+        ['.story .topbar', '.story-frame'],
+        ['.story-frame', '.story-caption'],
+        ['.story-caption', '.story-controls'],
+      ]);
+      assert(issues.length === 0, `${size}, кадр ${i}: без наложений` + (issues.length ? ': ' + issues.join('; ') : ''));
+      const box = await page.locator('.story-controls .btn').boundingBox();
+      assert(box && box.y + box.height <= viewport.height && box.height >= 44, `${size}, кадр ${i}: кнопка видна без прокрутки и не меньше 44px`);
+      const frame = await page.locator('.story-frame').boundingBox();
+      assert(Math.abs(frame.width / frame.height - 4 / 3) < 0.02, `${size}, кадр ${i}: пропорция 4:3 без искажений`);
+      const font = await page.locator('.story-caption').evaluate((n) => parseFloat(getComputedStyle(n).fontSize));
+      assert(font >= 15, `${size}: подпись ${font}px`);
+      if (process.env.SHOT_DIR) await page.screenshot({ path: `${process.env.SHOT_DIR}/story-${i}-${size}.png` });
+      await page.locator('.story-controls .btn').click();
+    }
     assert(page.errors.length === 0, 'без ошибок: ' + page.errors.join('; '));
     await context.close();
   }
