@@ -683,7 +683,7 @@ async function geometry(page, pairs) {
     await page.locator('.case .topbar .btn').click();
     await cardOf(/Чей пирог/).click();
     await story.waitFor();
-    assert((await story.locator('.story-counter').innerText()).trim() === '1 / 3', 'вступление обучающего дела — книжка из трёх страниц');
+    assert((await story.locator('.story-counter').innerText()).trim() === '1 / 4', 'вступление обучающего дела — книжка из четырёх страниц');
     await story.getByRole('button', { name: 'Пропустить' }).click();
     await page.waitForSelector('.case');
     await page.locator('.case .topbar .btn').click();
@@ -706,7 +706,7 @@ async function geometry(page, pairs) {
     await page.locator('.case-card', { hasText: /Чей пирог/ }).click();
     await page.locator('.story').waitFor();
     assert((await page.locator('.dialog').count()) === 0, 'новый игрок: сначала кадр, потом обучение');
-    for (let i = 0; i < 3; i += 1) await page.keyboard.press('Enter'); // «Дальше», «Дальше», «К расследованию»
+    for (let i = 0; i < 4; i += 1) await page.keyboard.press('Enter'); // «Дальше» ×3, «К расследованию»
     await page.getByRole('button', { name: 'Понятно, начинаем' }).click();
     await page.waitForSelector('.case');
     assert((await page.locator('.case .topbar .title').innerText()).includes('Чей пирог'), 'открыто обучающее дело');
@@ -758,12 +758,12 @@ async function geometry(page, pairs) {
     await context.close();
   }
 
-  console.log('\n=== 11. «Пирог»: книжка из трёх страниц, новая редакция показывается один раз ===');
+  console.log('\n=== 11. «Пирог»: книжка из четырёх страниц, новая редакция показывается один раз ===');
   {
-    // Игрок видел прежний одиночный кадр обоих дел, начал «Пирог», есть покупка.
+    // Игрок видел и одиночный кадр, и трёхстраничную книжку (ред. 2), начал «Пирог», есть покупка и звёзды.
     const old = JSON.parse(JSON.stringify(HOSE_DONE));
     old.data.casesCompleted = ['ch1-hose'];
-    old.data.storySeen = ['tutorial-1', 'second-1', 'ch1-hose'];
+    old.data.storySeen = ['tutorial-1', 'tutorial-1#2', 'second-1', 'ch1-hose'];
     old.data.progress['tutorial-1'] = { marks: { 'места|калитка~персонажи|Ирина': 'no' }, hintsUsed: 1 };
     old.data.purchases = { noAds: true };
     const { context, page } = await openWithSave(browser, old);
@@ -774,13 +774,23 @@ async function geometry(page, pairs) {
     const story = page.locator('.story');
     await story.waitFor();
     const captions = [];
-    for (let i = 1; i <= 3; i += 1) {
-      assert((await story.locator('.story-counter').innerText()).trim() === `${i} / 3`, `страница ${i} из 3`);
+    const images = [];
+    for (let i = 1; i <= 4; i += 1) {
+      assert((await story.locator('.story-counter').innerText()).trim() === `${i} / 4`, `страница ${i} из 4`);
       await page.waitForFunction(() => document.querySelector('.story-image')?.naturalWidth > 0);
       captions.push(await story.locator('.story-caption').innerText());
-      if (i < 3) await story.getByRole('button', { name: 'Дальше' }).click();
+      images.push(await story.locator('.story-image').evaluate((n) => n.src.split('/').pop().split('.')[0]));
+      if (i < 4) await story.getByRole('button', { name: 'Дальше' }).click();
     }
-    assert(captions[0].includes('кто-то в беседке') && captions[1].includes('пирог, зонт или лейка') && captions[2].includes('Чей он?'), 'подписи книжки по порядку');
+    assert(
+      JSON.stringify(images) === JSON.stringify(['tutorial-pie-book-1', 'tutorial-pie-book-2-garden', 'tutorial-pie-book-umbrella', 'tutorial-pie-1']),
+      'порядок страниц: двор → лейка у грядки → зонт → пирог в беседке: ' + images.join(', '),
+    );
+    assert(
+      captions[0].includes('Михаил, Ирина и Олег') && captions[1].includes('полная лейка') && captions[2].includes('был зонт') && captions[3].includes('Чей он?'),
+      'подписи книжки по порядку',
+    );
+    assert(!captions.join(' ').includes('пирог, зонт или лейка'), 'белой страницы с отдельными предметами больше нет');
     // «Пропустить» с последней страницы: дальше — дело с условиями и фактами.
     await story.getByRole('button', { name: 'Пропустить' }).click();
     await page.waitForSelector('.case');
@@ -789,8 +799,8 @@ async function geometry(page, pairs) {
     assert((await page.locator('.clues .clue').count()) === 5 && (await page.locator('.clues-title').innerText()).trim() === 'Факты', 'после пропуска факты на экране дела');
     assert((await page.locator('button[aria-label="Ирина — калитка"].no').count()) === 1, 'незаконченная отметка «Пирога» на месте');
     let saved = await saveOf(page);
-    assert(saved.data.storySeen.includes('tutorial-1#2'), 'новая редакция записана отдельным ключом');
-    assert(['tutorial-1', 'second-1', 'ch1-hose'].every((k) => saved.data.storySeen.includes(k)), 'прежние отметки просмотра не стёрты');
+    assert(saved.data.storySeen.includes('tutorial-1#3'), 'новая редакция записана отдельным ключом');
+    assert(['tutorial-1', 'tutorial-1#2', 'second-1', 'ch1-hose'].every((k) => saved.data.storySeen.includes(k)), 'прежние отметки просмотра (обеих прежних редакций и других дел) не стёрты');
     assert(JSON.stringify(saved.data.progress['tutorial-1']) === JSON.stringify(before.data.progress['tutorial-1']), 'прогресс «Пирога» не изменился');
     assert(saved.data.purchases.noAds === true && JSON.stringify(saved.data.stars) === JSON.stringify(before.data.stars), 'покупка и звёзды на месте');
 
@@ -799,10 +809,14 @@ async function geometry(page, pairs) {
     await replay.focus();
     await page.keyboard.press('Enter');
     await story.waitFor();
-    assert((await story.locator('.story-counter').innerText()).trim() === '1 / 3', 'повтор — с первой страницы книжки');
-    await page.keyboard.press('ArrowRight');
-    await page.keyboard.press('ArrowRight');
-    assert((await story.locator('.story-counter').innerText()).trim() === '3 / 3', 'стрелки листают книжку');
+    assert((await story.locator('.story-counter').innerText()).trim() === '1 / 4', 'повтор — с первой страницы книжки');
+    for (let i = 0; i < 3; i += 1) await page.keyboard.press('ArrowRight');
+    assert((await story.locator('.story-counter').innerText()).trim() === '4 / 4', 'стрелки листают книжку до конца');
+    for (let i = 0; i < 6; i += 1) {
+      await page.keyboard.press(i % 2 ? 'Shift+Tab' : 'Tab');
+      assert(await page.evaluate(() => !!document.activeElement?.closest('.story')), `повтор, ${i % 2 ? 'Shift+Tab' : 'Tab'}: фокус внутри книжки`);
+    }
+    assert(await page.evaluate(() => document.getElementById('app').inert === true), 'фон под книжкой заблокирован');
     await page.keyboard.press('Escape');
     assert(await replay.evaluate((n) => n === document.activeElement), 'после повтора фокус на кнопке «Вступление»');
 
@@ -831,9 +845,17 @@ async function geometry(page, pairs) {
     await page.locator('.case-card', { hasText: /Чей пирог/ }).click();
     const story = page.locator('.story');
     await story.waitFor();
-    for (let i = 1; i <= 3; i += 1) {
+    for (let i = 1; i <= 4; i += 1) {
       await page.waitForFunction(() => document.querySelector('.story-image')?.naturalWidth > 0);
       await page.evaluate(() => document.querySelector('.story-image').decode());
+      const whole = await page.evaluate(() => {
+        const img = document.querySelector('.story-image');
+        const box = img.getBoundingClientRect();
+        const fit = getComputedStyle(img).objectFit;
+        // При contain картинка целиком; при пропорции рамки = пропорции картинки полей нет.
+        return fit === 'contain' && Math.abs(box.width / box.height - img.naturalWidth / img.naturalHeight) < 0.02;
+      });
+      assert(whole, `${size}, страница ${i}: картинка целиком, без обрезки и полей`);
       const issues = await geometry(page, [
         ['.story .topbar', '.story-frame'],
         ['.story-frame', '.story-caption'],

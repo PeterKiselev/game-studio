@@ -404,23 +404,36 @@ describe('кадры первых двух дел', () => {
   });
 });
 
-describe('вступление-книжка «Пирога» (редакция 2)', () => {
+describe('вступление-книжка «Пирога» (редакция 3, четыре страницы)', () => {
   const source = cases.find((c) => c.id === 'tutorial-1')!;
   const story = source.story!;
   const solution = uniqueSolution(source)!;
 
-  it('три страницы, новая редакция, прежняя обложка', () => {
+  it('четыре страницы: двор → лейка у грядки → зонт → пирог; новая редакция, прежняя обложка', () => {
     expect(story.map((f) => f.image.match(/[^/]+\.webp/)![0])).toEqual([
       'tutorial-pie-book-1.webp',
-      'tutorial-pie-book-2.webp',
+      'tutorial-pie-book-2-garden.webp',
+      'tutorial-pie-book-umbrella.webp',
       'tutorial-pie-1.webp',
     ]);
-    expect(source.storyVersion).toBe(2);
+    expect(source.storyVersion).toBe(3);
     expect(source.cover).toMatch(/cover-tutorial-pie\.webp/);
     for (const frame of story) {
       expect(frame.alt.length).toBeGreaterThan(10);
       expect(frame.caption.length).toBeLessThanOrEqual(130);
     }
+  });
+
+  it('страница с зонтом — фон: ни места из таблицы, ни «оставили/нашли»', () => {
+    const umbrella = story[2];
+    const text = `${umbrella.caption} ${umbrella.alt}`.toLowerCase();
+    expect(text).not.toMatch(/беседк|грядк|калитк|оставил|оставлен|нашли|найден|забыл/);
+  });
+
+  it('лейка у грядки и пирог в беседке — уже факты дела, а не новые улики', () => {
+    const facts = source.clues.filter((c) => c.kind === 'same').map((c) => [c.a.value, c.b.value].sort().join('~'));
+    expect(facts).toContain(['лейка', 'грядка'].sort().join('~'));
+    expect(facts).toContain(['пирог', 'беседка'].sort().join('~'));
   });
 
   it('в кадрах нет глаголов, выдающих владельца пирога', () => {
