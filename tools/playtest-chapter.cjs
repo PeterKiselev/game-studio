@@ -508,6 +508,61 @@ async function geometry(page, pairs) {
     await context.close();
   }
 
+  console.log('\n=== 7б. Вступление модально: клавиатура не достаёт до карточек и клеток под ним ===');
+  {
+    const focusInStory = (page) => page.evaluate(() => !!document.activeElement?.closest('.story'));
+    const { context, page } = await openWithSave(browser, null);
+    await page.getByRole('button', { name: TITLE }).click();
+    const story = page.locator('.story');
+    await story.waitFor();
+    assert(await page.evaluate(() => document.getElementById('app').inert === true), 'фон (участок) inert, пока открыто вступление');
+    for (const [key, n] of [['Tab', 8], ['Shift+Tab', 8]]) {
+      for (let i = 0; i < n; i += 1) {
+        await page.keyboard.press(key);
+        assert(await focusInStory(page), `${key} ×${i + 1}: фокус внутри вступления`);
+      }
+    }
+    // Прямая попытка: карточка под окном не получает фокус и не нажимается.
+    const card = page.locator('.case-card').first();
+    await card.evaluate((n) => n.focus());
+    assert(!(await card.evaluate((n) => n === document.activeElement)), 'карточку «Чей пирог…» под вступлением нельзя сфокусировать');
+    await page.keyboard.press('Enter'); // фокус в окне — Enter листает кадр, а не открывает дело
+    assert((await story.count()) === 1 && (await page.locator('.case').count()) === 0, 'Enter не открыл дело из-под вступления');
+    const saved = await saveOf(page);
+    assert(!saved?.data?.progress?.['tutorial-1'], 'обучающее дело не начато');
+    await page.keyboard.press('Escape');
+    await page.getByRole('button', { name: 'Понятно, начинаем' }).click();
+    await page.waitForSelector('.case');
+    assert((await page.locator('.case .topbar .title').innerText()).includes('Шланг у водокачки'), 'после вступления открыто именно дело 1');
+    assert(await page.evaluate(() => document.getElementById('app').inert === false), 'после закрытия фон снова доступен');
+
+    // Ручной повтор поверх дела: клетки недоступны, после закрытия фокус на кнопке повтора.
+    const replay = page.getByRole('button', { name: '📖 Вступление' });
+    await replay.focus();
+    await page.keyboard.press('Enter');
+    await story.waitFor();
+    const cell = page.locator('button[aria-label="Зоя — ведро"]');
+    for (let i = 0; i < 6; i += 1) {
+      await page.keyboard.press('Tab');
+      assert(await focusInStory(page), `повтор, Tab ×${i + 1}: фокус внутри вступления`);
+    }
+    await cell.evaluate((n) => n.focus());
+    assert(!(await cell.evaluate((n) => n === document.activeElement)), 'клетку под вступлением нельзя сфокусировать');
+    await page.keyboard.press('ArrowRight');
+    assert((await story.locator('.story-counter').innerText()).trim() === '2 / 3', 'стрелка вправо листает и в модальном окне');
+    await page.keyboard.press('ArrowLeft');
+    assert((await story.locator('.story-counter').innerText()).trim() === '1 / 3', 'стрелка влево листает назад');
+    await page.keyboard.press('Escape');
+    assert((await story.count()) === 0, 'Escape закрывает повтор');
+    assert(await replay.evaluate((n) => n === document.activeElement), 'фокус вернулся на кнопку «Вступление»');
+    assert((await page.locator('.cell.yes, .cell.no').count()) === 0, 'ни одна клетка не изменилась, пока было открыто вступление');
+    await page.keyboard.press('Shift+Tab');
+    await cell.click();
+    assert((await cell.evaluate((n) => n.classList.contains('yes'))), 'после закрытия клетки снова работают');
+    assert(page.errors.length === 0, 'без ошибок: ' + page.errors.join('; '));
+    await context.close();
+  }
+
   console.log('\n=== 8. Вступление: вёрстка ===');
   for (const viewport of [
     { width: 360, height: 640 },

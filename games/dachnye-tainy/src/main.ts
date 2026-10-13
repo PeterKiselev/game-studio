@@ -336,8 +336,13 @@ async function startCase(source: Case): Promise<void> {
 /**
  * Кадры вступления поверх текущего экрана. Promise разрешается, когда игрок
  * дошёл до конца или нажал «Пропустить»; оба случая считаются просмотром.
+ *
+ * Окно модальное: всё остальное в body на время показа inert (ни клик, ни Tab,
+ * ни экранный диктор до фона не доходят), а Tab/Shift+Tab ходят по кругу
+ * внутри окна. При закрытии фон возвращается в прежнее состояние, фокус —
+ * на returnFocus (кнопку повтора), если вступление открывали вручную.
  */
-function showStory(source: Case): Promise<void> {
+function showStory(source: Case, returnFocus?: HTMLElement): Promise<void> {
   const frames = source.story ?? [];
   return new Promise((resolve) => {
     let index = 0;
@@ -357,6 +362,7 @@ function showStory(source: Case): Promise<void> {
     );
 
     overlay.setAttribute('role', 'dialog');
+    overlay.setAttribute('aria-modal', 'true');
     overlay.setAttribute('aria-label', `Вступление: ${shortTitle(source)}`);
 
     function render(): void {
@@ -379,11 +385,20 @@ function showStory(source: Case): Promise<void> {
       }
       document.removeEventListener('keydown', onKey);
       overlay.remove();
+      for (const [node, wasInert] of background) node.inert = wasInert;
+      if (returnFocus?.isConnected) returnFocus.focus();
       resolve();
     }
 
     function onKey(e: KeyboardEvent): void {
-      if (e.key === 'Escape') finish(true);
+      if (e.key === 'Tab') {
+        // Две кнопки окна по кругу; фокус, оказавшийся вне окна, возвращается внутрь.
+        e.preventDefault();
+        const order = [skip, next];
+        const at = order.indexOf(document.activeElement as HTMLButtonElement);
+        const step = e.shiftKey ? -1 : 1;
+        order[at < 0 ? 0 : (at + step + order.length) % order.length].focus();
+      } else if (e.key === 'Escape') finish(true);
       else if (e.key === 'ArrowRight') next.click();
       else if (e.key === 'ArrowLeft' && index > 0) {
         index -= 1;
@@ -404,6 +419,10 @@ function showStory(source: Case): Promise<void> {
 
     app.track('story_shown', { caseId: source.id });
     render();
+    const background = [...document.body.children]
+      .filter((node): node is HTMLElement => node instanceof HTMLElement)
+      .map((node) => [node, node.inert] as const);
+    for (const [node] of background) node.inert = true;
     document.body.append(overlay);
     next.focus();
   });
@@ -770,7 +789,7 @@ function introBlock(source: Case): HTMLElement {
     const replay = el('button', { class: 'btn ghost story-replay', type: 'button' }, '📖 Вступление') as HTMLButtonElement;
     replay.addEventListener('click', () => {
       app.track('story_replay', { caseId: source.id });
-      void showStory(source);
+      void showStory(source, replay);
     });
     box.append(replay);
   }
