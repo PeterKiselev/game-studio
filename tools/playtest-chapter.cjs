@@ -683,7 +683,7 @@ async function geometry(page, pairs) {
     await page.locator('.case .topbar .btn').click();
     await cardOf(/Чей пирог/).click();
     await story.waitFor();
-    assert((await story.locator('.story-caption').innerText()).includes('пирог'), 'кадр обучающего дела');
+    assert((await story.locator('.story-counter').innerText()).trim() === '1 / 3', 'вступление обучающего дела — книжка из трёх страниц');
     await story.getByRole('button', { name: 'Пропустить' }).click();
     await page.waitForSelector('.case');
     await page.locator('.case .topbar .btn').click();
@@ -706,7 +706,7 @@ async function geometry(page, pairs) {
     await page.locator('.case-card', { hasText: /Чей пирог/ }).click();
     await page.locator('.story').waitFor();
     assert((await page.locator('.dialog').count()) === 0, 'новый игрок: сначала кадр, потом обучение');
-    await page.keyboard.press('Enter'); // фокус на «К расследованию»
+    for (let i = 0; i < 3; i += 1) await page.keyboard.press('Enter'); // «Дальше», «Дальше», «К расследованию»
     await page.getByRole('button', { name: 'Понятно, начинаем' }).click();
     await page.waitForSelector('.case');
     assert((await page.locator('.case .topbar .title').innerText()).includes('Чей пирог'), 'открыто обучающее дело');
@@ -754,6 +754,105 @@ async function geometry(page, pairs) {
     const btn = await page.locator('.story-controls .btn').boundingBox();
     assert(btn.y + btn.height <= viewport.height && btn.height >= 44, `${size}: «К расследованию» видна без прокрутки`);
     if (process.env.SHOT_DIR) await page.screenshot({ path: `${process.env.SHOT_DIR}/story-bike-${size}.png` });
+    assert(page.errors.length === 0, 'без ошибок: ' + page.errors.join('; '));
+    await context.close();
+  }
+
+  console.log('\n=== 11. «Пирог»: книжка из трёх страниц, новая редакция показывается один раз ===');
+  {
+    // Игрок видел прежний одиночный кадр обоих дел, начал «Пирог», есть покупка.
+    const old = JSON.parse(JSON.stringify(HOSE_DONE));
+    old.data.casesCompleted = ['ch1-hose'];
+    old.data.storySeen = ['tutorial-1', 'second-1', 'ch1-hose'];
+    old.data.progress['tutorial-1'] = { marks: { 'места|калитка~персонажи|Ирина': 'no' }, hintsUsed: 1 };
+    old.data.purchases = { noAds: true };
+    const { context, page } = await openWithSave(browser, old);
+    const before = await saveOf(page);
+    const pie = page.locator('.case-card', { hasText: /Чей пирог/ });
+    assert((await pie.locator('.cover-image').getAttribute('src')).includes('cover-tutorial-pie'), 'обложка «Пирога» прежняя');
+    await pie.click();
+    const story = page.locator('.story');
+    await story.waitFor();
+    const captions = [];
+    for (let i = 1; i <= 3; i += 1) {
+      assert((await story.locator('.story-counter').innerText()).trim() === `${i} / 3`, `страница ${i} из 3`);
+      await page.waitForFunction(() => document.querySelector('.story-image')?.naturalWidth > 0);
+      captions.push(await story.locator('.story-caption').innerText());
+      if (i < 3) await story.getByRole('button', { name: 'Дальше' }).click();
+    }
+    assert(captions[0].includes('кто-то в беседке') && captions[1].includes('пирог, зонт или лейка') && captions[2].includes('Чей он?'), 'подписи книжки по порядку');
+    // «Пропустить» с последней страницы: дальше — дело с условиями и фактами.
+    await story.getByRole('button', { name: 'Пропустить' }).click();
+    await page.waitForSelector('.case');
+    const intro = await page.locator('.case-intro').innerText();
+    assert(intro.includes('по одному в каждом') && intro.includes('у всех разные') && intro.includes('Чей пирог остался в беседке?'), 'после пропуска условия на экране дела');
+    assert((await page.locator('.clues .clue').count()) === 5 && (await page.locator('.clues-title').innerText()).trim() === 'Факты', 'после пропуска факты на экране дела');
+    assert((await page.locator('button[aria-label="Ирина — калитка"].no').count()) === 1, 'незаконченная отметка «Пирога» на месте');
+    let saved = await saveOf(page);
+    assert(saved.data.storySeen.includes('tutorial-1#2'), 'новая редакция записана отдельным ключом');
+    assert(['tutorial-1', 'second-1', 'ch1-hose'].every((k) => saved.data.storySeen.includes(k)), 'прежние отметки просмотра не стёрты');
+    assert(JSON.stringify(saved.data.progress['tutorial-1']) === JSON.stringify(before.data.progress['tutorial-1']), 'прогресс «Пирога» не изменился');
+    assert(saved.data.purchases.noAds === true && JSON.stringify(saved.data.stars) === JSON.stringify(before.data.stars), 'покупка и звёзды на месте');
+
+    // Повтор из блока условий: все три страницы, фокус возвращается на кнопку.
+    const replay = page.locator('.case-intro').getByRole('button', { name: '📖 Вступление' });
+    await replay.focus();
+    await page.keyboard.press('Enter');
+    await story.waitFor();
+    assert((await story.locator('.story-counter').innerText()).trim() === '1 / 3', 'повтор — с первой страницы книжки');
+    await page.keyboard.press('ArrowRight');
+    await page.keyboard.press('ArrowRight');
+    assert((await story.locator('.story-counter').innerText()).trim() === '3 / 3', 'стрелки листают книжку');
+    await page.keyboard.press('Escape');
+    assert(await replay.evaluate((n) => n === document.activeElement), 'после повтора фокус на кнопке «Вступление»');
+
+    // Второй раз сам не показывается; «Велосипед» по-прежнему не показывается (его кадр не менялся).
+    await page.locator('.case .topbar .btn').click();
+    await page.reload({ waitUntil: 'networkidle' });
+    await page.waitForSelector('.case-list');
+    for (const re of [/Чей пирог/, /Чей велосипед/]) {
+      await page.locator('.case-card', { hasText: re }).click();
+      await page.waitForSelector('.case');
+      assert((await story.count()) === 0, `${re}: вступление само не показывается`);
+      await page.locator('.case .topbar .btn').click();
+    }
+    saved = await saveOf(page);
+    assert(JSON.stringify(saved.data.casesCompleted) === JSON.stringify(before.data.casesCompleted), 'раскрытые дела не изменились');
+    assert(page.errors.length === 0, 'без ошибок: ' + page.errors.join('; '));
+    await context.close();
+  }
+  for (const viewport of [
+    { width: 360, height: 640 },
+    { width: 390, height: 844 },
+    { width: 1000, height: 700 },
+  ]) {
+    const size = `${viewport.width}×${viewport.height}`;
+    const { context, page } = await openWithSave(browser, null, viewport);
+    await page.locator('.case-card', { hasText: /Чей пирог/ }).click();
+    const story = page.locator('.story');
+    await story.waitFor();
+    for (let i = 1; i <= 3; i += 1) {
+      await page.waitForFunction(() => document.querySelector('.story-image')?.naturalWidth > 0);
+      await page.evaluate(() => document.querySelector('.story-image').decode());
+      const issues = await geometry(page, [
+        ['.story .topbar', '.story-frame'],
+        ['.story-frame', '.story-caption'],
+        ['.story-caption', '.story-controls'],
+      ]);
+      assert(issues.length === 0, `${size}, страница ${i}: без наложений` + (issues.length ? ': ' + issues.join('; ') : ''));
+      const btn = await story.locator('.story-controls .btn').boundingBox();
+      assert(btn.y + btn.height <= viewport.height && btn.height >= 44, `${size}, страница ${i}: кнопка видна без прокрутки`);
+      if (process.env.SHOT_DIR) await page.screenshot({ path: `${process.env.SHOT_DIR}/pie-book-${i}-${size}.png` });
+      await story.locator('.story-controls .btn').click();
+    }
+    await page.getByRole('button', { name: 'Понятно, начинаем' }).click();
+    await page.waitForSelector('.case');
+    const caseIssues = await geometry(page, [
+      ['.case-intro', '.clues'],
+      ['.clues', '.grids-stack'],
+    ]);
+    assert(caseIssues.length === 0, `${size}: условия, факты и таблицы «Пирога» без наложений` + (caseIssues.length ? ': ' + caseIssues.join('; ') : ''));
+    if (process.env.SHOT_DIR) await page.screenshot({ path: `${process.env.SHOT_DIR}/pie-case-${size}.png` });
     assert(page.errors.length === 0, 'без ошибок: ' + page.errors.join('; '));
     await context.close();
   }

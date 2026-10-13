@@ -28,9 +28,11 @@ interface Save {
   /** Обучение цели и жесту ✓/✕ показано один раз, не перед каждым делом. */
   onboardingSeen?: boolean;
   /**
-   * Дела, чьё иллюстрированное вступление уже показано (досмотрено или
-   * пропущено). Сам показ — только при первом открытии, дальше — по кнопке.
-   * Необязательное поле: старые сохранения читаются без миграции.
+   * Вступления, которые уже показаны (досмотрены или пропущены): ключ
+   * storyKey() — id дела, а для новой редакции кадров «id#редакция». Так
+   * обновлённое вступление один раз увидят и те, кто видел прежнее, а
+   * отметки других дел не сбрасываются. Сам показ — один раз, дальше — по
+   * кнопке. Необязательное поле: старые сохранения читаются без миграции.
    */
   storySeen?: string[];
   /**
@@ -338,10 +340,15 @@ async function maybeShowOnboarding(): Promise<void> {
  * ведёт к делу. Дальше — только по кнопке «Вступление».
  */
 async function startCase(source: Case): Promise<void> {
-  if (source.story && !app.save.data.storySeen?.includes(source.id)) {
+  if (source.story && !app.save.data.storySeen?.includes(storyKey(source))) {
     await showStory(source);
   }
   await openCase(source);
+}
+
+/** Ключ просмотра вступления: «tutorial-1» для первой редакции, «tutorial-1#2» для второй. */
+function storyKey(source: Case): string {
+  return source.storyVersion && source.storyVersion > 1 ? `${source.id}#${source.storyVersion}` : source.id;
 }
 
 /**
@@ -390,8 +397,8 @@ function showStory(source: Case, returnFocus?: HTMLElement): Promise<void> {
     function finish(skipped: boolean): void {
       app.track(skipped ? 'story_skipped' : 'story_done', { caseId: source.id, frame: index + 1 });
       const seen = (app.save.data.storySeen ??= []);
-      if (!seen.includes(source.id)) {
-        seen.push(source.id);
+      if (!seen.includes(storyKey(source))) {
+        seen.push(storyKey(source));
         app.save.markDirty();
       }
       document.removeEventListener('keydown', onKey);

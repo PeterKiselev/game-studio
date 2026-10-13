@@ -380,7 +380,7 @@ describe('иллюстрированное вступление дела 1', () 
 });
 
 describe('кадры первых двух дел', () => {
-  it.each(['tutorial-1', 'second-1'])('%s: один кадр с короткой подписью и обложка', (id) => {
+  it.each(['second-1'])('%s: один кадр с короткой подписью и обложка', (id) => {
     const source = cases.find((c) => c.id === id)!;
     expect(source.story).toHaveLength(1);
     const [frame] = source.story!;
@@ -390,7 +390,7 @@ describe('кадры первых двух дел', () => {
     expect(source.cover).toMatch(/cover-.*\.webp/);
   });
 
-  it.each(['tutorial-1', 'second-1'])('%s: подпись и описание без ответа — ни одного имени соседа', (id) => {
+  it.each(['second-1'])('%s: подпись и описание без ответа — ни одного имени соседа', (id) => {
     const source = cases.find((c) => c.id === id)!;
     const names = source.categories.find((c) => c.id === source.anchor)!.values;
     const text = `${source.story![0].caption} ${source.story![0].alt}`;
@@ -401,5 +401,60 @@ describe('кадры первых двух дел', () => {
 
   it('у всех дел с кадрами есть обложка карточки', () => {
     for (const c of cases.filter((x) => x.story)) expect(c.cover, c.id).toBeTruthy();
+  });
+});
+
+describe('вступление-книжка «Пирога» (редакция 2)', () => {
+  const source = cases.find((c) => c.id === 'tutorial-1')!;
+  const story = source.story!;
+  const solution = uniqueSolution(source)!;
+
+  it('три страницы, новая редакция, прежняя обложка', () => {
+    expect(story.map((f) => f.image.match(/[^/]+\.webp/)![0])).toEqual([
+      'tutorial-pie-book-1.webp',
+      'tutorial-pie-book-2.webp',
+      'tutorial-pie-1.webp',
+    ]);
+    expect(source.storyVersion).toBe(2);
+    expect(source.cover).toMatch(/cover-tutorial-pie\.webp/);
+    for (const frame of story) {
+      expect(frame.alt.length).toBeGreaterThan(10);
+      expect(frame.caption.length).toBeLessThanOrEqual(130);
+    }
+  });
+
+  it('в кадрах нет глаголов, выдающих владельца пирога', () => {
+    const text = story.map((f) => `${f.caption} ${f.alt}`).join(' ');
+    expect(text).not.toMatch(/хозя|принёс|принесла|оставил|оставила/i);
+  });
+
+  /**
+   * Перечисление «Ирина, Михаил и Олег … в беседке, у калитки, у грядки»
+   * читается как пары по порядку. Поэтому ни одна позиция перечисления мест
+   * или вещей не должна совпадать с решением — ни в кадрах, ни в условиях.
+   */
+  it.each([
+    ['кадры', story.map((f) => f.caption).join(' ')],
+    ['условия', source.intro ?? ''],
+  ])('%s: порядок перечисления не совпадает с решением ни в одной позиции', (_label, text) => {
+    const names = source.categories.find((c) => c.id === source.anchor)!.values;
+    const stem = (v: string) => v.toLowerCase().slice(0, 4);
+    const lower = text.toLowerCase();
+    const nameOrder = [...names].sort((a, b) => lower.indexOf(stem(a)) - lower.indexOf(stem(b)));
+    for (const name of names) expect(lower, name).toContain(stem(name));
+    for (const cat of source.categories.filter((c) => c.id !== source.anchor)) {
+      for (const v of cat.values) expect(lower, v).toContain(stem(v));
+      const listed = [...cat.values].sort((a, b) => lower.indexOf(stem(a)) - lower.indexOf(stem(b)));
+      nameOrder.forEach((name, i) => {
+        const truth = cat.values[solution[cat.id][names.indexOf(name)]];
+        expect(listed[i], `${name} стоит рядом с «${listed[i]}» — это ответ`).not.toBe(truth);
+      });
+    }
+  });
+
+  it('условия на экране дела: трое, три места и три вещи, у всех разные', () => {
+    expect(source.intro).toMatch(/по одному в каждом/);
+    expect(source.intro).toMatch(/у всех разные/);
+    expect(source.intro).toMatch(/Чей пирог остался в беседке\?/);
   });
 });
