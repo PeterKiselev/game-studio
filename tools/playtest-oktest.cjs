@@ -13,13 +13,20 @@
  * и кнопка — в ОКах, окно оплаты вызывается с тем же SKU; во ВКонтакте та же
  * сборка показывает голоса; без адреса сервера — ни одного запроса восстановления.
  *
- * Запуск: node tools/playtest-oktest.cjs <url-ok-test> <url-обычной-vk> <url-ok-test-shop>
+ * Плюс диагностика восстановления (--restore-diag): вторая строка полосы показывает
+ * ответ журнала (товары / пусто / ошибка) независимо от сохранения, без ID и адресов;
+ * сохранение и облако не трогаются. Сервер подменяется маршрутом Playwright.
+ *
+ * Запуск: node tools/playtest-oktest.cjs <url-ok-test> <url-обычной-vk> <url-ok-test-shop> <url-ok-test-diag>
  */
 const { chromium } = require('playwright');
 
 const OKTEST = process.argv[2] || 'http://127.0.0.1:4180/';
 const PLAINVK = process.argv[3] || 'http://127.0.0.1:4178/';
 const OKSHOP = process.argv[4] || 'http://127.0.0.1:4181/';
+const OKDIAG = process.argv[5] || 'http://127.0.0.1:4182/';
+// Адрес, с которым собрана диагностическая сборка (--payments-url); ответы подменяются.
+const DIAG_SERVER = 'https://payments-oktest.test';
 const OK_LAUNCH = 'vk_user_id=574470572&vk_app_id=54767366&vk_client=ok&vk_platform=desktop_web&sign=test-sign&lang=ru';
 const VK_LAUNCH = 'vk_user_id=574470572&vk_app_id=54767366&vk_platform=desktop_web&sign=test-sign&lang=ru';
 
@@ -44,8 +51,10 @@ async function stubVkBridge(page) {
         case 'VKWebAppGetUserInfo':
           return ok({ id: 574470572, first_name: 'Test', last_name: 'Player' });
         case 'VKWebAppStorageGet':
+          window.__cloud = (window.__cloud || 0) + 1;
           return ok({ keys: [] });
         case 'VKWebAppStorageSet':
+          window.__cloudSet = (window.__cloudSet || 0) + 1;
           return ok({ result: true });
         case 'VKWebAppShowOrderBox':
           (window.__orders = window.__orders || []).push(msg.params);
@@ -57,8 +66,9 @@ async function stubVkBridge(page) {
   });
 }
 
-async function open(browser, base, launch, viewport = { width: 420, height: 800 }) {
+async function open(browser, base, launch, viewport = { width: 420, height: 800 }, prepare = null) {
   const context = await browser.newContext({ viewport });
+  if (prepare) await prepare(context);
   const page = await context.newPage();
   page.errors = [];
   page.on('pageerror', (e) => page.errors.push(e.message));
@@ -164,6 +174,73 @@ async function open(browser, base, launch, viewport = { width: 420, height: 800 
     // Обычная VK-сборка в ОК: как раньше — магазина нет.
     const { context, page } = await open(browser, PLAINVK, OK_LAUNCH);
     assert((await page.locator('.shop-btn').count()) === 0, 'обычная VK-сборка в ОК — магазина нет, как в опубликованной версии');
+    await context.close();
+  }
+
+  console.log('\n=== 6. Диагностика восстановления: ответ журнала независимо от сохранения ===');
+  const journal = (page) => page.locator('.test-marker-journal').textContent();
+  const server = (reply) => async (context) => {
+    await context.route(`${DIAG_SERVER}/**`, async (route) => {
+      const r = reply(route.request().url());
+      if (r === 'fail') return route.abort('failed');
+      return route.fulfill({ status: r.status, contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' }, body: JSON.stringify(r.body) });
+    });
+  };
+  const withSave = (purchases) => async (context) => {
+    await context.addInitScript((p) => {
+      if (!localStorage.getItem('studio:dachnye-tainy')) {
+        localStorage.setItem('studio:dachnye-tainy', JSON.stringify({ v: 3, t: Date.now(), data: { casesCompleted: ['tutorial-1'], progress: {}, stars: { 'tutorial-1': 3 }, achievements: ['first_case'], purchases: p, onboardingSeen: true } }));
+      }
+    }, purchases);
+  };
+  const both = (...fns) => async (context) => {
+    for (const fn of fns) await fn(context);
+  };
+  {
+    // Сохранение без покупок, журнал — оба товара.
+    const { context, page } = await open(browser, OKDIAG, OK_LAUNCH, undefined, server(() => ({ status: 200, body: { skus: ['dachnye_tainy_no_ads', 'dachnye_tainy_unlimited_hints'] } })));
+    await page.waitForSelector('.test-marker-journal');
+    assert((await journal(page)) === 'журнал: без рекламы, подсказки', 'журнал вернул оба товара — строка: ' + (await journal(page)));
+    assert((await page.locator('.test-marker').textContent()).includes('ДИАГНОСТИКА'), 'маркер помечен как диагностика');
+    const screen = (await page.locator('.test-marker').textContent()) + ' ' + (await journal(page));
+    assert(!/574470572|test-sign|sign=|https?:|oktest|vk_user/.test(screen), 'на экране нет ID, подписи и адресов: ' + screen);
+    assert((await page.evaluate(() => window.__cloud || 0)) > 0, 'облачное сохранение запрашивается как обычно');
+    await page.locator('.shop-btn').click();
+    await page.waitForSelector('.shop-item');
+    assert((await page.locator('.shop-item .btn').allInnerTexts()).every((t) => t.trim() === 'Куплено'), 'права из журнала добавлены — «Куплено»');
+    assert(page.errors.length === 0, 'без ошибок: ' + page.errors.join('; '));
+    await context.close();
+  }
+  {
+    // Сохранение с покупкой, журнал пуст: строка честно говорит «пусто», купленное не снимается.
+    const { context, page } = await open(browser, OKDIAG, OK_LAUNCH, undefined, both(withSave({ noAds: true }), server(() => ({ status: 200, body: { skus: [] } }))));
+    await page.waitForSelector('.test-marker-journal');
+    assert((await journal(page)) === 'журнал: пусто', 'журнал пуст — строка «журнал: пусто», хотя в сохранении покупка есть');
+    await page.locator('.shop-btn').click();
+    await page.waitForSelector('.shop-item');
+    assert((await page.locator('.shop-item .btn').first().innerText()).trim() === 'Куплено', 'купленное по сохранению не снято');
+    const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('studio:dachnye-tainy')));
+    assert(saved.data.purchases.noAds === true && saved.data.casesCompleted.includes('tutorial-1'), 'прогресс и покупки в сохранении целы');
+    await context.close();
+  }
+  for (const [label, reply, expected] of [
+    ['403', () => ({ status: 403, body: { error: 'bad_sign' } }), 'журнал: ошибка 403'],
+    ['503', () => ({ status: 503, body: { error: 'not_configured' } }), 'журнал: ошибка 503'],
+    ['сеть', () => 'fail', 'журнал: ошибка сети'],
+  ]) {
+    const { context, page } = await open(browser, OKDIAG, OK_LAUNCH, undefined, both(withSave({ unlimitedHints: true }), server(reply)));
+    await page.waitForSelector('.test-marker-journal');
+    assert((await journal(page)) === expected, `${label}: «${expected}»`);
+    const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('studio:dachnye-tainy')));
+    assert(saved.data.purchases.unlimitedHints === true, `${label}: покупка в сохранении на месте`);
+    assert(page.errors.length === 0, 'без ошибок: ' + page.errors.join('; '));
+    await context.close();
+  }
+  {
+    // Обычная сборка с магазином (без --restore-diag) второй строки не показывает.
+    const { context, page } = await open(browser, OKSHOP, OK_LAUNCH);
+    await page.waitForTimeout(500);
+    assert((await page.locator('.test-marker-journal').count()) === 0, 'без --restore-diag строки журнала нет');
     await context.close();
   }
 

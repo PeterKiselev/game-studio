@@ -11,11 +11,11 @@ import type { DailyEntry } from './daily/schedule';
 import { recordCaseComplete, recordCaseStart, recordDailyOpen, recordNextCase, recordVisit } from './stats/core';
 import type { CaseKind, Env, LocalStats } from './stats/core';
 import { updateStats } from './stats/store';
-import { showTestMarker } from './test-marker';
+import { setMarkerJournal, showTestMarker } from './test-marker';
 import { ACHIEVEMENTS, checkNewAchievements, starsFor } from './achievements';
 import { SHOP_ITEMS, SKU_NO_ADS, SKU_UNLIMITED_HINTS, buyLabel, priceText } from './shop';
 import type { ShopItem } from './shop';
-import { fetchConfirmedSkus, mergePurchases, restoreUrl } from './restore';
+import { describeJournal, fetchRestore, mergePurchases, restoreUrl } from './restore';
 import './theme.css';
 import './style.css';
 
@@ -115,6 +115,8 @@ const DEFAULTS: Save = { casesCompleted: [], progress: {}, stars: {}, achievemen
 declare const __PAYMENTS_URL__: string;
 /** Покупки в Одноклассниках: только тестовая сборка с магазином ОК (tools/build-oktest.mjs --shop). */
 declare const __OK_PAYMENTS__: boolean;
+/** Диагностика восстановления в тестовой полосе: только сборка с --restore-diag. */
+declare const __RESTORE_DIAG__: boolean;
 
 const root = document.getElementById('app')!;
 let app!: GameApp<Save>;
@@ -185,8 +187,15 @@ async function main(): Promise<void> {
  */
 async function restorePurchases(reason: 'launch' | 'after_purchase'): Promise<void> {
   const url = restoreUrl(__PAYMENTS_URL__, location.search);
-  if (!url) return;
-  const skus = await fetchConfirmedSkus(url, (u, init) => fetch(u, init));
+  if (!url) {
+    if (__RESTORE_DIAG__) setMarkerJournal(describeJournal(null));
+    return;
+  }
+  const result = await fetchRestore(url, (u, init) => fetch(u, init));
+  // Диагностика показывает ответ журнала как есть — до и независимо от того,
+  // что уже лежит в сохранении (облачном или локальном). Сохранение не трогает.
+  if (__RESTORE_DIAG__) setMarkerJournal(describeJournal(result));
+  const skus = result.kind === 'skus' ? result.skus : null;
   if (!skus) {
     app.track('purchase_restore_failed', { reason });
     return;

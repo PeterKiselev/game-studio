@@ -48,8 +48,42 @@ export function restoreUrl(base: string, search: string): string | null {
 
 export type FetchLike = (url: string, init?: { signal?: AbortSignal }) => Promise<{
   ok: boolean;
+  status?: number;
   json(): Promise<unknown>;
 }>;
+
+/**
+ * Что ответил журнал — с причиной ошибки. Нужен диагностике восстановления
+ * (тестовая сборка): по нему видно, пришли права из журнала или нет, отдельно
+ * от того, что лежит в сохранении.
+ */
+export type RestoreResult =
+  | { kind: 'skus'; skus: string[]; unknown: number }
+  | { kind: 'error'; reason: 'network' | 'timeout' | 'bad-response' | 'http'; status?: number };
+
+export async function fetchRestore(url: string, fetchFn: FetchLike, timeoutMs = 5000): Promise<RestoreResult> {
+  const controller = new AbortController();
+  let timedOut = false;
+  const timer = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, timeoutMs);
+  try {
+    const res = await fetchFn(url, { signal: controller.signal });
+    if (!res.ok) return { kind: 'error', reason: 'http', status: res.status };
+    const body = (await res.json()) as { skus?: unknown };
+    if (!body || !Array.isArray(body.skus) || !body.skus.every((s) => typeof s === 'string')) {
+      return { kind: 'error', reason: 'bad-response' };
+    }
+    const all = body.skus as string[];
+    const skus = all.filter((sku) => Object.prototype.hasOwnProperty.call(SKU_FLAGS, sku));
+    return { kind: 'skus', skus, unknown: all.length - skus.length };
+  } catch {
+    return { kind: 'error', reason: timedOut ? 'timeout' : 'network' };
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 /** Подтверждённые сервером SKU этой игры или null при любой ошибке. */
 export async function fetchConfirmedSkus(
@@ -57,19 +91,31 @@ export async function fetchConfirmedSkus(
   fetchFn: FetchLike,
   timeoutMs = 5000,
 ): Promise<string[] | null> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    const res = await fetchFn(url, { signal: controller.signal });
-    if (!res.ok) return null;
-    const body = (await res.json()) as { skus?: unknown };
-    if (!body || !Array.isArray(body.skus) || !body.skus.every((s) => typeof s === 'string')) return null;
-    return (body.skus as string[]).filter((sku) => Object.prototype.hasOwnProperty.call(SKU_FLAGS, sku));
-  } catch {
-    return null;
-  } finally {
-    clearTimeout(timer);
+  const result = await fetchRestore(url, fetchFn, timeoutMs);
+  return result.kind === 'skus' ? result.skus : null;
+}
+
+const SKU_SHORT: Record<string, string> = {
+  dachnye_tainy_no_ads: 'без рекламы',
+  dachnye_tainy_unlimited_hints: 'подсказки',
+};
+
+/**
+ * Строка диагностики для тестовой полосы: только ответ журнала — названия
+ * товаров, «пусто» или вид ошибки. Ни идентификаторов, ни подписи, ни адреса
+ * запроса. null — запрос не отправлялся (нет адреса сервера или подписи запуска).
+ */
+export function describeJournal(result: RestoreResult | null): string {
+  if (!result) return 'журнал: не запрашивался';
+  if (result.kind === 'error') {
+    if (result.reason === 'http') return `журнал: ошибка ${result.status ?? 'сервера'}`;
+    if (result.reason === 'timeout') return 'журнал: нет ответа';
+    if (result.reason === 'bad-response') return 'журнал: неверный ответ';
+    return 'журнал: ошибка сети';
   }
+  const names = result.skus.map((sku) => SKU_SHORT[sku] ?? sku);
+  const extra = result.unknown > 0 ? ` (+${result.unknown} чужих)` : '';
+  return names.length > 0 ? `журнал: ${names.join(', ')}${extra}` : `журнал: пусто${extra}`;
 }
 
 /** Добавляет права из списка SKU. Возвращает добавленные SKU; ничего не снимает. */

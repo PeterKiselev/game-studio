@@ -18,6 +18,8 @@
  *
  * --shop: покупки в ОК включены только в этой сборке (__OK_PAYMENTS__), цена — в ОКах.
  * --payments-url: адрес ТЕСТОВОГО сервера для восстановления покупок из журнала.
+ * --restore-diag: вторая строка полосы — что ответил журнал (товары / пусто / ошибка),
+ *   независимо от сохранения; только вместе с --shop, папка dist/ok-test-diag.
  * Без него восстановление выключено (маркер это показывает); боевой адрес не принимается.
  */
 import { execFileSync } from 'node:child_process';
@@ -26,6 +28,11 @@ import { join } from 'node:path';
 
 const args = process.argv.slice(2);
 const shop = args.includes('--shop');
+const diag = args.includes('--restore-diag');
+if (diag && !shop) {
+  console.error('Отказ: --restore-diag имеет смысл только вместе с --shop.');
+  process.exit(1);
+}
 const paymentsUrl = (args.find((a) => a.startsWith('--payments-url=')) ?? '').slice('--payments-url='.length);
 if (paymentsUrl) {
   const url = new URL(paymentsUrl);
@@ -42,7 +49,7 @@ if (paymentsUrl) {
 
 const root = process.cwd();
 const game = join(root, 'games', 'dachnye-tainy');
-const outName = shop ? 'ok-test-shop' : 'ok-test';
+const outName = diag ? 'ok-test-diag' : shop ? 'ok-test-shop' : 'ok-test';
 const outDir = join(game, 'dist', outName);
 
 const git = (...args) => execFileSync('git', args, { cwd: root, encoding: 'utf8' }).trim();
@@ -51,13 +58,15 @@ const dirty = git('status', '--porcelain', '--untracked-files=no').length > 0;
 // Московская дата, как у дела дня: UTC+3.
 const day = new Date(Date.now() + 3 * 3600_000).toISOString().slice(0, 10);
 const marker =
-  `ТЕСТ ОК${shop ? ' · МАГАЗИН' : ''} · ${day} · ${commit}${dirty ? '+изм' : ''}` +
+  `ТЕСТ ОК${shop ? ' · МАГАЗИН' : ''}${diag ? ' · ДИАГНОСТИКА' : ''} · ${day} · ${commit}${dirty ? '+изм' : ''}` +
   (shop ? ` · восстановление: ${paymentsUrl ? 'вкл' : 'выкл'}` : '');
 
 const env = { ...process.env, VITE_TEST_MARKER: marker };
 delete env.VITE_PAYMENTS_URL;
 delete env.VITE_LOCAL_STATS;
 delete env.VITE_OK_PAYMENTS;
+delete env.VITE_RESTORE_DIAG;
+if (diag) env.VITE_RESTORE_DIAG = '1';
 if (shop) env.VITE_OK_PAYMENTS = '1';
 if (paymentsUrl) env.VITE_PAYMENTS_URL = paymentsUrl;
 

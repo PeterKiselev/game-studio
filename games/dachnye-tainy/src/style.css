@@ -914,3 +914,22 @@
   text-overflow: ellipsis;
   opacity: 0.92;
 }
+
+/* Вторая строка тестовой полосы: ответ журнала восстановления (только --restore-diag). */
+.test-marker-journal {
+  position: fixed;
+  top: 19px;
+  left: 0;
+  right: 0;
+  z-index: 60;
+  pointer-events: none;
+  padding: 2px 8px;
+  background: var(--ink);
+  color: var(--paper);
+  font: 600 11px/1.4 system-ui, sans-serif;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  opacity: 0.92;
+}

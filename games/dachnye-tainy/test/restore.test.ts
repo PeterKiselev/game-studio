@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { SKU_FLAGS, fetchConfirmedSkus, mergePurchases, restoreUrl } from '../src/restore';
+import { SKU_FLAGS, describeJournal, fetchConfirmedSkus, fetchRestore, mergePurchases, restoreUrl } from '../src/restore';
 import type { FetchLike, Purchases } from '../src/restore';
 import { SHOP_ITEMS } from '../src/shop';
 
@@ -88,4 +88,43 @@ describe('mergePurchases', () => {
 
 it('каждый товар магазина восстанавливаем, и лишних SKU нет', () => {
   expect(Object.keys(SKU_FLAGS).sort()).toEqual(SHOP_ITEMS.map((i) => i.sku).sort());
+});
+
+describe('диагностика восстановления: ответ журнала для тестовой полосы', () => {
+  const reply = (status: number, body: unknown) => async () => ({ ok: status === 200, status, json: async () => body });
+  const url = 'https://payments-oktest.example/ok/restore?vk_user_id=574470572&sign=SECRET';
+
+  it('два товара, пусто, чужие SKU — ответ журнала как есть', async () => {
+    expect(describeJournal(await fetchRestore(url, reply(200, { skus: ['dachnye_tainy_no_ads', 'dachnye_tainy_unlimited_hints'] })))).toBe(
+      'журнал: без рекламы, подсказки',
+    );
+    expect(describeJournal(await fetchRestore(url, reply(200, { skus: [] })))).toBe('журнал: пусто');
+    expect(describeJournal(await fetchRestore(url, reply(200, { skus: ['sudoku_no_ads'] })))).toBe('журнал: пусто (+1 чужих)');
+  });
+
+  it('ошибки различаются: код ответа, сеть, таймаут, неверный ответ, не запрашивался', async () => {
+    expect(describeJournal(await fetchRestore(url, reply(403, { error: 'bad_sign' })))).toBe('журнал: ошибка 403');
+    expect(describeJournal(await fetchRestore(url, reply(503, { error: 'not_configured' })))).toBe('журнал: ошибка 503');
+    expect(describeJournal(await fetchRestore(url, async () => { throw new Error('offline'); }))).toBe('журнал: ошибка сети');
+    const hang = (_u: string, init?: { signal?: AbortSignal }) =>
+      new Promise<never>((_, reject) => init?.signal?.addEventListener('abort', () => reject(new Error('aborted'))));
+    expect(describeJournal(await fetchRestore(url, hang, 20))).toBe('журнал: нет ответа');
+    expect(describeJournal(await fetchRestore(url, reply(200, { skus: 'x' })))).toBe('журнал: неверный ответ');
+    expect(describeJournal(null)).toBe('журнал: не запрашивался');
+  });
+
+  it('в строке нет идентификаторов, подписи и адреса', async () => {
+    for (const result of [
+      await fetchRestore(url, reply(200, { skus: ['dachnye_tainy_no_ads'] })),
+      await fetchRestore(url, reply(403, {})),
+    ]) {
+      const text = describeJournal(result);
+      expect(text).not.toMatch(/574470572|SECRET|http|oktest|sign|vk_/);
+    }
+  });
+
+  it('прежний fetchConfirmedSkus ведёт себя как раньше', async () => {
+    expect(await fetchConfirmedSkus(url, reply(200, { skus: ['dachnye_tainy_no_ads'] }))).toEqual(['dachnye_tainy_no_ads']);
+    expect(await fetchConfirmedSkus(url, reply(403, {}))).toBeNull();
+  });
 });

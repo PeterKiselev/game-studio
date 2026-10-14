@@ -19,6 +19,7 @@
     "build:dachnye-tainy:vk": "npm run build -w @studio/dachnye-tainy -- --mode vk",
     "build:dachnye-tainy:oktest": "node tools/build-oktest.mjs",
     "build:dachnye-tainy:oktest-shop": "node tools/build-oktest.mjs --shop",
+    "build:dachnye-tainy:oktest-diag": "node tools/build-oktest.mjs --shop --restore-diag",
     "pack:dachnye-tainy:vk": "node tools/pack.mjs dachnye-tainy vk",
     "dev:pograniche": "npm run dev -w @studio/pograniche",
     "build:pograniche:web": "npm run build -w @studio/pograniche -- --mode web",

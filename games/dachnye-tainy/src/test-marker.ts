@@ -20,6 +20,23 @@ export function markerText(marker: string, search: string): string {
   return `${marker} · клиент: ${client} · платформа: ${platform}`;
 }
 
+/**
+ * Вторая строка полосы — диагностика восстановления (только сборка с
+ * --restore-diag): что ответил журнал на последнем запросе. Текст готовит
+ * describeJournal() — без идентификаторов, подписи и адреса.
+ */
+export function setMarkerJournal(text: string): void {
+  if (!__TEST_MARKER__) return;
+  let line = document.querySelector<HTMLElement>('.test-marker-journal');
+  if (!line) {
+    line = document.createElement('div');
+    line.className = 'test-marker-journal';
+    line.setAttribute('aria-hidden', 'true');
+    document.body.append(line);
+  }
+  line.textContent = text;
+}
+
 export function showTestMarker(): void {
   if (!__TEST_MARKER__) return;
   const ribbon = document.createElement('div');

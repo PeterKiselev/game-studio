@@ -25,6 +25,8 @@ export default defineConfig(({ mode }) => {
       __TEST_MARKER__: JSON.stringify(process.env.VITE_TEST_MARKER ?? ''),
       // Покупки в ОК: только тестовая сборка с магазином ОК (tools/build-oktest.mjs --shop).
       __OK_PAYMENTS__: JSON.stringify(process.env.VITE_OK_PAYMENTS === '1'),
+      // Диагностика восстановления в тестовой полосе (tools/build-oktest.mjs --restore-diag).
+      __RESTORE_DIAG__: JSON.stringify(process.env.VITE_RESTORE_DIAG === '1'),
     },
     build: {
       outDir: `dist/${platform}`,
