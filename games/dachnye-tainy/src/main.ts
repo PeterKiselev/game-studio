@@ -8,6 +8,9 @@ import { claimedFact, suspectFact, testimonyHolds, versionHolds } from './contra
 import { marksFitCase, renameMarks } from './progress';
 import { DAILY_SCHEDULE, dailyState, formatDay, isDailyCase, moscowDate, pastDailies } from './daily/schedule';
 import type { DailyEntry } from './daily/schedule';
+import { recordCaseComplete, recordCaseStart, recordDailyOpen, recordNextCase, recordVisit } from './stats/core';
+import type { CaseKind, Env, LocalStats } from './stats/core';
+import { updateStats } from './stats/store';
 import { ACHIEVEMENTS, checkNewAchievements, starsFor } from './achievements';
 import { SHOP_ITEMS, SKU_NO_ADS, SKU_UNLIMITED_HINTS, buyLabel, votes } from './shop';
 import type { ShopItem } from './shop';
@@ -162,6 +165,10 @@ async function main(): Promise<void> {
   app.track('app_start');
   showPlot();
   watchDayChange();
+  logVisit();
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) logVisit();
+  });
   app.ready();
   // Не ждём: игра уже на экране, восстановление только добавит права, если они есть.
   void restorePurchases('launch');
@@ -329,6 +336,34 @@ function caseCardMark(c: Case, stamp: string): HTMLElement {
   return el('div', { class: 'cover' }, img, el('div', { class: 'stamp badge' }, stamp));
 }
 
+// --- локальный учёт (этап 1 аналитики, только тестовая сборка) ---------------------
+
+/** Когда открыто дело в этой сессии — для примерной длительности до раскрытия. */
+const caseOpenedAt = new Map<string, number>();
+
+function caseKind(source: Case): CaseKind {
+  if (isDailyCase(source.id)) return 'daily';
+  return PLOT_CASE_IDS.includes(source.id) ? 'plot' : 'chapter';
+}
+
+/** Дела, тронутые до включения учёта: раскрытые, начатые, раскрытые дела дня. */
+function touchedBeforeStats(): string[] {
+  const s = app.save.data;
+  return [...s.casesCompleted, ...Object.keys(s.progress), ...Object.keys(s.dailySolved ?? {})];
+}
+
+/**
+ * Изменить локальную статистику. В обычной сборке — ничего, даже без
+ * обращения к хранилищу (stats/store.ts). Не ждём: учёт не задерживает игру.
+ */
+function stat(change: (stats: LocalStats, env: Env) => LocalStats): void {
+  void updateStats(moscowDate(), touchedBeforeStats, change);
+}
+
+function logVisit(): void {
+  stat((st, env) => recordVisit(st, env, { platform: app.platform.id, build: 'test' }));
+}
+
 // --- дело дня ---------------------------------------------------------------------
 
 /** Дата, на которую нарисован участок: при смене московских суток участок перерисуется. */
@@ -354,7 +389,10 @@ function dailyCard(s: Save, entry: DailyEntry, past: boolean): HTMLButtonElement
       el('span', {}, dailyStatus(s, entry)),
     ),
   ) as HTMLButtonElement;
-  card.addEventListener('click', () => void startCase(entry.case));
+  card.addEventListener('click', () => {
+    stat((st, env) => recordDailyOpen(st, env, entry.case.id, entry.date));
+    void startCase(entry.case);
+  });
   return card;
 }
 
@@ -549,6 +587,8 @@ async function openCase(source: Case): Promise<void> {
   await maybeShowOnboarding();
 
   app.track('case_start', { caseId: source.id });
+  caseOpenedAt.set(source.id, Date.now());
+  stat((st, env) => recordCaseStart(st, env, source.id, caseKind(source)));
   app.startRound();
 
   const maybeSolution = uniqueSolution(source);
@@ -955,7 +995,7 @@ function stepSolved(
   feedback.textContent = `Верно. ${text}`;
   app.track('case_complete', { caseId: source.id, hintsUsed, wrongAnswers: wrong });
   const next = el('button', { class: 'btn primary', type: 'button' }, 'К развязке') as HTMLButtonElement;
-  next.addEventListener('click', () => void finishCase(source, solution, hintsUsed, hadMistake));
+  next.addEventListener('click', () => void finishCase(source, solution, hintsUsed, hadMistake, wrong));
   feedback.append(el('div', { class: 'step-next' }, next));
   next.scrollIntoView({ block: 'nearest' });
 }
@@ -1117,6 +1157,7 @@ async function finishCase(
   solution: Solution,
   hintsUsed: number,
   hadMistake: boolean,
+  stepWrong = 0,
 ): Promise<void> {
   const s = app.save.data;
   const daily = isDailyCase(source.id);
@@ -1148,6 +1189,16 @@ async function finishCase(
     app.save.markDirty();
   }
   await app.endRound();
+  const opened = caseOpenedAt.get(source.id);
+  const earnedStars = daily ? s.dailySolved?.[source.id]?.stars : s.stars[source.id];
+  stat((st, env) =>
+    recordCaseComplete(st, env, source.id, caseKind(source), {
+      stars: earnedStars ?? starsFor(hintsUsed),
+      hints: hintsUsed,
+      durationMs: opened ? Date.now() - opened : 0,
+      stepWrong,
+    }),
+  );
 
   const children = [
     el('div', { class: 'topbar' }, el('span', { class: 'title' }, 'Дело раскрыто')),
@@ -1372,6 +1423,7 @@ function continueButton(source: Case, nextCase?: Case): HTMLElement {
     const next = el('button', { class: 'btn primary next-case', type: 'button' }, 'Следующее дело →') as HTMLButtonElement;
     next.addEventListener('click', () => {
       app.track('next_case', { from: source.id, to: nextCase.id });
+      stat((st, env) => recordNextCase(st, env, source.id, nextCase.id));
       void startCase(nextCase);
     });
     wrap.append(next);

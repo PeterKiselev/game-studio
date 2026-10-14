@@ -16,6 +16,10 @@ export default defineConfig(({ mode }) => {
       __PLATFORM__: JSON.stringify(platform),
       // Адрес платёжного сервера для восстановления покупок. Не задан — выключено.
       __PAYMENTS_URL__: JSON.stringify(process.env.VITE_PAYMENTS_URL ?? ''),
+      // Локальный учёт статистики (этап 1 аналитики): только в тестовой сборке
+      // с VITE_LOCAL_STATS=1. Без флага код учёта ничего не делает и не трогает
+      // хранилище; сети нет в обоих случаях.
+      __LOCAL_STATS__: JSON.stringify(process.env.VITE_LOCAL_STATS === '1'),
     },
     build: {
       outDir: `dist/${platform}`,
