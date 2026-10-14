@@ -10,7 +10,7 @@ compatibility_flags = ["nodejs_compat"]
 APP_SLUG = "dachnye-tainy"
 OK_ONLY = "1"
 VK_APP_ID = "54767366"
-PAYMENTS_MODE = "live"
+PAYMENTS_MODE = "test"
 OK_LIVE_ENABLED = "0"
 OK_TEST_LIST_VERIFIED = "0"
 # Set OK_APP_KEY, OK_APP_SECRET, VK_APP_SECRET and OK_TEST_UIDS privately.
