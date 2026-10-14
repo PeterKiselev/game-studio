@@ -374,8 +374,8 @@ describe('иллюстрированное вступление дела 1', () 
     expect(source.intro).toMatch(/Кто принёс шланг\?/);
   });
 
-  it('кадры есть у первых двух дел и у дела 1 главы', () => {
-    expect(cases.filter((c) => c.story).map((c) => c.id)).toEqual(['tutorial-1', 'second-1', 'ch1-hose']);
+  it('кадры есть у первых четырёх дел и у дела 1 главы', () => {
+    expect(cases.filter((c) => c.story).map((c) => c.id)).toEqual(['tutorial-1', 'second-1', 'third-1', 'fourth-1', 'ch1-hose']);
   });
 });
 
@@ -665,5 +665,77 @@ describe('глава 1, дело 3 «Свет над прудом»', () => {
     expect(CASE_REQUIRES['ch1-pond']).toBe('ch1-key');
     expect(nextChapterCase('ch1-pond')).toBeUndefined();
     expect(cases.filter((c) => c.verdict).map((c) => c.id)).toEqual(['ch1-pond']);
+  });
+});
+
+describe('книжки «Теплицы» и «Самовара»', () => {
+  const books = [
+    {
+      id: 'third-1',
+      files: ['third-greenhouse-book-1', 'third-greenhouse-book-2', 'third-greenhouse-book-3'],
+      cover: 'cover-third-greenhouse',
+      // Последняя страница повторяет существующий факт: теплица — сразу после выхода № 3.
+      facts: [['3', 'теплица']],
+      neutralPage: -1,
+    },
+    {
+      id: 'fourth-1',
+      files: ['fourth-samovar-book-1', 'fourth-samovar-book-2', 'fourth-samovar-book-3', 'fourth-samovar-book-lantern', 'fourth-samovar-book-4'],
+      cover: 'cover-fourth-samovar',
+      facts: [['лопата', 'сарай'], ['гамак', 'банька'], ['самовар', 'огород']],
+      // Страница с фонарём: ни места из таблицы, ни «нашли/оставили».
+      neutralPage: 3,
+    },
+  ] as const;
+
+  it.each(books.map((b) => [b.id, b] as const))('%s: страницы по порядку, обложка с последней сцены', (_id, b) => {
+    const source = cases.find((c) => c.id === b.id)!;
+    expect(source.story!.map((f) => f.image.match(/([^/]+)\.webp/)![1])).toEqual([...b.files]);
+    expect(source.cover).toMatch(new RegExp(`${b.cover}\\.webp`));
+    for (const frame of source.story!) {
+      expect(frame.alt.length).toBeGreaterThan(10);
+      expect(frame.caption.length).toBeLessThanOrEqual(130);
+    }
+  });
+
+  it.each(books.map((b) => [b.id, b] as const))('%s: в кадрах ни имён, ни владельцев', (_id, b) => {
+    const source = cases.find((c) => c.id === b.id)!;
+    const names = source.categories.find((c) => c.id === source.anchor)!.values;
+    const text = source.story!.map((f) => `${f.caption} ${f.alt}`).join(' ');
+    for (const name of names) expect(text, name).not.toContain(name.slice(0, 4));
+    expect(text).not.toMatch(/хозя|принёс|принесла|оставил[аи]?|забыл/i);
+  });
+
+  it('страница с фонарём — фон: ни места из таблицы, ни «нашли/оставили»', () => {
+    const source = cases.find((c) => c.id === 'fourth-1')!;
+    const page = source.story![books[1].neutralPage];
+    const text = `${page.caption} ${page.alt}`.toLowerCase();
+    expect(text).toContain('фонарь');
+    expect(text).not.toMatch(/качел|сара|баньк|огород|нашли|найден|оставил|оставлен/);
+  });
+
+  it.each(books.map((b) => [b.id, b] as const))('%s: предметы на страницах — уже факты дела', (_id, b) => {
+    const source = cases.find((c) => c.id === b.id)!;
+    const facts = source.clues.filter((c) => c.kind === 'same').map((c) => [c.a.value, c.b.value].sort().join('~'));
+    for (const pair of b.facts) expect(facts, pair.join('~')).toContain([...pair].sort().join('~'));
+  });
+
+  it.each(books.map((b) => [b.id, b] as const))('%s: условия на экране дела, перечисления не совпадают с решением', (_id, b) => {
+    const source = cases.find((c) => c.id === b.id)!;
+    const solution = uniqueSolution(source)!;
+    const lower = source.intro!.toLowerCase();
+    expect(lower).toMatch(/по одному/);
+    expect(source.intro).toMatch(/\?$/);
+    const stem = (v: string) => v.toLowerCase().slice(0, 4);
+    const names = source.categories.find((c) => c.id === source.anchor)!.values;
+    const order = (values: string[]) => [...values].sort((x, y) => lower.indexOf(stem(x)) - lower.indexOf(stem(y)));
+    const nameOrder = order(names);
+    for (const cat of source.categories.filter((c) => c.id !== source.anchor)) {
+      if (!cat.values.every((v) => lower.includes(stem(v)))) continue; // названа не полностью — пар не образует
+      const listed = order(cat.values);
+      nameOrder.forEach((name, i) => {
+        expect(listed[i], `${name} рядом с «${listed[i]}» — это ответ`).not.toBe(cat.values[solution[cat.id][names.indexOf(name)]]);
+      });
+    }
   });
 });

@@ -386,6 +386,7 @@ async function geometry(page, pairs) {
     };
     const { context, page } = await openWithSave(browser, old);
     await page.getByRole('button', { name: /Кто был в теплице/ }).click();
+    await page.locator('.story').getByRole('button', { name: 'Пропустить' }).click();
     await page.waitForSelector('.case');
     const heads = await page.locator('.grid-block').first().innerText();
     assert(!/первой|вторым|третьей|четвёртым/.test(heads), 'в таблицах нет позиций с родовыми окончаниями');
@@ -640,13 +641,13 @@ async function geometry(page, pairs) {
     const { context, page } = await openWithSave(browser, old);
     const before = await saveOf(page);
     const cardOf = (re) => page.locator('.case-card', { hasText: re });
-    assert((await page.locator('.case-card .cover-image').count()) === 3, 'обложки у трёх дел с картинками');
+    assert((await page.locator('.case-card .cover-image').count()) === 5, 'обложки у пяти дел с картинками');
     await page.waitForFunction(() => [...document.querySelectorAll('.cover-image')].every((i) => i.complete && i.naturalWidth > 0));
     const pie = cardOf(/Чей пирог/);
     assert((await pie.innerText()).includes('Раскрыто · ⭐⭐⭐') && (await pie.locator('.stamp.badge').innerText()).trim() === '✓', 'обучающее дело: статус, звёзды и печать ✓ на обложке');
     assert((await cardOf(/Чей велосипед/).innerText()).includes('Ждёт расследования'), 'начатое второе дело — прежний статус');
     assert((await cardOf(/Шланг у водокачки/).innerText()).includes('Раскрыто · ⭐⭐'), 'дело главы: статус и звёзды на месте');
-    assert((await cardOf(/Чей самовар/).locator('.cover').count()) === 0 && (await cardOf(/Чей самовар/).locator('.stamp').count()) === 1, 'дела без картинки — прежняя печать без обложки');
+    assert((await cardOf(/Кто вернулся с рынка/).locator('.cover').count()) === 0 && (await cardOf(/Кто вернулся с рынка/).locator('.stamp').count()) === 1, 'дела без картинки — прежняя печать без обложки');
     const key = cardOf(/Глава 1\. Чей ключ/);
     assert((await key.locator('.cover').count()) === 0 && (await key.locator('.stamp').innerText()).trim() === '?' && (await key.innerText()).includes('Ждёт расследования'), 'дело 2 главы (открыто после дела 1) — прежняя печать «?» и статус');
 
@@ -1070,6 +1071,177 @@ async function geometry(page, pairs) {
     assert(JSON.stringify(saved.data.casesCompleted) === JSON.stringify(before.data.casesCompleted), 'раскрытые дела не изменились');
     assert(page.errors.length === 0, 'без ошибок: ' + page.errors.join('; '));
     await context.close();
+  }
+
+  console.log('\n=== 14. «Теплица» (3 страницы) и «Самовар» (5 страниц, с фонарём): новый и старый игрок, клавиатура ===');
+  const imageName = (story) => story.locator('.story-image').evaluate((n) => n.src.split('/').pop().split('.')[0]);
+  {
+    // Новый игрок (дело главы пройдено, кадров ещё не видел): «Теплица» открывается с клавиатуры.
+    const { context, page } = await openWithSave(browser, JSON.parse(JSON.stringify(HOSE_DONE)));
+    const card = page.locator('.case-card', { hasText: /Кто был в теплице/ });
+    assert((await card.locator('.cover-image').getAttribute('src')).includes('cover-third-greenhouse'), 'обложка «Теплицы» на карточке');
+    assert((await page.locator('.case-card', { hasText: /Чей самовар/ }).locator('.cover-image').getAttribute('src')).includes('cover-fourth-samovar'), 'обложка «Самовара» на карточке');
+    await card.focus();
+    await page.keyboard.press('Enter');
+    const story = page.locator('.story');
+    await story.waitFor();
+    assert(await page.evaluate(() => document.getElementById('app').inert === true), 'фон под книжкой заблокирован');
+    const images = [];
+    const captions = [];
+    for (let i = 1; i <= 3; i += 1) {
+      assert((await story.locator('.story-counter').innerText()).trim() === `${i} / 3`, `«Теплица»: страница ${i} из 3`);
+      await page.waitForFunction(() => document.querySelector('.story-image')?.naturalWidth > 0);
+      images.push(await imageName(story));
+      captions.push(await story.locator('.story-caption').innerText());
+      const btn = story.locator('.story-controls .btn');
+      assert((await btn.innerText()).trim() === (i < 3 ? 'Дальше' : 'К расследованию'), `кнопка страницы ${i}: «${(await btn.innerText()).trim()}»`);
+      await btn.focus();
+      await page.keyboard.press('Enter');
+    }
+    assert(
+      JSON.stringify(images) === JSON.stringify(['third-greenhouse-book-1', 'third-greenhouse-book-2', 'third-greenhouse-book-3']),
+      'порядок: двор → дорожка → теплица: ' + images.join(', '),
+    );
+    assert(captions[2].includes('после выхода № 3') && !/Аня|Борис|Вика|Гриша/.test(captions.join(' ')), 'последняя подпись — существующий факт, имён нет');
+    await page.waitForSelector('.case');
+    assert((await story.count()) === 0, 'после последней страницы — экран дела');
+    const intro = await page.locator('.case-intro').innerText();
+    assert(intro.includes('по одному соседу в каждом') && intro.includes('Кто был в теплице после выхода № 3?'), 'условия на экране дела');
+    assert((await page.locator('.clues .clue').count()) > 0 && (await page.locator('.grid-block').count()) === 3, 'факты и таблицы на месте');
+    const saved = await saveOf(page);
+    assert(saved.data.storySeen?.includes('third-1') && !saved.data.storySeen.includes('fourth-1'), 'просмотр записан только для «Теплицы»');
+    await page.locator('.case .topbar .btn').click();
+    await page.reload({ waitUntil: 'networkidle' });
+    await page.waitForSelector('.case-list');
+    await page.locator('.case-card', { hasText: /Кто был в теплице/ }).click();
+    await page.waitForSelector('.case');
+    assert((await story.count()) === 0, '«Теплица» второй раз сама не показывается');
+    assert(page.errors.length === 0, 'без ошибок: ' + page.errors.join('; '));
+    await context.close();
+  }
+  {
+    // Старый игрок: «Самовар» начат, «Теплица» раскрыта, есть покупка; кадров «Самовара» не видел.
+    const old = JSON.parse(JSON.stringify(HOSE_DONE));
+    old.data.casesCompleted = ['ch1-hose', 'third-1'];
+    old.data.stars = { 'ch1-hose': 3, 'third-1': 2 };
+    old.data.storySeen = ['tutorial-1#3', 'second-1#2', 'ch1-hose'];
+    old.data.progress['fourth-1'] = { marks: { 'места|сарай~персонажи|Люда': 'no' }, hintsUsed: 1 };
+    old.data.purchases = { noAds: true };
+    const { context, page } = await openWithSave(browser, old);
+    const before = await saveOf(page);
+    const greenhouse = page.locator('.case-card', { hasText: /Кто был в теплице/ });
+    assert((await greenhouse.innerText()).includes('Раскрыто · ⭐⭐') && (await greenhouse.locator('.stamp.badge').innerText()).trim() === '✓', 'раскрытая «Теплица»: статус, звёзды и ✓ на обложке');
+    const samovar = page.locator('.case-card', { hasText: /Чей самовар/ });
+    assert((await samovar.innerText()).includes('Ждёт расследования'), 'начатый «Самовар» — прежний статус');
+    await samovar.click();
+    const story = page.locator('.story');
+    await story.waitFor();
+    const images = [];
+    const captions = [];
+    for (let i = 1; i <= 5; i += 1) {
+      assert((await story.locator('.story-counter').innerText()).trim() === `${i} / 5`, `«Самовар»: страница ${i} из 5`);
+      await page.waitForFunction(() => document.querySelector('.story-image')?.naturalWidth > 0);
+      images.push(await imageName(story));
+      captions.push(await story.locator('.story-caption').innerText());
+      if (i < 5) await page.keyboard.press('ArrowRight');
+    }
+    assert(
+      JSON.stringify(images) === JSON.stringify(['fourth-samovar-book-1', 'fourth-samovar-book-2', 'fourth-samovar-book-3', 'fourth-samovar-book-lantern', 'fourth-samovar-book-4']),
+      'порядок: двор → лопата → гамак → фонарь → самовар: ' + images.join(', '),
+    );
+    assert(captions[1].includes('лопата') && captions[2].includes('гамак') && captions[3].includes('фонарь') && captions[4].includes('Чей он?'), 'подписи по порядку');
+    assert(!/качел|сара|баньк|огород/i.test(captions[3]), 'страница с фонарём не называет места');
+    assert(!/Валя|Гоша|Люда|Тимофей/.test(captions.join(' ')), 'в подписях нет имён');
+    await page.keyboard.press('ArrowLeft');
+    assert((await story.locator('.story-counter').innerText()).trim() === '4 / 5', 'стрелка влево листает назад');
+    await story.getByRole('button', { name: 'Пропустить' }).click();
+    await page.waitForSelector('.case');
+    const intro = await page.locator('.case-intro').innerText();
+    assert(intro.includes('по одному в каждом') && intro.includes('у всех разные') && intro.includes('Чей самовар кипел в огороде?'), 'после пропуска условия на экране дела');
+    assert((await page.locator('.clues .clue').count()) > 0, 'после пропуска факты на экране дела');
+    assert((await page.locator('button[aria-label="Люда — сарай"].no, button[aria-label="сарай — Люда"].no').count()) === 1, 'незаконченная отметка «Самовара» на месте');
+    let saved = await saveOf(page);
+    assert(saved.data.storySeen.includes('fourth-1') && ['tutorial-1#3', 'second-1#2', 'ch1-hose'].every((k) => saved.data.storySeen.includes(k)), 'просмотр записан, прежние отметки целы');
+    assert(!saved.data.storySeen.includes('third-1'), '«Теплица» не отмечена просмотренной — у раскрытого дела книжка покажется один раз при открытии');
+    assert(JSON.stringify(saved.data.progress['fourth-1']) === JSON.stringify(before.data.progress['fourth-1']), 'прогресс «Самовара» не изменился');
+    assert(saved.data.purchases.noAds === true && JSON.stringify(saved.data.stars) === JSON.stringify(before.data.stars), 'покупка и звёзды на месте');
+
+    const replay = page.locator('.case-intro').getByRole('button', { name: '📖 Вступление' });
+    await replay.focus();
+    await page.keyboard.press('Enter');
+    await story.waitFor();
+    assert((await story.locator('.story-counter').innerText()).trim() === '1 / 5', 'повтор — с первой страницы');
+    for (let i = 0; i < 6; i += 1) {
+      await page.keyboard.press(i % 2 ? 'Shift+Tab' : 'Tab');
+      assert(await page.evaluate(() => !!document.activeElement?.closest('.story')), `повтор, ${i % 2 ? 'Shift+Tab' : 'Tab'}: фокус внутри книжки`);
+    }
+    assert(await page.evaluate(() => document.getElementById('app').inert === true), 'фон под книжкой заблокирован');
+    await page.keyboard.press('Escape');
+    assert((await story.count()) === 0, 'Escape закрывает повтор');
+    assert(await replay.evaluate((n) => n === document.activeElement), 'после повтора фокус на кнопке «Вступление»');
+    assert((await page.locator('.cell.yes').count()) === 0 && (await page.locator('.cell.no').count()) === 1, 'клетки не изменились, пока была открыта книжка');
+
+    await page.locator('.case .topbar .btn').click();
+    await page.reload({ waitUntil: 'networkidle' });
+    await page.waitForSelector('.case-list');
+    await page.locator('.case-card', { hasText: /Чей самовар/ }).click();
+    await page.waitForSelector('.case');
+    assert((await story.count()) === 0, '«Самовар» второй раз сам не показывается');
+    // Раскрытая «Теплица»: книжка один раз, «Пропустить» — сразу к раскрытому делу.
+    await page.locator('.case .topbar .btn').click();
+    await page.locator('.case-card', { hasText: /Кто был в теплице/ }).click();
+    await story.waitFor();
+    await story.getByRole('button', { name: 'Пропустить' }).click();
+    await page.waitForSelector('.case');
+    saved = await saveOf(page);
+    assert(JSON.stringify(saved.data.casesCompleted) === JSON.stringify(before.data.casesCompleted) && JSON.stringify(saved.data.stars) === JSON.stringify(before.data.stars), 'раскрытые дела и звёзды не изменились');
+    assert(page.errors.length === 0, 'без ошибок: ' + page.errors.join('; '));
+    await context.close();
+  }
+  for (const viewport of [
+    { width: 360, height: 640 },
+    { width: 390, height: 844 },
+    { width: 1000, height: 700 },
+  ]) {
+    const size = `${viewport.width}×${viewport.height}`;
+    for (const [title, pages, slug] of [[/Кто был в теплице/, 3, 'greenhouse'], [/Чей самовар/, 5, 'samovar']]) {
+      const { context, page } = await openWithSave(browser, JSON.parse(JSON.stringify(HOSE_DONE)), viewport);
+      const cardIssues = await geometry(page, []);
+      assert(cardIssues.length === 0, `${size}: участок с новыми обложками без прокрутки вбок` + (cardIssues.length ? ': ' + cardIssues.join('; ') : ''));
+      await page.locator('.case-card', { hasText: title }).click();
+      const story = page.locator('.story');
+      await story.waitFor();
+      for (let i = 1; i <= pages; i += 1) {
+        await page.waitForFunction(() => document.querySelector('.story-image')?.naturalWidth > 0);
+        await page.evaluate(() => document.querySelector('.story-image').decode());
+        const whole = await page.evaluate(() => {
+          const img = document.querySelector('.story-image');
+          const box = img.getBoundingClientRect();
+          const fit = getComputedStyle(img).objectFit;
+          return fit === 'contain' && Math.abs(box.width / box.height - img.naturalWidth / img.naturalHeight) < 0.02;
+        });
+        assert(whole, `${size}, ${slug} ${i}/${pages}: картинка целиком, без обрезки`);
+        const issues = await geometry(page, [
+          ['.story .topbar', '.story-frame'],
+          ['.story-frame', '.story-caption'],
+          ['.story-caption', '.story-controls'],
+        ]);
+        assert(issues.length === 0, `${size}, ${slug} ${i}/${pages}: без наложений` + (issues.length ? ': ' + issues.join('; ') : ''));
+        const btn = await story.locator('.story-controls .btn').boundingBox();
+        assert(btn.y + btn.height <= viewport.height && btn.height >= 44, `${size}, ${slug} ${i}/${pages}: кнопка видна без прокрутки`);
+        if (process.env.SHOT_DIR) await page.screenshot({ path: `${process.env.SHOT_DIR}/${slug}-book-${i}-${size}.png` });
+        await story.locator('.story-controls .btn').click();
+      }
+      await page.waitForSelector('.case');
+      const caseIssues = await geometry(page, [
+        ['.case-intro', '.clues'],
+        ['.clues', '.grids-stack'],
+      ]);
+      assert(caseIssues.length === 0, `${size}: условия, факты и таблицы (${slug}) без наложений` + (caseIssues.length ? ': ' + caseIssues.join('; ') : ''));
+      if (process.env.SHOT_DIR) await page.screenshot({ path: `${process.env.SHOT_DIR}/${slug}-case-${size}.png` });
+      assert(page.errors.length === 0, 'без ошибок: ' + page.errors.join('; '));
+      await context.close();
+    }
   }
 
   await browser.close();
