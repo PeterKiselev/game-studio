@@ -37,7 +37,7 @@
 |---|---|---|
 | `visit` | не чаще одного раза за московский день на локальный профиль (§4) | `days_since_first`, `days_since_prev_visit`, `first_day` (московская дата первого визита профиля), `platform`, `build` |
 | `case_first_start` | впервые для этого профиля начато дело (§5) | `case_id`, `kind` (plot / chapter / daily) |
-| `case_first_complete` | впервые для этого профиля раскрыто дело | `case_id`, `kind`, `stars`, `hints` (0 / 1 / 2 / 3+), `duration` (<2 / 2–5 / 5–10 / 10+ мин), `step_wrong` (0 / 1 / 2+) |
+| `case_first_complete` | впервые для этого профиля раскрыто дело | `case_id`, `kind`, `stars`, `hints` (0 / 1 / 2 / 3+), `last_session_duration` (<2 / 2–5 / 5–10 / 10+ мин — длительность **последнего сеанса** с открытия дела до раскрытия, не всего прохождения), `step_wrong` (0 / 1 / 2+) |
 | `case_attempt` | каждое начало и каждое раскрытие, включая повторы | `case_id`, `kind`, `phase` (start / complete) |
 | `next_case` | переход «Следующее дело →» с развязки | `from`, `to` |
 | `daily_open` | открытие дела дня | `case_id`, `when` (today / past), для past — `ago` (1 / 2–7 / 8+ дней) |

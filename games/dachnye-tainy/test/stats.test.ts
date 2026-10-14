@@ -17,7 +17,7 @@ let counter = 0;
 const env = (today: string): Env => ({ today, newId: () => `id-${(counter += 1)}` });
 const meta = { platform: 'web', build: 'test' };
 const names = (s: LocalStats) => s.queue.map((e) => e.name);
-const done = { stars: 3, hints: 0, durationMs: 90_000, stepWrong: 0 };
+const done = { stars: 3, hints: 0, lastSessionMs: 90_000, stepWrong: 0 };
 
 describe('визит — не чаще раза в московский день', () => {
   it('первый визит: 0 дней с первого, дата первого визита', () => {
@@ -75,9 +75,9 @@ describe('первый старт и первое раскрытие', () => {
 
   it('поля первого раскрытия — корзинами, без точных чисел', () => {
     let s = recordCaseStart(initStats('2026-10-14', []), env('2026-10-14'), 'ch1-pond', 'chapter');
-    s = recordCaseComplete(s, env('2026-10-14'), 'ch1-pond', 'chapter', { stars: 1, hints: 5, durationMs: 7 * 60_000, stepWrong: 3 });
+    s = recordCaseComplete(s, env('2026-10-14'), 'ch1-pond', 'chapter', { stars: 1, hints: 5, lastSessionMs: 7 * 60_000, stepWrong: 3 });
     const ev = s.queue.find((e) => e.name === 'case_first_complete')!;
-    expect(ev.props).toEqual({ case_id: 'ch1-pond', kind: 'chapter', stars: 1, hints: '3+', duration: '5-10', step_wrong: '2+' });
+    expect(ev.props).toEqual({ case_id: 'ch1-pond', kind: 'chapter', stars: 1, hints: '3+', last_session_duration: '5-10', step_wrong: '2+' });
   });
 });
 

@@ -41,7 +41,7 @@ export const QUEUE_LIMIT = 200;
 export const WHITELIST = {
   visit: ['days_since_first', 'days_since_prev_visit', 'first_day', 'platform', 'build'],
   case_first_start: ['case_id', 'kind'],
-  case_first_complete: ['case_id', 'kind', 'stars', 'hints', 'duration', 'step_wrong'],
+  case_first_complete: ['case_id', 'kind', 'stars', 'hints', 'last_session_duration', 'step_wrong'],
   case_attempt: ['case_id', 'kind', 'phase'],
   next_case: ['from', 'to'],
   daily_open: ['case_id', 'when', 'ago'],
@@ -112,7 +112,12 @@ export function recordCaseStart(stats: LocalStats, env: Env, caseId: string, kin
 export interface CompleteDetails {
   stars: number;
   hints: number;
-  durationMs: number;
+  /**
+   * Длительность ПОСЛЕДНЕГО сеанса: от последнего открытия дела до раскрытия.
+   * Не всё прохождение: если дело начато вчера и раскрыто сегодня, сюда
+   * попадает только сегодняшний сеанс. Поэтому поле так и называется.
+   */
+  lastSessionMs: number;
   stepWrong: number;
 }
 
@@ -139,7 +144,7 @@ export function recordCaseComplete(stats: LocalStats, env: Env, caseId: string, 
       kind,
       stars: d.stars,
       hints: hintsBucket(d.hints),
-      duration: durationBucket(d.durationMs),
+      last_session_duration: durationBucket(d.lastSessionMs),
       step_wrong: stepBucket(d.stepWrong),
     });
     next = { ...next, firstCompleted: [...next.firstCompleted, caseId] };

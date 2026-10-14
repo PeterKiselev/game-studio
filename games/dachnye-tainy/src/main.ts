@@ -340,7 +340,7 @@ function caseCardMark(c: Case, stamp: string): HTMLElement {
 
 // --- локальный учёт (этап 1 аналитики, только тестовая сборка) ---------------------
 
-/** Когда открыто дело в этой сессии — для примерной длительности до раскрытия. */
+/** Когда дело открыто в последний раз — для длительности последнего сеанса (не всего прохождения). */
 const caseOpenedAt = new Map<string, number>();
 
 function caseKind(source: Case): CaseKind {
@@ -1020,7 +1020,9 @@ function stepBackButton(source: Case, step: string): HTMLButtonElement {
  * версия опровергается. Факты главы появляются только здесь, после таблиц.
  */
 function showVerdict(source: Case, step: Verdict, solution: Solution, hintsUsed: number, hadMistake: boolean): void {
-  let wrong = 0;
+  // Отброшенные до перезагрузки варианты хранятся в progress.wrongChoices —
+  // они тоже неверные выборы этого прохождения шага, счёт начинается с них.
+  let wrong = app.save.data.progress[source.id]?.wrongChoices?.length ?? 0;
   const feedback = el('div', { class: 'step-feedback', hidden: true });
   const options = el('div', { class: 'step-options versions' });
   const culpritCategory = source.categories.find((cat) => cat.id === step.culprit.category)!;
@@ -1104,7 +1106,9 @@ function showContradiction(
   hintsUsed: number,
   hadMistake: boolean,
 ): void {
-  let wrong = 0;
+  // Отброшенные до перезагрузки варианты хранятся в progress.wrongChoices —
+  // они тоже неверные выборы этого прохождения шага, счёт начинается с них.
+  let wrong = app.save.data.progress[source.id]?.wrongChoices?.length ?? 0;
   const feedback = el('div', { class: 'step-feedback', hidden: true });
   const options = el('div', { class: 'step-options' });
 
@@ -1197,7 +1201,7 @@ async function finishCase(
     recordCaseComplete(st, env, source.id, caseKind(source), {
       stars: earnedStars ?? starsFor(hintsUsed),
       hints: hintsUsed,
-      durationMs: opened ? Date.now() - opened : 0,
+      lastSessionMs: opened ? Date.now() - opened : 0,
       stepWrong,
     }),
   );
