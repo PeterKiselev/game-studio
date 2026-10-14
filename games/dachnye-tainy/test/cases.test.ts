@@ -379,24 +379,63 @@ describe('иллюстрированное вступление дела 1', () 
   });
 });
 
-describe('кадры первых двух дел', () => {
-  it.each(['second-1'])('%s: один кадр с короткой подписью и обложка', (id) => {
-    const source = cases.find((c) => c.id === id)!;
-    expect(source.story).toHaveLength(1);
-    const [frame] = source.story!;
-    expect(frame.image).toMatch(/\.webp/);
-    expect(frame.alt.length).toBeGreaterThan(10);
-    expect(frame.caption.length).toBeLessThanOrEqual(110);
-    expect(source.cover).toMatch(/cover-.*\.webp/);
+describe('вступление-книжка «Велосипеда» (редакция 2, четыре страницы)', () => {
+  const source = cases.find((c) => c.id === 'second-1')!;
+  const story = source.story!;
+  const solution = uniqueSolution(source)!;
+  const names = source.categories.find((c) => c.id === source.anchor)!.values;
+
+  it('четыре страницы: двор → ведро у колодца → книга → велосипед; новая редакция, прежняя обложка', () => {
+    expect(story.map((f) => f.image.match(/[^/]+\.webp/)![0])).toEqual([
+      'second-bike-book-1.webp',
+      'second-bike-book-2.webp',
+      'second-bike-book-3.webp',
+      'second-bike-1.webp',
+    ]);
+    expect(source.storyVersion).toBe(2);
+    expect(source.cover).toMatch(/cover-second-bike\.webp/);
+    for (const frame of story) {
+      expect(frame.alt.length).toBeGreaterThan(10);
+      expect(frame.caption.length).toBeLessThanOrEqual(130);
+    }
   });
 
-  it.each(['second-1'])('%s: подпись и описание без ответа — ни одного имени соседа', (id) => {
-    const source = cases.find((c) => c.id === id)!;
-    const names = source.categories.find((c) => c.id === source.anchor)!.values;
-    const text = `${source.story![0].caption} ${source.story![0].alt}`;
+  it('в кадрах ни одного имени и ничего, что выдаёт владельца или пол', () => {
+    const text = story.map((f) => `${f.caption} ${f.alt}`).join(' ');
     for (const name of names) expect(text, name).not.toContain(name.slice(0, 4));
-    // «хозяин», «хозяйка», «он принёс» и т. п. выдали бы пол владельца.
-    expect(text).not.toMatch(/хозя|принёс|принесла|оставил|оставила/i);
+    expect(text).not.toMatch(/хозя|принёс|принесла|оставил|оставила|забыл/i);
+  });
+
+  it('страница с книгой — фон: ни места из таблицы, ни «оставили/нашли»', () => {
+    const text = `${story[2].caption} ${story[2].alt}`.toLowerCase();
+    expect(text).not.toMatch(/забор|колод|крыльц|оставил|оставлен|нашли|найден|скамь/);
+  });
+
+  it('ведро у колодца и велосипед у забора — уже факты дела, а не новые улики', () => {
+    const facts = source.clues.filter((c) => c.kind === 'same').map((c) => [c.a.value, c.b.value].sort().join('~'));
+    expect(facts).toContain(['ведро', 'колодец'].sort().join('~'));
+    expect(facts).toContain(['велосипед', 'забор'].sort().join('~'));
+  });
+
+  it('условия на экране дела: списки отдельно, прямо сказано, что пары неизвестны', () => {
+    expect(source.intro).toMatch(/по одному в каждом/);
+    expect(source.intro).toMatch(/у всех разные/);
+    expect(source.intro).toMatch(/пока неизвестно/);
+    expect(source.intro).toMatch(/Чей велосипед прислонён к забору\?/);
+  });
+
+  it('в условиях порядок перечисления не совпадает с решением ни в одной позиции', () => {
+    const lower = source.intro!.toLowerCase();
+    const stem = (v: string) => v.toLowerCase().slice(0, 4);
+    const order = (values: string[]) => [...values].sort((a, b) => lower.indexOf(stem(a)) - lower.indexOf(stem(b)));
+    const nameOrder = order(names);
+    for (const cat of source.categories.filter((c) => c.id !== source.anchor)) {
+      for (const v of cat.values) expect(lower, v).toContain(stem(v));
+      const listed = order(cat.values);
+      nameOrder.forEach((name, i) => {
+        expect(listed[i], `${name} стоит рядом с «${listed[i]}» — это ответ`).not.toBe(cat.values[solution[cat.id][names.indexOf(name)]]);
+      });
+    }
   });
 
   it('у всех дел с кадрами есть обложка карточки', () => {

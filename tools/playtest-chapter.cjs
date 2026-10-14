@@ -650,25 +650,24 @@ async function geometry(page, pairs) {
     const key = cardOf(/Глава 1\. Чей ключ/);
     assert((await key.locator('.cover').count()) === 0 && (await key.locator('.stamp').innerText()).trim() === '?' && (await key.innerText()).includes('Ждёт расследования'), 'дело 2 главы (открыто после дела 1) — прежняя печать «?» и статус');
 
-    // Второе дело: один кадр, клавиатура заперта в окне, прогресс цел.
+    // Второе дело: книжка из четырёх страниц, клавиатура заперта в окне, прогресс цел.
     await cardOf(/Чей велосипед/).click();
     const story = page.locator('.story');
     await story.waitFor();
-    assert((await story.locator('.story-counter').innerText()).trim() === '', 'один кадр — без счётчика «1 / 1»');
-    assert((await story.locator('.story-controls .btn').innerText()).trim() === 'К расследованию', 'единственная кнопка — «К расследованию»');
+    assert((await story.locator('.story-counter').innerText()).trim() === '1 / 4', 'вступление «Велосипеда» — книжка из четырёх страниц');
     const caption = await story.locator('.story-caption').innerText();
-    assert(caption.includes('велосипед') && !/Настя|Пётр|Женя/.test(caption), 'подпись без имён: ' + caption);
+    assert(!/Настя|Пётр|Женя/.test(caption), 'подпись без имён: ' + caption);
     for (let i = 0; i < 5; i += 1) {
       await page.keyboard.press('Tab');
       assert(await page.evaluate(() => !!document.activeElement?.closest('.story')), `Tab ×${i + 1}: фокус внутри кадра`);
     }
     await page.keyboard.press('Shift+Tab');
     assert(await page.evaluate(() => !!document.activeElement?.closest('.story')), 'Shift+Tab: фокус внутри кадра');
-    await story.locator('.story-controls .btn').click();
+    for (let i = 0; i < 4; i += 1) await story.locator('.story-controls .btn').click();
     await page.waitForSelector('.case');
     assert((await page.locator('button[aria-label="Пётр — забор"].no').count()) === 1, 'незаконченная отметка второго дела на месте');
     const replay = page.getByRole('button', { name: '📖 Вступление' });
-    assert((await replay.count()) === 1, 'у дела без текста вступления есть кнопка повтора');
+    assert((await replay.count()) === 1, 'кнопка повтора вступления на месте');
     await replay.focus();
     await page.keyboard.press('Enter');
     await story.waitFor();
@@ -676,7 +675,7 @@ async function geometry(page, pairs) {
     assert(await replay.evaluate((n) => n === document.activeElement), 'после повтора фокус на кнопке «Вступление»');
 
     let saved = await saveOf(page);
-    assert(saved.data.storySeen?.includes('second-1') && !saved.data.storySeen.includes('tutorial-1'), 'просмотр записан только для второго дела');
+    assert(saved.data.storySeen?.includes('second-1#2') && !saved.data.storySeen.some((k) => k.startsWith('tutorial-1')), 'просмотр новой редакции записан только для второго дела');
     assert(JSON.stringify(saved.data.progress['second-1']) === JSON.stringify(before.data.progress['second-1']), 'прогресс второго дела не изменился');
     assert(JSON.stringify(saved.data.stars) === JSON.stringify(before.data.stars) && saved.data.purchases.unlimitedHints === true, 'звёзды и покупка не изменились');
 
@@ -743,18 +742,27 @@ async function geometry(page, pairs) {
 
     await page.locator('.case-card', { hasText: /Чей велосипед/ }).click();
     await page.locator('.story').waitFor();
-    await page.waitForFunction(() => document.querySelector('.story-image')?.naturalWidth > 0);
-    await page.evaluate(() => document.querySelector('.story-image').decode());
-    assert(await page.evaluate(() => document.querySelector('.story-image').naturalWidth === 1080), `${size}: картинка кадра загружена`);
-    const issues = await geometry(page, [
-      ['.story .topbar', '.story-frame'],
-      ['.story-frame', '.story-caption'],
-      ['.story-caption', '.story-controls'],
-    ]);
-    assert(issues.length === 0, `${size}: одиночный кадр без наложений` + (issues.length ? ': ' + issues.join('; ') : ''));
-    const btn = await page.locator('.story-controls .btn').boundingBox();
-    assert(btn.y + btn.height <= viewport.height && btn.height >= 44, `${size}: «К расследованию» видна без прокрутки`);
-    if (process.env.SHOT_DIR) await page.screenshot({ path: `${process.env.SHOT_DIR}/story-bike-${size}.png` });
+    for (let i = 1; i <= 4; i += 1) {
+      await page.waitForFunction(() => document.querySelector('.story-image')?.naturalWidth > 0);
+      await page.evaluate(() => document.querySelector('.story-image').decode());
+      const whole = await page.evaluate(() => {
+        const img = document.querySelector('.story-image');
+        const box = img.getBoundingClientRect();
+        return img.naturalWidth === 1080 && getComputedStyle(img).objectFit === 'contain'
+          && Math.abs(box.width / box.height - img.naturalWidth / img.naturalHeight) < 0.02;
+      });
+      assert(whole, `${size}, страница ${i}: картинка загружена и видна целиком`);
+      const issues = await geometry(page, [
+        ['.story .topbar', '.story-frame'],
+        ['.story-frame', '.story-caption'],
+        ['.story-caption', '.story-controls'],
+      ]);
+      assert(issues.length === 0, `${size}, страница ${i}: без наложений` + (issues.length ? ': ' + issues.join('; ') : ''));
+      const btn = await page.locator('.story-controls .btn').boundingBox();
+      assert(btn.y + btn.height <= viewport.height && btn.height >= 44, `${size}, страница ${i}: кнопка видна без прокрутки`);
+      if (process.env.SHOT_DIR) await page.screenshot({ path: `${process.env.SHOT_DIR}/bike-book-${i}-${size}.png` });
+      if (i < 4) await page.locator('.story-controls .btn').click();
+    }
     assert(page.errors.length === 0, 'без ошибок: ' + page.errors.join('; '));
     await context.close();
   }
@@ -821,11 +829,12 @@ async function geometry(page, pairs) {
     await page.keyboard.press('Escape');
     assert(await replay.evaluate((n) => n === document.activeElement), 'после повтора фокус на кнопке «Вступление»');
 
-    // Второй раз сам не показывается; «Велосипед» по-прежнему не показывается (его кадр не менялся).
+    // Второй раз «Пирог» сам не показывается. («Велосипед» у этого игрока — новой редакции и покажется
+    // один раз; это проверяет сценарий 13.)
     await page.locator('.case .topbar .btn').click();
     await page.reload({ waitUntil: 'networkidle' });
     await page.waitForSelector('.case-list');
-    for (const re of [/Чей пирог/, /Чей велосипед/]) {
+    for (const re of [/Чей пирог/]) {
       await page.locator('.case-card', { hasText: re }).click();
       await page.waitForSelector('.case');
       assert((await story.count()) === 0, `${re}: вступление само не показывается`);
@@ -995,6 +1004,70 @@ async function geometry(page, pairs) {
     const heights = await page.locator('.step-options.versions .btn').evaluateAll((ns) => ns.map((n) => n.getBoundingClientRect().height));
     assert(heights.every((h) => h >= 44), `${size}: версии не ниже 44px`);
     if (process.env.SHOT_DIR) await page.screenshot({ path: `${process.env.SHOT_DIR}/pond-step-${size}.png`, fullPage: true });
+    assert(page.errors.length === 0, 'без ошибок: ' + page.errors.join('; '));
+    await context.close();
+  }
+
+  console.log('\n=== 13. «Велосипед»: книжка из четырёх страниц, новая редакция один раз ===');
+  {
+    const old = JSON.parse(JSON.stringify(HOSE_DONE));
+    old.data.casesCompleted = ['ch1-hose'];
+    old.data.storySeen = ['second-1', 'tutorial-1#3', 'ch1-hose'];
+    old.data.progress['second-1'] = { marks: { 'места|забор~персонажи|Пётр': 'no' }, hintsUsed: 1 };
+    old.data.purchases = { noAds: true };
+    const { context, page } = await openWithSave(browser, old);
+    const before = await saveOf(page);
+    const bike = page.locator('.case-card', { hasText: /Чей велосипед/ });
+    assert((await bike.locator('.cover-image').getAttribute('src')).includes('cover-second-bike'), 'обложка «Велосипеда» прежняя');
+    await bike.click();
+    const story = page.locator('.story');
+    await story.waitFor();
+    assert(await page.evaluate(() => document.getElementById('app').inert === true), 'фон под книжкой заблокирован');
+    const images = [];
+    const captions = [];
+    for (let i = 1; i <= 4; i += 1) {
+      assert((await story.locator('.story-counter').innerText()).trim() === `${i} / 4`, `страница ${i} из 4`);
+      await page.waitForFunction(() => document.querySelector('.story-image')?.naturalWidth > 0);
+      images.push(await story.locator('.story-image').evaluate((n) => n.src.split('/').pop().split('.')[0]));
+      captions.push(await story.locator('.story-caption').innerText());
+      if (i < 4) await page.keyboard.press('ArrowRight');
+    }
+    assert(
+      JSON.stringify(images) === JSON.stringify(['second-bike-book-1', 'second-bike-book-2', 'second-bike-book-3', 'second-bike-1']),
+      'порядок: двор → ведро у колодца → книга → велосипед: ' + images.join(', '),
+    );
+    assert(captions[1].includes('ведро') && captions[2].includes('книга') && captions[3].includes('велосипед'), 'подписи по порядку');
+    assert(!/Настя|Пётр|Женя/.test(captions.join(' ')), 'в подписях нет имён');
+    await story.getByRole('button', { name: 'Пропустить' }).click();
+    await page.waitForSelector('.case');
+    const intro = await page.locator('.case-intro').innerText();
+    assert(intro.includes('пока неизвестно') && intro.includes('Чей велосипед прислонён к забору?'), 'после пропуска условия на экране дела');
+    assert((await page.locator('.clues .clue').count()) === 5, 'после пропуска все 5 фактов на экране');
+    assert((await page.locator('button[aria-label="Пётр — забор"].no').count()) === 1, 'незаконченная отметка на месте');
+    let saved = await saveOf(page);
+    assert(saved.data.storySeen.includes('second-1#2') && ['second-1', 'tutorial-1#3', 'ch1-hose'].every((k) => saved.data.storySeen.includes(k)), 'новая редакция записана отдельно, прежние отметки целы');
+    assert(JSON.stringify(saved.data.progress['second-1']) === JSON.stringify(before.data.progress['second-1']), 'прогресс не изменился');
+    assert(saved.data.purchases.noAds === true && JSON.stringify(saved.data.stars) === JSON.stringify(before.data.stars), 'покупка и звёзды на месте');
+
+    const replay = page.locator('.case-intro').getByRole('button', { name: '📖 Вступление' });
+    await replay.focus();
+    await page.keyboard.press('Enter');
+    await story.waitFor();
+    assert((await story.locator('.story-counter').innerText()).trim() === '1 / 4', 'повтор — с первой страницы');
+    for (let i = 0; i < 6; i += 1) {
+      await page.keyboard.press(i % 2 ? 'Shift+Tab' : 'Tab');
+      assert(await page.evaluate(() => !!document.activeElement?.closest('.story')), `повтор, ${i % 2 ? 'Shift+Tab' : 'Tab'}: фокус внутри книжки`);
+    }
+    await page.keyboard.press('Escape');
+    assert(await replay.evaluate((n) => n === document.activeElement), 'после повтора фокус на кнопке «Вступление»');
+    await page.locator('.case .topbar .btn').click();
+    await page.reload({ waitUntil: 'networkidle' });
+    await page.waitForSelector('.case-list');
+    await page.locator('.case-card', { hasText: /Чей велосипед/ }).click();
+    await page.waitForSelector('.case');
+    assert((await story.count()) === 0, 'второй раз книжка сама не показывается');
+    saved = await saveOf(page);
+    assert(JSON.stringify(saved.data.casesCompleted) === JSON.stringify(before.data.casesCompleted), 'раскрытые дела не изменились');
     assert(page.errors.length === 0, 'без ошибок: ' + page.errors.join('; '));
     await context.close();
   }
