@@ -565,11 +565,47 @@ describe('глава 1, дело 3 «Свет над прудом»', () => {
 
     it('факты главы устанавливают действие, куда ушла вода и мотив', () => {
       const all = step.evidence.join(' ');
-      expect(all).toMatch(/только между 1:00 и 2:00/); // действие привязано к часу
       expect(all).toMatch(/след шланга.*пруд/); // куда ушла вода
       expect(all).toMatch(/к 1 августа/); // мотив
       expect(all).toMatch(/кольце с биркой «Правление»/); // ключ — связь с делом 2
-      expect(step.culpritReason).toMatch(/1:00 и 2:00/);
+    });
+
+    /**
+     * Момент и интервал: таблица даёт присутствие в 1:00, расход — отдельный
+     * факт. Их связывают самописец (включали один раз, ровно в 1:00, до этого
+     * не работал) и кадр в 1:00 (у рычага один человек). Имени в этих фактах нет.
+     */
+    it('начало расхода привязано к единственному человеку в 1:00 — без имени', () => {
+      const [recorder, frame] = step.evidence;
+      expect(recorder).toMatch(/включали один раз — ровно в 1:00/);
+      expect(recorder).toMatch(/До 1:00 он не работал/);
+      expect(frame).toMatch(/кадре Насти в 1:00 у насоса один человек/);
+      expect(frame).toMatch(/больше в кадре никого/);
+      for (const fact of [recorder, frame]) expect(fact).not.toMatch(/Геннадий|председател|Зоя|Игорь|Рома/);
+      // «Кадр Насти» по таблицам — тот же человек, что и в 1:00.
+      const byFrame = trueVersions({ ...source, verdict: { ...step, culprit: { category: 'подтверждение', value: 'кадр Насти' } } }, solution);
+      expect(byFrame.map((v) => v.who.value)).toEqual(['Геннадий Ильич']);
+      expect(step.culpritReason).toMatch(/один раз — в 1:00/);
+    });
+
+    it('вопрос, версии и вывод — только про прошлую ночь', () => {
+      expect(step.question).toMatch(/прошлой ночью/);
+      expect(step.question).not.toMatch(/три ночи|по ночам/);
+      for (const v of step.versions) expect(v.text, v.text).toMatch(/^Прошлой ночью/);
+      expect(step.resolution).not.toMatch(/три ночи|каждую ночь|по ночам/);
+      expect(step.evidence.join(' ')).toMatch(/прошлой ночью/);
+    });
+
+    it('две предыдущие ночи — признание в развязке, отдельно от доказанного', () => {
+      const proven = source.epilogue.indexOf('Доказано про прошлую ночь');
+      const noProof = source.epilogue.indexOf('Про две ночи до неё доказательств нет');
+      const confession = source.epilogue.indexOf('признаётся');
+      expect(proven).toBe(0);
+      expect(noProof).toBeGreaterThan(proven);
+      expect(confession).toBeGreaterThan(noProof);
+      // Предыдущие ночи упоминаются только после слов о признании.
+      expect(source.epilogue.slice(0, noProof)).not.toMatch(/позапрошлой|ночью до неё/);
+      expect(source.epilogue.slice(confession)).toMatch(/позапрошлой ночью/);
     });
 
     it('факты главы не подсказывают таблицы: их нет ни в условиях, ни в фактах сетки', () => {

@@ -917,7 +917,10 @@ async function geometry(page, pairs) {
     await solve(page, POND_YES, '.step');
     assert((await page.locator('.reveal').count()) === 0, 'таблицы решены — дело ещё не раскрыто');
     const evidence = await page.locator('.evidence').innerText();
-    assert(evidence.includes('только между 1:00 и 2:00') && evidence.includes('след шланга') && evidence.includes('к 1 августа') && evidence.includes('«Правление»'), 'после таблиц — факты главы: действие, след, мотив, ключ');
+    assert(evidence.includes('включали один раз — ровно в 1:00') && evidence.includes('у насоса один человек') && evidence.includes('след шланга') && evidence.includes('к 1 августа') && evidence.includes('«Правление»'), 'после таблиц — факты главы: начало расхода и единственный человек у рычага, след, мотив, ключ');
+    assert(!/Геннадий|председател/.test((await page.locator('.evidence .clue').nth(0).innerText()) + (await page.locator('.evidence .clue').nth(1).innerText())), 'факты о самописце и кадре не называют имени');
+    assert((await page.locator('.step-question').innerText()).includes('прошлой ночью'), 'вопрос — только про прошлую ночь');
+    assert((await page.locator('.step-options.versions .btn').allInnerTexts()).every((t) => t.trim().startsWith('Прошлой ночью')), 'все версии — про прошлую ночь');
     const summary = await page.locator('.step .case-file-row:not(.case-file-head)').allInnerTexts();
     assert(summary.some((r) => /Геннадий Ильич[\s\S]*1:00[\s\S]*кадр Насти/.test(r)), 'итог таблиц на экране шага');
     const versions = page.locator('.step-options.versions .btn');
@@ -927,7 +930,7 @@ async function geometry(page, pairs) {
     await versions.filter({ hasText: 'Зоя' }).focus();
     await page.keyboard.press('Enter');
     let fb = await page.locator('.step-feedback').innerText();
-    assert(fb.startsWith('Не сходится') && fb.includes('Зоя — час у водокачки: 0:00') && fb.includes('между 1:00 и 2:00') && fb.includes('не к пасеке'), 'версия про Зою опровергнута: ' + fb);
+    assert(fb.startsWith('Не сходится') && fb.includes('Зоя — час у водокачки: 0:00') && fb.includes('включили один раз — в 1:00') && fb.includes('не к пасеке'), 'версия про Зою опровергнута: ' + fb);
     assert(await versions.filter({ hasText: 'Зоя' }).isDisabled(), 'отброшенная версия погашена');
     let saved = await saveOf(page);
     assert(saved.data.progress['ch1-pond']?.gridSolved === true && JSON.stringify(saved.data.progress['ch1-pond'].wrongChoices) === '["Зоя"]', 'в сохранении: таблицы решены, версия про Зою отброшена');
@@ -948,10 +951,12 @@ async function geometry(page, pairs) {
     assert(fb.includes('Рома — час у водокачки: 3:00') && fb.includes('одолжил'), 'версия про Рому опровергнута часом и ключом: ' + fb);
     await versions.filter({ hasText: 'Геннадий Ильич' }).click();
     const ok = await page.locator('.step-feedback.correct').innerText();
-    assert(ok.startsWith('Верно') && ok.includes('кадр Насти') && ok.includes('1 августа'), 'верная версия: человек, действие, мотив');
+    assert(ok.startsWith('Верно') && ok.includes('включили один раз — в 1:00') && ok.includes('кадр Насти') && ok.includes('По таблицам это Геннадий Ильич') && ok.includes('1 августа'), 'верная версия: момент → кадр → таблицы → человек, след, мотив');
     await page.getByRole('button', { name: 'К развязке' }).click();
     await page.waitForSelector('.reveal');
-    assert((await page.locator('.reveal-text').innerText()).includes('Зою больше никто не подозревает'), 'развязка снимает подозрения с Зои');
+    const reveal = await page.locator('.reveal-text').innerText();
+    assert(reveal.startsWith('Доказано про прошлую ночь') && reveal.indexOf('доказательств нет') < reveal.indexOf('признаётся') && reveal.includes('позапрошлой ночью'), 'развязка: доказанное про прошлую ночь отдельно от признания о двух предыдущих');
+    assert(reveal.includes('Зою больше никто не подозревает'), 'развязка снимает подозрения с Зои');
     const finding = await page.locator('.finding').innerText();
     assert(finding.includes('лодку') && finding.includes('Продолжение следует'), 'крючок на следующую главу');
     assert((await page.locator('.next-case').count()) === 0, 'дела после 3 нет — кнопки «Следующее дело» нет');
