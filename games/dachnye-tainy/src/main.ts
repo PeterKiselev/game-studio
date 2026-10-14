@@ -1,10 +1,10 @@
 import { GameApp } from '@studio/game-kit';
 import { markKey, nextHint, uniqueSolution } from '@studio/rules';
-import type { Case, Contradiction, PlayerMarks, Ref, Solution } from '@studio/rules';
+import type { Case, Contradiction, PlayerMarks, Ref, Solution, Verdict } from '@studio/rules';
 import { dialog, el, toast } from '@studio/ui';
 import { renderPairGrid } from './grid';
 import { CASE_REQUIRES, PLOT_CASE_IDS, VALUE_RENAMES, cases, nextChapterCase, tutorialCase } from './cases';
-import { claimedFact, testimonyHolds } from './contradiction';
+import { claimedFact, suspectFact, testimonyHolds, versionHolds } from './contradiction';
 import { marksFitCase, renameMarks } from './progress';
 import { ACHIEVEMENTS, checkNewAchievements, starsFor } from './achievements';
 import { SHOP_ITEMS, SKU_NO_ADS, SKU_UNLIMITED_HINTS, buyLabel, votes } from './shop';
@@ -58,6 +58,12 @@ interface CaseProgress {
    * старые сохранения читаются без миграции.
    */
   gridSolved?: boolean;
+  /**
+   * Варианты шага после таблиц, которые игрок уже проверил и отбросил
+   * (имя подозреваемого или говорящего). Вернувшись, он видит их погашенными
+   * и не начинает шаг заново. Необязательное поле.
+   */
+  wrongChoices?: string[];
 }
 
 interface SaveV1 {
@@ -232,7 +238,7 @@ function showPlot(): void {
     if (done) status = `Раскрыто · ${'⭐'.repeat(earned ?? 0)}`;
     else if (locked && requiredCase) status = `Сначала раскройте «${shortTitle(requiredCase)}»`;
     else if (s.progress[c.id]?.gridSolved && marksFitCase(c, s.progress[c.id].marks)) {
-      status = 'Таблицы готовы — осталось сверить показания';
+      status = c.verdict ? 'Таблицы готовы — осталось выбрать версию' : 'Таблицы готовы — осталось сверить показания';
     }
     const card = el(
       'button',
@@ -495,8 +501,8 @@ async function openCase(source: Case): Promise<void> {
     app.save.markDirty();
     saved = undefined;
   }
-  if (saved?.gridSolved && source.contradiction) {
-    showContradiction(source, source.contradiction, solution, saved.hintsUsed, false);
+  if (saved?.gridSolved && hasStep(source)) {
+    showStep(source, solution, saved.hintsUsed, false);
     return;
   }
   const marks: PlayerMarks = saved ? { ...saved.marks } : {};
@@ -549,7 +555,9 @@ async function openCase(source: Case): Promise<void> {
         'поставьте по одной ✓ в каждой строке. ' +
         (source.contradiction
           ? 'Когда всё верно, останется сверить показания с таблицами.'
-          : 'Когда всё верно, дело раскроется само.'),
+          : source.verdict
+            ? 'Когда всё верно, останется выбрать версию.'
+            : 'Когда всё верно, дело раскроется само.'),
     ),
   );
 
@@ -743,16 +751,15 @@ async function openCase(source: Case): Promise<void> {
       if (value === 'yes' && !groundTruthYes.has(key)) return;
     }
     solved = true;
-    const step = source.contradiction;
-    if (step) {
-      // Таблицы решены, но дело — ещё нет: впереди сверка показаний. Отметки
-      // сохраняем вместе с флагом, чтобы вернуться прямо к этому шагу.
+    if (hasStep(source)) {
+      // Таблицы решены, но дело — ещё нет: впереди шаг (показания или версия).
+      // Отметки сохраняем вместе с флагом, чтобы вернуться прямо к этому шагу.
       app.save.data.progress[source.id] = { marks: { ...marks }, hintsUsed, gridSolved: true };
       app.save.markDirty();
       app.track('case_grid_solved', { caseId: source.id, hintsUsed, markCount });
       setTimeout(() => {
         if (left) return;
-        showContradiction(source, step, solution, hintsUsed, hadMistake);
+        showStep(source, solution, hintsUsed, hadMistake);
       }, 500);
       return;
     }
@@ -774,7 +781,7 @@ async function openCase(source: Case): Promise<void> {
       // завершении. Ушёл на середине — гейм-плей стопаем и сохраняем,
       // но это не партия, и в счётчик показов она попадать не должна.
       // У дела с шагом «противоречие» решённые таблицы — ещё не конец партии.
-      void (solved && !source.contradiction ? app.endRound() : app.abandonRound());
+      void (solved && !hasStep(source) ? app.endRound() : app.abandonRound());
       showPlot();
     });
     return btn;
@@ -817,7 +824,118 @@ function replayButton(source: Case): HTMLButtonElement {
   return replay;
 }
 
-// --- экран 2б: противоречие в показаниях ---------------------------------------
+// --- экран 2б: шаг после таблиц ---------------------------------------------------
+
+/** Есть ли у дела шаг после таблиц: «противоречие» или «выбор версии». */
+function hasStep(source: Case): boolean {
+  return !!(source.contradiction || source.verdict);
+}
+
+function showStep(source: Case, solution: Solution, hintsUsed: number, hadMistake: boolean): void {
+  if (source.verdict) showVerdict(source, source.verdict, solution, hintsUsed, hadMistake);
+  else if (source.contradiction) showContradiction(source, source.contradiction, solution, hintsUsed, hadMistake);
+}
+
+/** Отброшенный вариант — в сохранение, чтобы после возврата он остался погашенным. */
+function rememberWrong(source: Case, choice: string): void {
+  const progress = app.save.data.progress[source.id];
+  if (!progress) return;
+  progress.wrongChoices = [...new Set([...(progress.wrongChoices ?? []), choice])];
+  app.save.markDirty();
+}
+
+function wasWrong(source: Case, choice: string): boolean {
+  return app.save.data.progress[source.id]?.wrongChoices?.includes(choice) ?? false;
+}
+
+/** Кнопка «К развязке» после верного ответа на шаге — общая для обоих шагов. */
+function stepSolved(
+  source: Case,
+  solution: Solution,
+  hintsUsed: number,
+  hadMistake: boolean,
+  feedback: HTMLElement,
+  text: string,
+  wrong: number,
+): void {
+  feedback.className = 'step-feedback correct';
+  feedback.textContent = `Верно. ${text}`;
+  app.track('case_complete', { caseId: source.id, hintsUsed, wrongAnswers: wrong });
+  const next = el('button', { class: 'btn primary', type: 'button' }, 'К развязке') as HTMLButtonElement;
+  next.addEventListener('click', () => void finishCase(source, solution, hintsUsed, hadMistake));
+  feedback.append(el('div', { class: 'step-next' }, next));
+  next.scrollIntoView({ block: 'nearest' });
+}
+
+function stepBackButton(source: Case, step: string): HTMLButtonElement {
+  const back = el('button', { class: 'btn ghost', type: 'button' }, 'Участок') as HTMLButtonElement;
+  back.addEventListener('click', () => {
+    app.track('case_exit', { caseId: source.id, solved: false, step });
+    void app.abandonRound();
+    showPlot();
+  });
+  return back;
+}
+
+/**
+ * «Выберите версию»: таблицы дают человека в ключевой час, факты главы —
+ * действие, куда ушла вода и мотив. Верность версии проверяет решение
+ * (versionHolds). Неверная версия — не проигрыш: игра показывает, когда
+ * подозреваемый был там по таблицам, почему это не тот час, и чем ещё
+ * версия опровергается. Факты главы появляются только здесь, после таблиц.
+ */
+function showVerdict(source: Case, step: Verdict, solution: Solution, hintsUsed: number, hadMistake: boolean): void {
+  let wrong = 0;
+  const feedback = el('div', { class: 'step-feedback', hidden: true });
+  const options = el('div', { class: 'step-options versions' });
+  const culpritCategory = source.categories.find((cat) => cat.id === step.culprit.category)!;
+
+  for (const v of step.versions) {
+    const btn = el('button', { class: 'btn ghost', type: 'button' }, v.text) as HTMLButtonElement;
+    btn.disabled = wasWrong(source, v.who.value);
+    btn.addEventListener('click', () => {
+      const correct = versionHolds(source, solution, v);
+      app.track('chapter_step', { caseId: source.id, step: 'version', correct });
+      feedback.hidden = false;
+      if (!correct) {
+        wrong += 1;
+        btn.disabled = true;
+        rememberWrong(source, v.who.value);
+        feedback.className = 'step-feedback';
+        feedback.textContent =
+          `Не сходится. ${v.who.value} — ${culpritCategory.title.toLowerCase()}: ${suspectFact(source, solution, v)}, ` +
+          `${step.culpritReason}. ${v.refutation ?? ''} Подумайте ещё.`.replace(/\s+/g, ' ');
+        return;
+      }
+      for (const b of options.querySelectorAll('button')) b.disabled = true;
+      btn.classList.add('chosen');
+      stepSolved(source, solution, hintsUsed, hadMistake, feedback, step.resolution, wrong);
+    });
+    options.append(btn);
+  }
+
+  const evidence = el('div', { class: 'evidence' }, el('div', { class: 'evidence-title' }, 'Что ещё известно'));
+  for (const fact of step.evidence) evidence.append(el('div', { class: 'clue' }, el('b', {}, '•'), el('span', {}, fact)));
+
+  const screen = el(
+    'div',
+    { class: 'screen case step' },
+    el('div', { class: 'topbar' }, el('span', { class: 'title' }, source.title), el('span', { class: 'spacer' }), stepBackButton(source, 'version')),
+    el(
+      'div',
+      { class: 'case-scroll' },
+      el('div', { class: 'step-title' }, 'Что установили таблицы'),
+      caseFileSummary(source, solution),
+      evidence,
+      el('div', { class: 'step-question' }, step.question),
+      options,
+      feedback,
+    ),
+  );
+  root.replaceChildren(screen);
+}
+
+// --- противоречие в показаниях ---------------------------------------------------
 
 /** Показания отдельно от фактов: подписаны как слова, которые ещё нужно проверить. */
 function testimoniesBlock(step: Contradiction): HTMLElement {
@@ -857,6 +975,7 @@ function showContradiction(
 
   for (const t of step.testimonies) {
     const btn = el('button', { class: 'btn ghost', type: 'button' }, t.who.value) as HTMLButtonElement;
+    btn.disabled = wasWrong(source, t.who.value);
     btn.addEventListener('click', () => {
       const correct = !testimonyHolds(source, solution, t);
       app.track('chapter_step', { caseId: source.id, step: 'contradiction', correct });
@@ -864,6 +983,7 @@ function showContradiction(
       if (!correct) {
         wrong += 1;
         btn.disabled = true;
+        rememberWrong(source, t.who.value);
         feedback.className = 'step-feedback';
         feedback.textContent =
           `${t.who.value}: ${t.text} Слова ${step.claimTopic} совпадают с таблицами: ${t.who.value} — ${claimedFact(source, solution, t)}. ` +
@@ -872,23 +992,12 @@ function showContradiction(
       }
       for (const b of options.querySelectorAll('button')) b.disabled = true;
       btn.classList.add('chosen');
-      feedback.className = 'step-feedback correct';
-      feedback.textContent = `Верно. ${step.resolution}`;
-      app.track('case_complete', { caseId: source.id, hintsUsed, wrongAnswers: wrong });
-      const next = el('button', { class: 'btn primary', type: 'button' }, 'К развязке') as HTMLButtonElement;
-      next.addEventListener('click', () => void finishCase(source, solution, hintsUsed, hadMistake));
-      feedback.append(el('div', { class: 'step-next' }, next));
-      next.scrollIntoView({ block: 'nearest' });
+      stepSolved(source, solution, hintsUsed, hadMistake, feedback, step.resolution, wrong);
     });
     options.append(btn);
   }
 
-  const back = el('button', { class: 'btn ghost', type: 'button' }, 'Участок') as HTMLButtonElement;
-  back.addEventListener('click', () => {
-    app.track('case_exit', { caseId: source.id, solved: false, step: 'contradiction' });
-    void app.abandonRound();
-    showPlot();
-  });
+  const back = stepBackButton(source, 'contradiction');
 
   const screen = el(
     'div',

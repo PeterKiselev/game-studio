@@ -6,6 +6,7 @@ import { fifthCase } from './fifth';
 import { sixthCase } from './sixth';
 import { chapter1HoseCase } from './chapter1-hose';
 import { chapter1KeyCase } from './chapter1-key';
+import { chapter1PondCase } from './chapter1-pond';
 import type { Case } from '@studio/rules';
 import type { ValueRenames } from '../progress';
 
@@ -32,6 +33,7 @@ export const cases: Case[] = [
   sixthCase,
   chapter1HoseCase,
   chapter1KeyCase,
+  chapter1PondCase,
 ];
 
 /**
@@ -41,6 +43,7 @@ export const cases: Case[] = [
  */
 export const CASE_REQUIRES: Readonly<Record<string, string>> = {
   'ch1-key': 'ch1-hose',
+  'ch1-pond': 'ch1-key',
 };
 
 /**
@@ -61,4 +64,4 @@ export function nextChapterCase(id: string): Case | undefined {
   return cases.find((c) => c.id === nextId);
 }
 
-export { tutorialCase, secondCase, thirdCase, fourthCase, fifthCase, sixthCase, chapter1HoseCase, chapter1KeyCase };
+export { tutorialCase, secondCase, thirdCase, fourthCase, fifthCase, sixthCase, chapter1HoseCase, chapter1KeyCase, chapter1PondCase };

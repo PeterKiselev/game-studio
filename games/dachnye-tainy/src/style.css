@@ -761,3 +761,47 @@
   align-self: flex-start;
   min-height: 44px;
 }
+
+/* Шаг «выбор версии»: факты главы отдельным блоком, версии — длинные строки
+   в один столбец, текст слева. */
+.evidence {
+  background: var(--surface);
+  border-left: 3px solid var(--clue);
+  border-radius: var(--r-sm);
+  padding: 10px 12px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--ink-2);
+}
+
+.evidence .evidence-title {
+  font-weight: 700;
+  color: var(--ink);
+  margin-bottom: 4px;
+}
+
+.evidence .clue {
+  display: flex;
+  gap: 6px;
+  padding: 2px 0;
+}
+
+.evidence .clue b {
+  color: var(--clue);
+  flex: none;
+}
+
+.step-options.versions {
+  grid-template-columns: 1fr;
+}
+
+.step-options.versions .btn {
+  /* Версия — карточка-вариант, а не строка текста: рамка и фон. */
+  border: 1px solid var(--line);
+  background: var(--surface);
+  white-space: normal;
+  text-align: left;
+  justify-content: flex-start;
+  line-height: 1.4;
+  padding-block: 10px;
+}

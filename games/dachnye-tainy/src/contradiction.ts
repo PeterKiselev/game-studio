@@ -1,5 +1,5 @@
 import { buildModel, subjectOf } from '@studio/rules';
-import type { Case, Solution, Testimony } from '@studio/rules';
+import type { Case, Solution, Testimony, VerdictVersion } from '@studio/rules';
 
 /**
  * Шаг «чьи слова расходятся с фактами?» — сверка показаний с уже найденным
@@ -30,5 +30,26 @@ export function claimedFact(source: Case, solution: Solution, t: Testimony): str
   const model = buildModel(source);
   const subject = subjectOf(model, solution, t.who);
   const category = source.categories.find((cat) => cat.id === t.claim.category)!;
+  return category.values[solution[category.id][subject]];
+}
+
+/** Версия верна, если её подозреваемый по решению и есть ключевая клетка (кто был там в нужный час). */
+export function versionHolds(source: Case, solution: Solution, v: VerdictVersion): boolean {
+  const culprit = source.verdict?.culprit;
+  if (!culprit) return false;
+  const model = buildModel(source);
+  const suspect = subjectOf(model, solution, v.who);
+  return suspect >= 0 && suspect === subjectOf(model, solution, culprit);
+}
+
+/** Верные версии. В выпускаемом деле — ровно одна. */
+export function trueVersions(source: Case, solution: Solution): VerdictVersion[] {
+  return (source.verdict?.versions ?? []).filter((v) => versionHolds(source, solution, v));
+}
+
+/** Что таблицы установили о подозреваемом в категории ключевой клетки: для часа — «0:00». */
+export function suspectFact(source: Case, solution: Solution, v: VerdictVersion): string {
+  const category = source.categories.find((cat) => cat.id === source.verdict!.culprit.category)!;
+  const subject = subjectOf(buildModel(source), solution, v.who);
   return category.values[solution[category.id][subject]];
 }

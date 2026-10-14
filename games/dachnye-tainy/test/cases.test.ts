@@ -11,7 +11,7 @@ import {
 } from '@studio/rules';
 import type { PlayerMarks } from '@studio/rules';
 import { CASE_REQUIRES, VALUE_RENAMES, cases, nextChapterCase, tutorialCase } from '../src/cases';
-import { claimedFact, falseTestimonies, testimonyHolds } from '../src/contradiction';
+import { claimedFact, falseTestimonies, suspectFact, testimonyHolds, trueVersions, versionHolds } from '../src/contradiction';
 import { marksFitCase, renameMarks } from '../src/progress';
 
 /**
@@ -256,7 +256,7 @@ describe('глава 1, дело 2 «Чей ключ»', () => {
     expect(cases[7].id).toBe('ch1-key');
     expect(CASE_REQUIRES['ch1-key']).toBe('ch1-hose');
     expect(nextChapterCase('ch1-hose')?.id).toBe('ch1-key');
-    expect(nextChapterCase('ch1-key')).toBeUndefined();
+    expect(nextChapterCase('ch1-key')?.id).toBe('ch1-pond');
     expect(nextChapterCase('tutorial-1')).toBeUndefined();
   });
 
@@ -469,5 +469,126 @@ describe('вступление-книжка «Пирога» (редакция 3
     expect(source.intro).toMatch(/по одному в каждом/);
     expect(source.intro).toMatch(/у всех разные/);
     expect(source.intro).toMatch(/Чей пирог остался в беседке\?/);
+  });
+});
+
+describe('глава 1, дело 3 «Свет над прудом»', () => {
+  const source = cases.find((c) => c.id === 'ch1-pond')!;
+  const solution = uniqueSolution(source)!;
+  const step = source.verdict!;
+
+  it('решение: в 1:00 у водокачки Геннадий Ильич, его выдал кадр Насти', () => {
+    expect(describeSolution(source, solution)).toEqual([
+      'Геннадий Ильич — час у водокачки: 1:00, что выдало: кадр Насти',
+      'Зоя — час у водокачки: 0:00, что выдало: лай собаки',
+      'Игорь — час у водокачки: 2:00, что выдало: свет фонарика',
+      'Настя — час у водокачки: 23:00, что выдало: скрип калитки',
+      'Рома — час у водокачки: 3:00, что выдало: следы сапог',
+    ]);
+  });
+
+  it('ни один факт не лишний, и нет прямого «X был в такой-то час»', () => {
+    source.clues.forEach((_, i) => {
+      const without = { ...source, clues: source.clues.filter((__, j) => j !== i) };
+      expect(countSolutions(without), `факт ${i + 1} лишний`).toBe(2);
+    });
+    const direct = source.clues.filter((c) => [c.a.category, c.b.category].sort().join() === ['время', 'персонажи'].sort().join());
+    expect(direct).toEqual([]);
+  });
+
+  it('подсказки доводят дело до конца: 3 сетки по 25 клеток', () => {
+    const marks: PlayerMarks = {};
+    for (let guard = 0; guard < 300; guard += 1) {
+      const hint = nextHint(source, marks);
+      if (!hint) break;
+      expect(hint.text.length).toBeGreaterThan(10);
+      marks[markKey(hint.a, hint.b)] = hint.positive ? 'yes' : 'no';
+    }
+    expect(nextHint(source, marks)).toBeNull();
+    expect(Object.keys(marks)).toHaveLength(75);
+  });
+
+  it.each(source.clues.map((clue, i) => [i + 1, clue] as const))('факт %i прямо выражает своё правило', (_n, clue) => {
+    const text = clue.text.toLowerCase();
+    for (const ref of [clue.a, clue.b]) {
+      const word = ref.value.toLowerCase().split(' ')[0];
+      const stem = /^\d/.test(word) ? word.replace(':00', '') : word.slice(0, Math.min(4, word.length - 1));
+      expect(text, `в тексте нет «${ref.value}»: ${clue.text}`).toContain(stem);
+    }
+    const marker = { same: /того, кто/, different: / не /, before: /раньше/, after: /позже/, adjacent: /соседние часы/ }[clue.kind];
+    expect(text, `нет слова для правила ${clue.kind}: ${clue.text}`).toMatch(marker);
+  });
+
+  it('условия: пятеро, по одному в каждый час, всё разное, вопрос про 1:00; связь с находкой дела 2', () => {
+    expect(source.intro).toContain('по одному в каждый час');
+    expect(source.intro).toContain('всё разное');
+    expect(source.intro).toMatch(/Кто был у водокачки в 1:00\?/);
+    expect(source.intro).toMatch(/Кольцо с биркой «Правление»/);
+    expect(cases.find((c) => c.id === 'ch1-key')!.finding!.text).toMatch(/Правление/);
+  });
+
+  it('в условиях порядок перечисления не совпадает с решением ни в одной позиции', () => {
+    const lower = source.intro!.toLowerCase();
+    const names = source.categories.find((c) => c.id === source.anchor)!.values;
+    const stem = (v: string) => v.toLowerCase().slice(0, 4);
+    const order = (values: string[]) => [...values].sort((a, b) => lower.indexOf(stem(a)) - lower.indexOf(stem(b)));
+    const nameOrder = order(names);
+    for (const cat of source.categories.filter((c) => c.id !== source.anchor)) {
+      const listed = order(cat.values);
+      nameOrder.forEach((name, i) => {
+        expect(listed[i], `${name} стоит рядом с «${listed[i]}» — это ответ`).not.toBe(cat.values[solution[cat.id][names.indexOf(name)]]);
+      });
+    }
+  });
+
+  describe('шаг «выбор версии»', () => {
+    it('верна ровно одна версия — Геннадий Ильич, и это проверяет решение', () => {
+      expect(trueVersions(source, solution).map((v) => v.who.value)).toEqual(['Геннадий Ильич']);
+      expect(step.culprit).toEqual({ category: 'время', value: '1:00' });
+    });
+
+    it('при другом решении верной была бы другая версия', () => {
+      // Меняем местами часы председателя и Зои: в 1:00 теперь Зоя.
+      const swapped = { ...solution, время: [...solution.время] };
+      [swapped.время[0], swapped.время[1]] = [swapped.время[1], swapped.время[0]];
+      expect(trueVersions(source, swapped).map((v) => v.who.value)).toEqual(['Зоя']);
+    });
+
+    it('неверные версии опровергаются часом из таблиц и фактом главы', () => {
+      for (const v of step.versions.filter((x) => !versionHolds(source, solution, x))) {
+        expect(suspectFact(source, solution, v)).not.toBe('1:00');
+        expect(v.refutation, v.who.value).toBeTruthy();
+      }
+      expect(suspectFact(source, solution, step.versions.find((v) => v.who.value === 'Зоя')!)).toBe('0:00');
+      expect(suspectFact(source, solution, step.versions.find((v) => v.who.value === 'Рома')!)).toBe('3:00');
+    });
+
+    it('факты главы устанавливают действие, куда ушла вода и мотив', () => {
+      const all = step.evidence.join(' ');
+      expect(all).toMatch(/только между 1:00 и 2:00/); // действие привязано к часу
+      expect(all).toMatch(/след шланга.*пруд/); // куда ушла вода
+      expect(all).toMatch(/к 1 августа/); // мотив
+      expect(all).toMatch(/кольце с биркой «Правление»/); // ключ — связь с делом 2
+      expect(step.culpritReason).toMatch(/1:00 и 2:00/);
+    });
+
+    it('факты главы не подсказывают таблицы: их нет ни в условиях, ни в фактах сетки', () => {
+      const before = `${source.intro} ${source.clues.map((c) => c.text).join(' ')}`;
+      expect(before).not.toMatch(/Игорь в 2:00|след шланга|300 литров/);
+    });
+
+    it('развязка закрывает интригу главы и оставляет крючок', () => {
+      expect(step.resolution).toMatch(/Геннадий Ильич/);
+      expect(source.epilogue).toMatch(/пруд/);
+      expect(source.epilogue).toMatch(/Зою больше никто не подозревает/);
+      expect(source.finding?.text).toMatch(/лодку/);
+    });
+  });
+
+  it('глава: дело 3 открывается после дела 2, стоит девятым и последнее в главе', () => {
+    expect(cases[8].id).toBe('ch1-pond');
+    expect(CASE_REQUIRES['ch1-pond']).toBe('ch1-key');
+    expect(nextChapterCase('ch1-pond')).toBeUndefined();
+    expect(cases.filter((c) => c.verdict).map((c) => c.id)).toEqual(['ch1-pond']);
   });
 });

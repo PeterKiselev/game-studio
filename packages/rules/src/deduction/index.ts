@@ -12,6 +12,8 @@ export type {
   Solution,
   StoryFrame,
   Testimony,
+  Verdict,
+  VerdictVersion,
 } from './types';
 
 export { buildModel, indexOf, markKey, positionOf, resolveOrder, subjectOf } from './model';
