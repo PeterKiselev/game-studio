@@ -49,6 +49,14 @@ export interface Env {
    * которого отдаётся восстановление. Без значения учёт и восстановление выключены.
    */
   PAYMENTS_MODE?: string;
+  /** Explicit release gate; does not itself publish the app or change platform settings. */
+  OK_LIVE_ENABLED?: string;
+  /** Set only after reconciling the full tester list with the platform cabinet. */
+  OK_TEST_LIST_VERIFIED?: string;
+  /** Comma-separated native OK UIDs; configure privately, never in client assets. */
+  OK_TEST_UIDS?: string;
+  /** Separate OK Worker must not expose VK callback/restore routes. */
+  OK_ONLY?: string;
   /** Durable Object журнала покупок (привязка LEDGER, см. wrangler.toml). */
   LEDGER?: NamespaceLike;
 }
@@ -160,6 +168,9 @@ export function handleOrderStatusChange(params: URLSearchParams): Response {
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
+    if (env.OK_ONLY === '1' && url.pathname !== '/ok' && url.pathname !== '/ok/restore') {
+      return new Response('Not found', { status: 404 });
+    }
 
     // GET-маршруты: подтверждение покупки ОК и восстановление покупок.
     // /ok указывается в «URL для платёжных уведомлений Одноклассников» — он
@@ -169,11 +180,13 @@ export default {
         return new Response('Method not allowed', { status: 405 });
       }
       const app = { app: env.APP_SLUG, appId: env.VK_APP_ID, ledger: ledgerOf(env), catalog: ITEMS };
+      const okMode = { mode: modeOf(env), liveEnabled: env.OK_LIVE_ENABLED,
+        testListVerified: env.OK_TEST_LIST_VERIFIED, testUids: env.OK_TEST_UIDS };
       if (url.pathname === '/ok') {
-        return handleOkPayment(url.searchParams, { ...app, secret: env.OK_APP_SECRET, appKey: env.OK_APP_KEY, mode: modeOf(env) });
+        return handleOkPayment(url.searchParams, { ...app, ...okMode, secret: env.OK_APP_SECRET, appKey: env.OK_APP_KEY });
       }
       const platform = url.pathname === '/ok/restore' ? 'ok' : 'vk';
-      return handleRestore(url.searchParams, { ...app, platform, secret: env.VK_APP_SECRET, mode: modeOf(env) });
+      return handleRestore(url.searchParams, { ...app, ...okMode, platform, secret: env.VK_APP_SECRET });
     }
 
     if (request.method !== 'POST') {

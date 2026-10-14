@@ -1,0 +1,26 @@
+# Separate OK-only deployment candidate. Release gates are deliberately closed.
+# Deploy explicitly with: npx wrangler deploy --config wrangler.ok-live.toml
+# Never use this configuration to update the existing VK Worker.
+name = "dachnye-tainy-payments-ok"
+main = "src/index.ts"
+compatibility_date = "2026-09-01"
+compatibility_flags = ["nodejs_compat"]
+
+[vars]
+APP_SLUG = "dachnye-tainy"
+OK_ONLY = "1"
+VK_APP_ID = "54767366"
+PAYMENTS_MODE = "live"
+OK_LIVE_ENABLED = "0"
+OK_TEST_LIST_VERIFIED = "0"
+# Set OK_APP_KEY, OK_APP_SECRET, VK_APP_SECRET and OK_TEST_UIDS privately.
+# Until approval, keep release gates closed or use PAYMENTS_MODE=test explicitly.
+# Reconcile the tester list again before changing the gates; do not infer moderation status.
+
+[[durable_objects.bindings]]
+name = "LEDGER"
+class_name = "LedgerDO"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["LedgerDO"]

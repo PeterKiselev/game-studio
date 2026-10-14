@@ -393,6 +393,31 @@ describe('Изоляция приложений', () => {
 // --- восстановление -----------------------------------------------------------
 
 describe('Восстановление', () => {
+  it('изменение списка не превращает повтор тестового платежа в рабочий', async () => {
+    const ns = new FakeNamespace();
+    const policy = { mode: 'live' as const, liveEnabled: '1', testListVerified: '1', testUids: '512005303399' };
+    await handleOkPayment(okParams(), okCtx(ns, policy));
+    const before = ns.allKeys();
+    expect(errCode(await handleOkPayment(okParams(), okCtx(ns, { ...policy, testUids: '77' })))).toBe('2');
+    expect(ns.allKeys()).toEqual(before);
+  });
+
+  it('рабочий ОК: тестировщик и обычный игрок пишутся и восстанавливаются отдельно', async () => {
+    const ns = new FakeNamespace();
+    const policy = { mode: 'live' as const, liveEnabled: '1', testListVerified: '1', testUids: '512005303399' };
+    expect(await (await handleOkPayment(okParams(), okCtx(ns, policy))).text()).toBe('true');
+    expect(await (await handleOkPayment(okParams({ uid: '77', transaction_id: 'real-77' }), okCtx(ns, policy))).text()).toBe('true');
+    expect(ns.allKeys().some(k => k.includes(':ok:test:512005303399/'))).toBe(true);
+    expect(ns.allKeys().some(k => k.includes(':ok:live:77/'))).toBe(true);
+    expect(await restored(await handleRestore(launch({ vk_user_id: '1', vk_ok_user_id: '512005303399' }),
+      restoreCtx(ns, policy)))).toEqual(['alpha']);
+    expect(await restored(await handleRestore(launch({ vk_user_id: '2', vk_ok_user_id: '77' }),
+      restoreCtx(ns, policy)))).toEqual(['alpha']);
+    expect(await restored(await handleRestore(launch({ vk_ok_user_id: '88' }), restoreCtx(ns, policy)))).toEqual([]);
+    const tx = await doLedger(ns).lookup({ app: 'dachnye-tainy', platform: 'ok', mode: 'live', uid: '77' }, 'real-77');
+    expect(tx?.modeBy).toBe('uid-list');
+  });
+
   it('ОК: подписанный vk_ok_user_id выбирает журнал независимо от vk_user_id', async () => {
     const ns = new FakeNamespace();
     await handleOkPayment(okParams(), okCtx(ns));

@@ -19,6 +19,8 @@
 import type { ShopItem } from './index';
 import type { Ledger, Mode, Platform, Scope } from './ledger';
 import { verifyLaunchSign, verifySignature } from './signature';
+import { selectOkMode } from './ok-mode';
+import type { OkModeConfig } from './ok-mode';
 
 export interface AppCtx {
   /** Ключ приложения в каталоге: товары с другим `app` этому приложению не продаются. */
@@ -37,7 +39,7 @@ function appItem(ctx: AppCtx, sku: string): ShopItem | undefined {
 
 // --- Одноклассники ----------------------------------------------------------
 
-export interface OkCtx extends AppCtx {
+export interface OkCtx extends AppCtx, OkModeConfig {
   /** Секрет подписи уведомлений ОК (OK_APP_SECRET). */
   secret?: string;
   /** Публичный application_key ОК-приложения (OK_APP_KEY). */
@@ -64,10 +66,7 @@ export async function handleOkPayment(params: URLSearchParams, ctx: OkCtx): Prom
   if (!ctx.secret || !ctx.appKey || !ctx.mode || !ctx.ledger || !ctx.app) {
     return okError(SERVICE, 'Платежи ОК не настроены на сервере.');
   }
-  // Временное ограничение, не защита: признак тестового режима в GET-уведомлении ОК
-  // не документирован, режим берётся из настройки деплоя. Пока он не подтверждён,
-  // рабочий режим ОК заблокирован — работает только изолированный тестовый сервер.
-  if (ctx.mode !== 'test') return okError(SERVICE, 'Рабочий режим платежей ОК заблокирован.');
+  // A live deployment additionally requires explicit gates and a reconciled tester list.
   if (!verifySignature(params, ctx.secret)) return okError(PARAM_SIGNATURE, 'Неверная подпись.');
   if (params.get('application_key') !== ctx.appKey) {
     return okError(INVALID_PAYMENT, 'Уведомление другого приложения.');
@@ -91,9 +90,16 @@ export async function handleOkPayment(params: URLSearchParams, ctx: OkCtx): Prom
   const item = appItem(ctx, sku);
   if (!item) return okError(INVALID_PAYMENT, 'Товара нет в каталоге этого приложения.');
 
-  const scope: Scope = { app: ctx.app, platform: 'ok', mode: ctx.mode, uid };
-  const tx = { txId, sku, amount, at: params.get('transaction_time') ?? '' };
+  const selected = selectOkMode(uid, ctx);
+  if (!selected) return okError(SERVICE, 'Рабочий режим платежей ОК не подтверждён.');
+  const scope: Scope = { app: ctx.app, platform: 'ok', mode: selected.mode, uid };
+  const tx = { txId, sku, amount, at: params.get('transaction_time') ?? '', modeBy: selected.by };
   try {
+    // Changing the manual tester list must never reclassify a previously accepted transaction.
+    if (ctx.mode === 'live' && await ctx.ledger.lookup({ ...scope,
+      mode: selected.mode === 'test' ? 'live' : 'test' }, txId)) {
+      return okError(SERVICE, 'Режим ранее принятой транзакции требует сверки.');
+    }
     const seen = await ctx.ledger.lookup(scope, txId);
     if (seen) {
       return seen.sku === sku && seen.amount === amount
@@ -176,7 +182,7 @@ export async function handleVkOrder(params: URLSearchParams, ctx: AppCtx): Promi
 
 // --- восстановление ---------------------------------------------------------
 
-export interface RestoreCtx extends AppCtx {
+export interface RestoreCtx extends AppCtx, OkModeConfig {
   platform: Platform;
   /** Защищённый ключ приложения (VK_APP_SECRET) — им подписаны параметры запуска. */
   secret?: string;
@@ -187,7 +193,8 @@ export interface RestoreCtx extends AppCtx {
 function restoreJson(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { 'Content-Type': 'application/json; charset=utf-8', 'Access-Control-Allow-Origin': '*' },
+    headers: { 'Content-Type': 'application/json; charset=utf-8', 'Access-Control-Allow-Origin': '*',
+      'Cache-Control': 'no-store' },
   });
 }
 
@@ -195,7 +202,6 @@ export async function handleRestore(search: URLSearchParams, ctx: RestoreCtx): P
   if (!ctx.secret || !ctx.ledger || !ctx.mode || !ctx.app || !ctx.appId) {
     return restoreJson(503, { error: 'not_configured' });
   }
-  if (ctx.platform === 'ok' && ctx.mode !== 'test') return restoreJson(503, { error: 'ok_live_blocked' });
   if (!verifyLaunchSign(search, ctx.secret)) return restoreJson(403, { error: 'bad_sign' });
   if (search.get('vk_app_id') !== ctx.appId) return restoreJson(403, { error: 'other_app' });
   const isOk = search.get('vk_client') === 'ok';
@@ -208,8 +214,10 @@ export async function handleRestore(search: URLSearchParams, ctx: RestoreCtx): P
     ? search.get('vk_ok_user_id') ?? ''
     : search.get('vk_user_id') ?? '';
   if (!/^\d+$/.test(uid)) return restoreJson(403, { error: 'bad_user' });
+  const selected = isOk ? selectOkMode(uid, ctx) : { mode: ctx.mode };
+  if (!selected) return restoreJson(503, { error: 'ok_live_blocked' });
   try {
-    const skus = await ctx.ledger.list({ app: ctx.app, platform: ctx.platform, mode: ctx.mode, uid });
+    const skus = await ctx.ledger.list({ app: ctx.app, platform: ctx.platform, mode: selected.mode, uid });
     return restoreJson(200, { skus: skus.filter((sku) => appItem(ctx, sku)) });
   } catch {
     return restoreJson(503, { error: 'store_failed' });

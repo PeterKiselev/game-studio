@@ -31,6 +31,8 @@ export interface TxRecord {
   /** Сумма, по которой покупка была принята (голоса ВК или ОКи) — для сверки повторов. */
   amount: number;
   at: string;
+  /** Audit of OK journal selection; absent on historical and VK records. */
+  modeBy?: 'test-deploy' | 'uid-list';
 }
 
 export type RecordResult = 'new' | 'duplicate' | 'conflict';
