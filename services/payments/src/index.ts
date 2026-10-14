@@ -68,8 +68,10 @@ export interface ShopItem {
   /** Цена в голосах VK — целое число. */
   price: number;
   /**
-   * Цена в ОКах для Одноклассников. НЕ задана ни у одного товара: курс/цены
-   * ОК владелец не назвал, угадывать нельзя. Без неё в ОК товар не продаётся.
+   * Цена в ОКах для Одноклассников. Задана только там, где её назвал владелец
+   * (14 октября: оба товара «Дачных тайн» — 20 ОК). Без неё товар в ОК не
+   * продаётся — голоса вместо ОКов не подставляются. Тот же каталог сверяет
+   * тест магазина игры (games/dachnye-tainy/test/shop.test.ts).
    */
   priceOk?: number;
 }
@@ -86,8 +88,8 @@ export interface ShopItem {
  * — вопрос времени. Тесты каждой игры сверяются именно с этим объектом.
  */
 export const ITEMS: Record<string, ShopItem> = {
-  dachnye_tainy_no_ads: { app: 'dachnye-tainy', title: 'Без рекламы', price: 20 },
-  dachnye_tainy_unlimited_hints: { app: 'dachnye-tainy', title: 'Безлимитные подсказки', price: 20 },
+  dachnye_tainy_no_ads: { app: 'dachnye-tainy', title: 'Без рекламы', price: 20, priceOk: 20 },
+  dachnye_tainy_unlimited_hints: { app: 'dachnye-tainy', title: 'Безлимитные подсказки', price: 20, priceOk: 20 },
   sudoku_no_ads: { app: 'sudoku', title: 'Без рекламы', price: 20 },
   sudoku_unlimited_hints: { app: 'sudoku', title: 'Безлимитные подсказки', price: 20 },
 };

@@ -1,4 +1,4 @@
-import type { IPlatform, PlatformId } from './types';
+import type { IPlatform, PlatformId, PlatformOptions } from './types';
 import { withTimeout } from './base';
 
 export * from './types';
@@ -35,7 +35,7 @@ export function detectPlatformId(): PlatformId {
  * Динамический импорт адаптера — так в бандл Яндекса не попадает vk-bridge,
  * и наоборот. Один код, разные сборки, ничего лишнего.
  */
-export async function createPlatform(id: PlatformId = detectPlatformId()): Promise<IPlatform> {
+export async function createPlatform(id: PlatformId = detectPlatformId(), options: PlatformOptions = {}): Promise<IPlatform> {
   let platform: IPlatform;
 
   switch (id) {
@@ -44,7 +44,7 @@ export async function createPlatform(id: PlatformId = detectPlatformId()): Promi
       break;
     case 'vk':
     case 'ok':
-      platform = new (await import('./adapters/vk')).VkPlatform();
+      platform = new (await import('./adapters/vk')).VkPlatform(options);
       break;
     default:
       platform = new (await import('./adapters/web')).WebPlatform();

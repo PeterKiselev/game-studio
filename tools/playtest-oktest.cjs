@@ -9,12 +9,17 @@
  * ни одного запроса к платёжному серверу; закрыта от поиска; обычная VK-сборка
  * маркера не содержит.
  *
- * Запуск: node tools/playtest-oktest.cjs <url-ok-test> <url-обычной-vk>
+ * Плюс сборка с магазином ОК (build-oktest.mjs --shop): в ОК магазин есть, цена
+ * и кнопка — в ОКах, окно оплаты вызывается с тем же SKU; во ВКонтакте та же
+ * сборка показывает голоса; без адреса сервера — ни одного запроса восстановления.
+ *
+ * Запуск: node tools/playtest-oktest.cjs <url-ok-test> <url-обычной-vk> <url-ok-test-shop>
  */
 const { chromium } = require('playwright');
 
 const OKTEST = process.argv[2] || 'http://127.0.0.1:4180/';
 const PLAINVK = process.argv[3] || 'http://127.0.0.1:4178/';
+const OKSHOP = process.argv[4] || 'http://127.0.0.1:4181/';
 const OK_LAUNCH = 'vk_user_id=574470572&vk_app_id=54767366&vk_client=ok&vk_platform=desktop_web&sign=test-sign&lang=ru';
 const VK_LAUNCH = 'vk_user_id=574470572&vk_app_id=54767366&vk_platform=desktop_web&sign=test-sign&lang=ru';
 
@@ -42,6 +47,9 @@ async function stubVkBridge(page) {
           return ok({ keys: [] });
         case 'VKWebAppStorageSet':
           return ok({ result: true });
+        case 'VKWebAppShowOrderBox':
+          (window.__orders = window.__orders || []).push(msg.params);
+          return ok({ success: true });
         default:
           return fail();
       }
@@ -117,6 +125,45 @@ async function open(browser, base, launch, viewport = { width: 420, height: 800 
     const fits = await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1);
     assert(fits, '360 px: без горизонтальной прокрутки');
     if (process.env.SHOT_DIR) await page.screenshot({ path: `${process.env.SHOT_DIR}/oktest-360.png` });
+    await context.close();
+  }
+
+  console.log('\n=== 5. Сборка с магазином ОК: цена в ОКах, окно оплаты, без восстановления ===');
+  {
+    const { context, page } = await open(browser, OKSHOP, OK_LAUNCH);
+    const text = await page.locator('.test-marker').textContent();
+    assert(text.includes('ТЕСТ ОК · МАГАЗИН') && text.includes('восстановление: выкл') && text.includes('клиент: ok'), 'маркер: магазин, восстановление выключено, клиент ok — ' + text);
+    assert((await page.locator('.shop-btn').count()) === 1, 'в ОК есть кнопка магазина');
+    await page.locator('.shop-btn').click();
+    await page.waitForSelector('.shop-item');
+    const prices = (await page.locator('.shop-price').allInnerTexts()).map((t) => t.trim());
+    const buttons = (await page.locator('.shop-item .btn').allInnerTexts()).map((t) => t.trim());
+    assert(JSON.stringify(prices) === JSON.stringify(['20 ОК', '20 ОК']), 'цены видны до нажатия и в ОКах: ' + prices.join(', '));
+    assert(buttons.every((b) => b === 'Купить за 20 ОК'), 'кнопки: «Купить за 20 ОК» — ' + buttons.join(', '));
+    assert(!(await page.locator('.shop').innerText()).includes('голос'), 'слова «голос» в магазине ОК нет');
+    await page.locator('.shop-item .btn').first().click();
+    await page.waitForFunction(() => (window.__orders || []).length === 1);
+    const order = await page.evaluate(() => window.__orders[0]);
+    assert(order.type === 'item' && order.item === 'dachnye_tainy_no_ads', 'окно оплаты вызвано с SKU «Без рекламы»: ' + JSON.stringify(order));
+    await page.waitForFunction(() => document.querySelector('.shop-item .btn').textContent === 'Куплено');
+    assert(true, 'после успешного ответа окна — «Куплено»');
+    const restoreCalls = page.foreign.concat(await page.evaluate(() => performance.getEntriesByType('resource').map((e) => e.name).filter((n) => n.includes('restore'))));
+    assert(restoreCalls.length === 0, 'адрес сервера не задан — ни одного запроса восстановления и сторонних запросов');
+    assert(page.errors.length === 0, 'без ошибок: ' + page.errors.join('; '));
+    await context.close();
+  }
+  {
+    const { context, page } = await open(browser, OKSHOP, VK_LAUNCH);
+    await page.locator('.shop-btn').click();
+    await page.waitForSelector('.shop-item');
+    const prices = (await page.locator('.shop-price').allInnerTexts()).map((t) => t.trim());
+    assert(JSON.stringify(prices) === JSON.stringify(['20 голосов', '20 голосов']), 'та же сборка во ВКонтакте — цены в голосах: ' + prices.join(', '));
+    await context.close();
+  }
+  {
+    // Обычная VK-сборка в ОК: как раньше — магазина нет.
+    const { context, page } = await open(browser, PLAINVK, OK_LAUNCH);
+    assert((await page.locator('.shop-btn').count()) === 0, 'обычная VK-сборка в ОК — магазина нет, как в опубликованной версии');
     await context.close();
   }
 

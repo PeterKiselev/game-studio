@@ -68,6 +68,18 @@ export interface StorageApi {
   save<T>(key: string, value: T): Promise<void>;
 }
 
+export type PaymentCurrency = 'vk-votes' | 'ok';
+
+/** Настройки создания платформы, которые задаёт сборка игры, а не площадка. */
+export interface PlatformOptions {
+  /**
+   * Разрешить покупки при запуске в Одноклассниках. По умолчанию выключено:
+   * подтверждённого платёжного пути в ОК нет, магазин там скрыт. Включается
+   * только тестовой сборкой для проверки покупки в ОК.
+   */
+  okPayments?: boolean;
+}
+
 export interface IPlatform {
   readonly id: PlatformId;
   readonly caps: Capabilities;
@@ -86,7 +98,15 @@ export interface IPlatform {
   storage: StorageApi;
 
   auth?(): Promise<Player>;
-  payments?: { buy(sku: string): Promise<Purchase> };
+  payments?: {
+    buy(sku: string): Promise<Purchase>;
+    /**
+     * В чём площадка показывает цену в окне оплаты: голоса ВКонтакте или ОКи
+     * Одноклассников. Игра обязана показать цену в той же валюте до кнопки
+     * «Купить» (требование модерации). Нет поля — голоса ВК.
+     */
+    currency?: PaymentCurrency;
+  };
   leaderboard?: { submit(board: string, score: number): Promise<void> };
   share?(payload: SharePayload): Promise<void>;
 }

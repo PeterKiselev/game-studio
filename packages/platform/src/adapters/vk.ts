@@ -1,5 +1,5 @@
 import { BasePlatform, NO_AD } from '../base';
-import type { AdResult, PlatformId, Player, SharePayload } from '../types';
+import type { AdResult, PaymentCurrency, PlatformId, PlatformOptions, Player, SharePayload } from '../types';
 
 /**
  * VK Mini Apps (Direct Games) — HTML5 внутри ВКонтакте.
@@ -9,6 +9,10 @@ import type { AdResult, PlatformId, Player, SharePayload } from '../types';
 export class VkPlatform extends BasePlatform {
   readonly id: PlatformId = 'vk';
   private bridge: any = null;
+
+  constructor(private readonly options: PlatformOptions = {}) {
+    super();
+  }
 
   override async init(): Promise<void> {
     const mod: any = await import('@vkontakte/vk-bridge');
@@ -30,6 +34,7 @@ export class VkPlatform extends BasePlatform {
     // не показывает мёртвую кнопку. Когда причина будет установлена на живом ОК,
     // это решение пересматривается.
     const isOk = params.get('vk_client') === 'ok';
+    this.payments.currency = isOk ? 'ok' : 'vk-votes';
 
     this.caps = {
       banner: false, // у VK нет sticky-баннера, только полноэкранные форматы
@@ -37,7 +42,8 @@ export class VkPlatform extends BasePlatform {
       rewarded: await this.hasAd('reward'),
       cloudSave: true,
       auth: true,
-      payments: !isOk,
+      // В ОК — только если сборка явно разрешила (тестовая сборка с магазином ОК).
+      payments: !isOk || !!this.options.okPayments,
       leaderboard: false,
       share: true,
     };
@@ -111,6 +117,8 @@ export class VkPlatform extends BasePlatform {
   }
 
   payments = {
+    /** Валюта окна оплаты: в ОК — ОКи (get_item с site=OK), во ВКонтакте — голоса. Задаётся в init(). */
+    currency: 'vk-votes' as PaymentCurrency,
     buy: async (sku: string) => {
       try {
         const res = await this.bridge.send('VKWebAppShowOrderBox', { type: 'item', item: sku });

@@ -135,10 +135,11 @@ describe('LedgerDO в workerd', () => {
     expect(await skus('/vk/restore', launchQuery({ vk_user_id: '574470573', vk_client: '__drop__' }))).toEqual([]);
   });
 
-  it('боевой /ok с настоящим каталогом: без цен в ОКах ничего не продаётся', async () => {
-    const q = okQuery({ uid: '400', transaction_id: 'prod-1', product_code: 'dachnye_tainy_no_ads', amount: '20' });
-    const res = await worker.fetch(`/ok?${q}`);
-    expect(res.headers.get('Invocation-error')).toBe('1001');
+  it('/ok с настоящим каталогом: цена владельца 20 ОК принимается, другая сумма — нет', async () => {
+    const wrong = okQuery({ uid: '400', transaction_id: 'prod-1', product_code: 'dachnye_tainy_no_ads', amount: '19' });
+    expect((await worker.fetch(`/ok?${wrong}`)).headers.get('Invocation-error')).toBe('1001');
+    const right = okQuery({ uid: '400', transaction_id: 'prod-2', product_code: 'dachnye_tainy_no_ads', amount: '20' });
+    expect(await (await worker.fetch(`/ok?${right}`)).text()).toBe('true');
   });
 
   const record = async (tx: { uid: string; txId: string; sku: string; amount: number }): Promise<string> =>

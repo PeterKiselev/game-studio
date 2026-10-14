@@ -13,7 +13,7 @@ import type { CaseKind, Env, LocalStats } from './stats/core';
 import { updateStats } from './stats/store';
 import { showTestMarker } from './test-marker';
 import { ACHIEVEMENTS, checkNewAchievements, starsFor } from './achievements';
-import { SHOP_ITEMS, SKU_NO_ADS, SKU_UNLIMITED_HINTS, buyLabel, votes } from './shop';
+import { SHOP_ITEMS, SKU_NO_ADS, SKU_UNLIMITED_HINTS, buyLabel, priceText } from './shop';
 import type { ShopItem } from './shop';
 import { fetchConfirmedSkus, mergePurchases, restoreUrl } from './restore';
 import './theme.css';
@@ -113,6 +113,8 @@ const DEFAULTS: Save = { casesCompleted: [], progress: {}, stars: {}, achievemen
  * сборкой, которую явно собрали с адресом (сначала — тестовой).
  */
 declare const __PAYMENTS_URL__: string;
+/** Покупки в Одноклассниках: только тестовая сборка с магазином ОК (tools/build-oktest.mjs --shop). */
+declare const __OK_PAYMENTS__: boolean;
 
 const root = document.getElementById('app')!;
 let app!: GameApp<Save>;
@@ -120,6 +122,7 @@ let app!: GameApp<Save>;
 async function main(): Promise<void> {
   app = await GameApp.boot<Save>({
     gameId: 'dachnye-tainy',
+    platform: { okPayments: __OK_PAYMENTS__ },
     saveVersion: 3,
     defaults: DEFAULTS,
     adPolicy: { firstAdAfterRounds: 1, minSecondsBetween: 180 },
@@ -1324,6 +1327,8 @@ const SHOP_EFFECTS: Record<string, { owned: (s: Save) => boolean; apply: (s: Sav
  */
 async function showShop(): Promise<void> {
   const s = app.save.data;
+  // Цена — в валюте окна оплаты: в ОК это ОКи, во ВКонтакте — голоса.
+  const currency = app.platform.payments?.currency ?? 'vk-votes';
   const box = el('div', { class: 'dialog shop' }, el('h2', {}, '🛍️ Магазин'));
 
   for (const item of SHOP_ITEMS) {
@@ -1331,7 +1336,7 @@ async function showShop(): Promise<void> {
     const btn = el(
       'button',
       { class: `btn ${owned ? 'ghost' : 'primary'}`, type: 'button', disabled: owned },
-      owned ? 'Куплено' : buyLabel(item),
+      owned ? 'Куплено' : buyLabel(item, currency),
     ) as HTMLButtonElement;
     if (!owned) btn.addEventListener('click', () => void buy(item, btn));
     onPurchasesChanged(btn, () => {
@@ -1353,7 +1358,7 @@ async function showShop(): Promise<void> {
           // Цена отдельной строкой, а не только в подписи кнопки: у купленного
           // товара кнопка говорит «Куплено», и цена не должна исчезать с экрана
           // вместе с ней — модератор VK требует, чтобы стоимость была видна.
-          el('span', { class: 'shop-price' }, votes(item.price)),
+          el('span', { class: 'shop-price' }, priceText(item, currency)),
         ),
         btn,
       ),

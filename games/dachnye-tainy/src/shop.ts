@@ -20,7 +20,12 @@ export interface ShopItem {
   description: string;
   /** Цена в голосах VK. Источник правды — `services/payments/src/index.ts`, сверяется тестом. */
   price: number;
+  /** Цена в ОКах для покупки в Одноклассниках (решение владельца 14 октября). Сверяется с сервером тем же тестом. */
+  priceOk: number;
 }
+
+/** Валюта, в которой площадка показывает окно оплаты (IPlatform.payments.currency). */
+export type Currency = 'vk-votes' | 'ok';
 
 export const SHOP_ITEMS: readonly ShopItem[] = [
   {
@@ -28,12 +33,14 @@ export const SHOP_ITEMS: readonly ShopItem[] = [
     title: 'Без рекламы',
     description: 'Убирает рекламу между делами навсегда. Подсказки за рекламу остаются по желанию.',
     price: 20,
+    priceOk: 20,
   },
   {
     sku: SKU_UNLIMITED_HINTS,
     title: 'Безлимитные подсказки',
     description: 'Все подсказки, кроме первой, становятся бесплатными — без рекламы.',
     price: 20,
+    priceOk: 20,
   },
 ];
 
@@ -52,7 +59,17 @@ export function votes(count: number): string {
   return `${count} ${noun}`;
 }
 
+/** «20 ОК» — так цену назвал владелец; слово не склоняется, как название валюты. */
+export function oks(count: number): string {
+  return `${count} ОК`;
+}
+
+/** Цена товара в валюте окна оплаты: в ОК — ОКи, во ВКонтакте — голоса. */
+export function priceText(item: ShopItem, currency: Currency = 'vk-votes'): string {
+  return currency === 'ok' ? oks(item.priceOk) : votes(item.price);
+}
+
 /** Подпись кнопки покупки. Цена в ней — требование модератора VK, а не украшение. */
-export function buyLabel(item: ShopItem): string {
-  return `Купить за ${votes(item.price)}`;
+export function buyLabel(item: ShopItem, currency: Currency = 'vk-votes'): string {
+  return `Купить за ${priceText(item, currency)}`;
 }

@@ -23,6 +23,8 @@ export default defineConfig(({ mode }) => {
       // Маркер тестовой сборки («ТЕСТ ОК · дата · коммит»): задаёт только
       // tools/build-oktest.mjs. Пусто — обычная сборка, маркера нет.
       __TEST_MARKER__: JSON.stringify(process.env.VITE_TEST_MARKER ?? ''),
+      // Покупки в ОК: только тестовая сборка с магазином ОК (tools/build-oktest.mjs --shop).
+      __OK_PAYMENTS__: JSON.stringify(process.env.VITE_OK_PAYMENTS === '1'),
     },
     build: {
       outDir: `dist/${platform}`,

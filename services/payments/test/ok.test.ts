@@ -187,10 +187,15 @@ describe('ОК: подтверждение покупки', () => {
     expect(ns.allKeys()).toEqual([]);
   });
 
-  it('боевой каталог ничего не продаёт в ОК (цены не названы)', async () => {
-    for (const sku of Object.keys(ITEMS).filter((s) => ITEMS[s].app === 'dachnye-tainy')) {
-      const res = await handleOkPayment(okParams({ product_code: sku, amount: '20' }), okCtx(new FakeNamespace(), { catalog: ITEMS }));
-      expect(errCode(res)).toBe('1001');
+  it('боевой каталог: товары «Дачных тайн» продаются в ОК ровно за 20 ОК (цена владельца)', async () => {
+    for (const sku of Object.keys(ITEMS).filter((x) => ITEMS[x].app === 'dachnye-tainy')) {
+      expect(ITEMS[sku].priceOk, sku).toBe(20);
+      const ok = await handleOkPayment(okParams({ product_code: sku, amount: '20', transaction_id: `price-${sku}` }), okCtx(new FakeNamespace(), { catalog: ITEMS }));
+      expect(await ok.text(), sku).toBe('true');
+      for (const amount of ['19', '21', '1']) {
+        const res = await handleOkPayment(okParams({ product_code: sku, amount, transaction_id: `bad-${sku}-${amount}` }), okCtx(new FakeNamespace(), { catalog: ITEMS }));
+        expect(errCode(res), `${sku} за ${amount}`).toBe('1001');
+      }
     }
   });
 

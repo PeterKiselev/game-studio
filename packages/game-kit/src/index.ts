@@ -1,5 +1,5 @@
 import { AdManager, SaveStore, createPlatform } from '@studio/platform';
-import type { AdPolicyConfig, IPlatform } from '@studio/platform';
+import type { AdPolicyConfig, IPlatform, PlatformOptions } from '@studio/platform';
 import { initTheme } from '@studio/ui';
 import { track } from './analytics';
 import type { TrackedEvent } from './analytics';
@@ -11,6 +11,8 @@ export interface BootOptions<T extends object> {
   defaults: T;
   adPolicy?: Partial<AdPolicyConfig>;
   migrate?: (old: unknown, fromVersion: number) => T | null;
+  /** Настройки платформы от сборки игры — например, разрешить покупки в ОК в тестовой сборке. */
+  platform?: PlatformOptions;
 }
 
 /**
@@ -32,7 +34,7 @@ export class GameApp<T extends object> {
   static async boot<T extends object>(opts: BootOptions<T>): Promise<GameApp<T>> {
     initTheme();
 
-    const platform = await createPlatform();
+    const platform = await createPlatform(undefined, opts.platform);
     const save = new SaveStore<T>(
       platform,
       opts.gameId,
