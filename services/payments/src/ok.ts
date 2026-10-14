@@ -201,7 +201,12 @@ export async function handleRestore(search: URLSearchParams, ctx: RestoreCtx): P
   const isOk = search.get('vk_client') === 'ok';
   if (isOk !== (ctx.platform === 'ok')) return restoreJson(403, { error: 'other_platform' });
 
-  const uid = search.get('vk_user_id') ?? '';
+  // Use the OK-specific identity only after verifying the entire vk_* signature.
+  // Older launches can still carry their OK identity in vk_user_id.
+  if (isOk && search.getAll('vk_ok_user_id').length > 1) return restoreJson(403, { error: 'bad_user' });
+  const uid = isOk && search.has('vk_ok_user_id')
+    ? search.get('vk_ok_user_id') ?? ''
+    : search.get('vk_user_id') ?? '';
   if (!/^\d+$/.test(uid)) return restoreJson(403, { error: 'bad_user' });
   try {
     const skus = await ctx.ledger.list({ app: ctx.app, platform: ctx.platform, mode: ctx.mode, uid });

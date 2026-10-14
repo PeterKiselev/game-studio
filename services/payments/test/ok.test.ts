@@ -393,6 +393,29 @@ describe('Изоляция приложений', () => {
 // --- восстановление -----------------------------------------------------------
 
 describe('Восстановление', () => {
+  it('ОК: подписанный vk_ok_user_id выбирает журнал независимо от vk_user_id', async () => {
+    const ns = new FakeNamespace();
+    await handleOkPayment(okParams(), okCtx(ns));
+    const p = launch({ vk_user_id: '123', vk_ok_user_id: '512005303399' });
+    expect(await restored(await handleRestore(p, restoreCtx(ns)))).toEqual(['alpha']);
+    p.set('vk_ok_user_id', '456');
+    expect((await handleRestore(p, restoreCtx(ns))).status).toBe(403);
+  });
+
+  it('неверный подписанный ID ОК не заменяется ID VK', async () => {
+    const ns = new FakeNamespace();
+    expect((await handleRestore(launch({ vk_ok_user_id: '' }), restoreCtx(ns))).status).toBe(403);
+    expect((await handleRestore(launch({ vk_ok_user_id: 'invalid' }), restoreCtx(ns))).status).toBe(403);
+  });
+
+  it('маршрут VK продолжает использовать vk_user_id, а не поле ОК', async () => {
+    const ns = new FakeNamespace();
+    await handleVkOrder(vkOrder(), { app: 'dachnye-tainy', appId: DT_ID,
+      ledger: doLedger(ns), catalog: catalog() });
+    expect(await restored(await handleRestore(launch({ vk_client: 'vk', vk_user_id: '574470572',
+      vk_ok_user_id: '123' }), restoreCtx(ns, { platform: 'vk' })))).toEqual(['alpha']);
+  });
+
   it('подмена vk_user_id после подписи — 403', async () => {
     const ns = new FakeNamespace();
     await handleOkPayment(okParams(), okCtx(ns));
