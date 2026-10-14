@@ -20,6 +20,9 @@ export default defineConfig(({ mode }) => {
       // с VITE_LOCAL_STATS=1. Без флага код учёта ничего не делает и не трогает
       // хранилище; сети нет в обоих случаях.
       __LOCAL_STATS__: JSON.stringify(process.env.VITE_LOCAL_STATS === '1'),
+      // Маркер тестовой сборки («ТЕСТ ОК · дата · коммит»): задаёт только
+      // tools/build-oktest.mjs. Пусто — обычная сборка, маркера нет.
+      __TEST_MARKER__: JSON.stringify(process.env.VITE_TEST_MARKER ?? ''),
     },
     build: {
       outDir: `dist/${platform}`,

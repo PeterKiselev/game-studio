@@ -11,6 +11,7 @@ import type { DailyEntry } from './daily/schedule';
 import { recordCaseComplete, recordCaseStart, recordDailyOpen, recordNextCase, recordVisit } from './stats/core';
 import type { CaseKind, Env, LocalStats } from './stats/core';
 import { updateStats } from './stats/store';
+import { showTestMarker } from './test-marker';
 import { ACHIEVEMENTS, checkNewAchievements, starsFor } from './achievements';
 import { SHOP_ITEMS, SKU_NO_ADS, SKU_UNLIMITED_HINTS, buyLabel, votes } from './shop';
 import type { ShopItem } from './shop';
@@ -164,6 +165,7 @@ async function main(): Promise<void> {
 
   app.track('app_start');
   showPlot();
+  showTestMarker();
   watchDayChange();
   logVisit();
   document.addEventListener('visibilitychange', () => {
