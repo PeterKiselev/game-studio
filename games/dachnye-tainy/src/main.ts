@@ -6,6 +6,8 @@ import { renderPairGrid } from './grid';
 import { CASE_REQUIRES, PLOT_CASE_IDS, VALUE_RENAMES, cases, nextChapterCase, tutorialCase } from './cases';
 import { claimedFact, suspectFact, testimonyHolds, versionHolds } from './contradiction';
 import { marksFitCase, renameMarks } from './progress';
+import { DAILY_SCHEDULE, dailyState, formatDay, isDailyCase, moscowDate, pastDailies } from './daily/schedule';
+import type { DailyEntry } from './daily/schedule';
 import { ACHIEVEMENTS, checkNewAchievements, starsFor } from './achievements';
 import { SHOP_ITEMS, SKU_NO_ADS, SKU_UNLIMITED_HINTS, buyLabel, votes } from './shop';
 import type { ShopItem } from './shop';
@@ -35,6 +37,14 @@ interface Save {
    * кнопке. Необязательное поле: старые сохранения читаются без миграции.
    */
   storySeen?: string[];
+  /**
+   * Раскрытые дела дня: id дела → дата расписания и звёзды. Отдельно от
+   * casesCompleted и stars: дела дня не двигают цель «Все тайны участка»,
+   * не открывают дела главы и не меняют участок. Незаконченные отметки
+   * хранятся там же, где у всех дел, — в progress. Необязательное поле:
+   * старые сохранения читаются без миграции.
+   */
+  dailySolved?: Record<string, { date: string; stars: 1 | 2 | 3 }>;
   /**
    * Звёзды за качество раскрытия (1-3, по числу подсказок), по каждому
    * делу — только за первое раскрытие. Участок растёт по сумме звёзд,
@@ -151,6 +161,7 @@ async function main(): Promise<void> {
 
   app.track('app_start');
   showPlot();
+  watchDayChange();
   app.ready();
   // Не ждём: игра уже на экране, восстановление только добавит права, если они есть.
   void restorePurchases('launch');
@@ -280,8 +291,11 @@ function showPlot(): void {
     );
   }
 
+  plotDay = moscowDate();
   const screenChildren: HTMLElement[] = [
     el('h1', {}, 'Дачные тайны'),
+    dailySection(s, plotDay),
+    el('div', { class: 'plot-label' }, 'Дела участка'),
     cardsBox,
     el('div', { class: 'plot-label' }, `Ваш участок · ${stars}⭐`),
     grid,
@@ -313,6 +327,85 @@ function caseCardMark(c: Case, stamp: string): HTMLElement {
   if (!c.cover) return el('div', { class: 'stamp' }, stamp);
   const img = el('img', { class: 'cover-image', src: c.cover, alt: '', width: 192, height: 144, decoding: 'async' });
   return el('div', { class: 'cover' }, img, el('div', { class: 'stamp badge' }, stamp));
+}
+
+// --- дело дня ---------------------------------------------------------------------
+
+/** Дата, на которую нарисован участок: при смене московских суток участок перерисуется. */
+let plotDay = '';
+
+function dailyStatus(s: Save, entry: DailyEntry): string {
+  const solved = s.dailySolved?.[entry.case.id];
+  if (solved) return `Раскрыто · ${'⭐'.repeat(solved.stars)}`;
+  if (s.progress[entry.case.id]) return 'Начато — можно продолжить';
+  return 'Ждёт расследования';
+}
+
+function dailyCard(s: Save, entry: DailyEntry, past: boolean): HTMLButtonElement {
+  const solved = !!s.dailySolved?.[entry.case.id];
+  const card = el(
+    'button',
+    { class: `daily-card${past ? ' past' : ''}`, type: 'button' },
+    el('div', { class: 'stamp' }, solved ? '✓' : '?'),
+    el(
+      'div',
+      { class: 'text' },
+      el('b', {}, past ? `${formatDay(entry.date)} · ${entry.case.title}` : entry.case.title),
+      el('span', {}, dailyStatus(s, entry)),
+    ),
+  ) as HTMLButtonElement;
+  card.addEventListener('click', () => void startCase(entry.case));
+  return card;
+}
+
+/**
+ * Дело дня и прошлые дела дня. Одно дело на московскую дату для всех;
+ * пропущенные дни остаются доступными ниже без штрафов; будущие не видны.
+ * Если на сегодня дела нет — честно говорим почему, а не выдаём старое
+ * дело как новое.
+ */
+function dailySection(s: Save, today: string): HTMLElement {
+  const box = el('div', { class: 'daily-section' }, el('div', { class: 'plot-label' }, `Дело дня · ${formatDay(today)}`));
+  const state = dailyState(today);
+  if (state.kind === 'today') {
+    box.append(dailyCard(s, state.entry, false));
+  } else {
+    const text =
+      state.kind === 'not-started'
+        ? `Дела дня начнутся ${formatDay(state.next.date)}.`
+        : state.kind === 'gap'
+          ? `Сегодня дела дня нет. Следующее — ${formatDay(state.next.date)}.`
+          : 'Новых дел дня пока нет — готовим следующие.';
+    box.append(el('div', { class: 'daily-empty' }, text));
+  }
+  const past = pastDailies(today);
+  if (past.length > 0) {
+    box.append(el('div', { class: 'daily-past-label' }, 'Прошлые дела дня — без спешки, в любой день'));
+    // Видны два последних дня; остальные — по кнопке, чтобы растущий список
+    // не уводил дела участка за первый экран.
+    const VISIBLE = 2;
+    for (const entry of past.slice(0, VISIBLE)) box.append(dailyCard(s, entry, true));
+    const rest = past.slice(VISIBLE);
+    if (rest.length > 0) {
+      const more = el('button', { class: 'btn ghost daily-more', type: 'button' }, `Ещё ${rest.length} прошлых`) as HTMLButtonElement;
+      more.addEventListener('click', () => {
+        more.replaceWith(...rest.map((entry) => dailyCard(s, entry, true)));
+      });
+      box.append(more);
+    }
+  }
+  return box;
+}
+
+/** Полночь по Москве, пока открыт участок: перерисовать с новым делом дня. */
+function watchDayChange(): void {
+  const check = (): void => {
+    if (root.querySelector('.screen.plot') && moscowDate() !== plotDay) showPlot();
+  };
+  setInterval(check, 30_000);
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) check();
+  });
 }
 
 /**
@@ -1026,7 +1119,8 @@ async function finishCase(
   hadMistake: boolean,
 ): Promise<void> {
   const s = app.save.data;
-  const isNew = !s.casesCompleted.includes(source.id);
+  const daily = isDailyCase(source.id);
+  const isNew = daily ? !s.dailySolved?.[source.id] : !s.casesCompleted.includes(source.id);
   let newAchievements: ReturnType<typeof checkNewAchievements> = [];
 
   // У дела с шагом «противоречие» отметки хранились до верного ответа.
@@ -1035,7 +1129,11 @@ async function finishCase(
     app.save.markDirty();
   }
 
-  if (isNew) {
+  if (isNew && daily) {
+    const date = DAILY_SCHEDULE.find((e) => e.case.id === source.id)!.date;
+    (s.dailySolved ??= {})[source.id] = { date, stars: starsFor(hintsUsed) };
+    app.save.markDirty();
+  } else if (isNew) {
     s.casesCompleted.push(source.id);
     s.stars[source.id] = starsFor(hintsUsed);
     newAchievements = checkNewAchievements(new Set(s.achievements), {
@@ -1080,7 +1178,10 @@ async function finishCase(
   // Сообщение о награде — только если участок правда пополнился. Дело
   // при повторном прохождении не должно врать про изменение, которого
   // не произошло: сохранение не меняется, значит и текст не должен.
-  if (isNew) {
+  if (isNew && daily) {
+    const stars = s.dailySolved![source.id].stars;
+    children.push(el('div', { class: 'reward stars-reward' }, `${'⭐'.repeat(stars)} Дело дня раскрыто`));
+  } else if (isNew) {
     const stars = s.stars[source.id];
     children.push(
       el('div', { class: 'reward stars-reward' }, `${'⭐'.repeat(stars)} Участок пополнился новым уголком`),
