@@ -113,6 +113,8 @@ const DEFAULTS: Save = { casesCompleted: [], progress: {}, stars: {}, achievemen
  * сборкой, которую явно собрали с адресом (сначала — тестовой).
  */
 declare const __PAYMENTS_URL__: string;
+/** Separate OK journal; never used for VK launches. */
+declare const __OK_PAYMENTS_URL__: string;
 /** Покупки в Одноклассниках: только тестовая сборка с магазином ОК (tools/build-oktest.mjs --shop). */
 declare const __OK_PAYMENTS__: boolean;
 /** Диагностика восстановления в тестовой полосе: только сборка с --restore-diag. */
@@ -186,7 +188,7 @@ async function main(): Promise<void> {
  * Ошибка сети или сервера ничего не меняет и игроку не показывается.
  */
 async function restorePurchases(reason: 'launch' | 'after_purchase'): Promise<void> {
-  const url = restoreUrl(__PAYMENTS_URL__, location.search);
+  const url = restoreUrl(__PAYMENTS_URL__, location.search, __OK_PAYMENTS_URL__);
   if (!url) {
     if (__RESTORE_DIAG__) setMarkerJournal(describeJournal(null));
     return;

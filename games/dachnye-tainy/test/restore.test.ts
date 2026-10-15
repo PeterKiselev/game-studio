@@ -7,6 +7,15 @@ const BASE = 'https://pay.example';
 const VK_LAUNCH = '?vk_user_id=574470572&vk_app_id=54767366&vk_platform=desktop_web&sign=abc&lang=ru';
 const OK_LAUNCH = '?vk_user_id=512005303399&vk_app_id=54767366&vk_client=ok&sign=abc';
 
+it('separate OK server never receives a VK restore request', () => {
+  const okBase = 'https://ok-pay.example';
+  expect(restoreUrl('', VK_LAUNCH, okBase)).toBeNull();
+  expect(restoreUrl(BASE, VK_LAUNCH, okBase)).toMatch(/^https:\/\/pay\.example\/vk\/restore\?/);
+  const url = restoreUrl('', OK_LAUNCH + '&vk_ok_user_id=99', okBase)!;
+  expect(url).toMatch(/^https:\/\/ok-pay\.example\/ok\/restore\?/);
+  expect(new URL(url).searchParams.get('vk_ok_user_id')).toBe('99');
+});
+
 function reply(status: number, body: unknown): FetchLike {
   return async () => ({ ok: status >= 200 && status < 300, json: async () => body });
 }

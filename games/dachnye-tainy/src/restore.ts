@@ -33,9 +33,10 @@ export const SKU_FLAGS: Record<string, keyof Purchases> = {
  * `vk_*` и `sign` — то, что подписано; остальные параметры адреса (например
  * `lang`) серверу не нужны.
  */
-export function restoreUrl(base: string, search: string): string | null {
-  if (!base) return null;
+export function restoreUrl(base: string, search: string, okBase = ''): string | null {
   const params = new URLSearchParams(search);
+  const selectedBase = params.get('vk_client') === 'ok' && okBase ? okBase : base;
+  if (!selectedBase) return null;
   if (!params.get('sign')) return null;
   const forwarded = new URLSearchParams();
   for (const [key, value] of params) {
@@ -43,7 +44,7 @@ export function restoreUrl(base: string, search: string): string | null {
   }
   if (!forwarded.get('vk_user_id') || !forwarded.get('vk_app_id')) return null;
   const path = params.get('vk_client') === 'ok' ? 'ok/restore' : 'vk/restore';
-  return `${base.replace(/\/+$/, '')}/${path}?${forwarded.toString()}`;
+  return `${selectedBase.replace(/\/+$/, '')}/${path}?${forwarded.toString()}`;
 }
 
 export type FetchLike = (url: string, init?: { signal?: AbortSignal }) => Promise<{

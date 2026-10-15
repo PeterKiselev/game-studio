@@ -16,6 +16,7 @@ export default defineConfig(({ mode }) => {
       __PLATFORM__: JSON.stringify(platform),
       // Адрес платёжного сервера для восстановления покупок. Не задан — выключено.
       __PAYMENTS_URL__: JSON.stringify(process.env.VITE_PAYMENTS_URL ?? ''),
+      __OK_PAYMENTS_URL__: JSON.stringify(process.env.VITE_OK_PAYMENTS_URL ?? ''),
       // Локальный учёт статистики (этап 1 аналитики): только в тестовой сборке
       // с VITE_LOCAL_STATS=1. Без флага код учёта ничего не делает и не трогает
       // хранилище; сети нет в обоих случаях.
@@ -23,7 +24,7 @@ export default defineConfig(({ mode }) => {
       // Маркер тестовой сборки («ТЕСТ ОК · дата · коммит»): задаёт только
       // tools/build-oktest.mjs. Пусто — обычная сборка, маркера нет.
       __TEST_MARKER__: JSON.stringify(process.env.VITE_TEST_MARKER ?? ''),
-      // Покупки в ОК: только тестовая сборка с магазином ОК (tools/build-oktest.mjs --shop).
+      // Покупки в ОК включают только явные сборки: oktest --shop или build-ok-candidate.mjs.
       __OK_PAYMENTS__: JSON.stringify(process.env.VITE_OK_PAYMENTS === '1'),
       // Диагностика восстановления в тестовой полосе (tools/build-oktest.mjs --restore-diag).
       __RESTORE_DIAG__: JSON.stringify(process.env.VITE_RESTORE_DIAG === '1'),

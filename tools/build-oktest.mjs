@@ -63,6 +63,7 @@ const marker =
 
 const env = { ...process.env, VITE_TEST_MARKER: marker };
 delete env.VITE_PAYMENTS_URL;
+delete env.VITE_OK_PAYMENTS_URL;
 delete env.VITE_LOCAL_STATS;
 delete env.VITE_OK_PAYMENTS;
 delete env.VITE_RESTORE_DIAG;
