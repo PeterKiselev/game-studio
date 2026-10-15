@@ -50,7 +50,14 @@ jobs:
       - run: npm run build:all
 
       - run: npm run build -w @studio/dachnye-tainy
-      - run: npm run build:dachnye-tainy:vk
+      - name: Build Dachnye Tainy VK and OK client
+        run: npm run build:dachnye-tainy:vk
+        env:
+          VITE_OK_PAYMENTS: '1'
+          VITE_OK_PAYMENTS_URL: https://dachnye-tainy-payments-ok.kiselevpetr3.workers.dev
+          VITE_TEST_MARKER: ''
+          VITE_RESTORE_DIAG: '0'
+          VITE_LOCAL_STATS: '0'
 
       - run: npm run build:pograniche:web
       - run: npm run build:sudoku:web
