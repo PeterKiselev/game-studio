@@ -1,82 +1,81 @@
-name: Deploy to GitHub Pages
-
-# Один сайт отдаёт сборки нескольких игр сразу:
-#   /                     — гомоку, веб-версия (для itch.io и прямых ссылок)
-#   /vk/                  — гомоку под VK Mini Apps
-#   /yandex/              — гомоку под Яндекс Игры
-#   /dachnye-tainy/       — «Дачные тайны», веб-версия для плейтеста
-#   /dachnye-tainy/vk/    — «Дачные тайны» под VK Mini Apps (тот же адрес
-#                           вписывается в форму «Размещение» в dev.vk.ru)
-#   /pograniche/           — «Пограничье», веб-версия вертикального среза
-#   /sudoku/               — «Академия Sudoku», веб-версия для плейтеста
-#   /sudoku/vk/            — «Академия Sudoku» под VK Mini Apps
-# Гомоку занимает корень, потому что его адрес уже вписан в формы VK
-# и Яндекса — переносить рискованно без пользы. Следующие игры получают
-# свой путь по имени, а не делят корень с первой.
-# Адрес постоянный, менять его в консолях площадок больше не придётся.
-
+name: Isolated Dachnye Tainy OK release
 on:
-  push:
-    branches: [master, main]
   workflow_dispatch:
-
 permissions:
   contents: read
+  actions: read
   pages: write
   id-token: write
-
 concurrency:
   group: pages
-  cancel-in-progress: true
-
+  cancel-in-progress: false
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
+        with:
+          path: candidate
+      - uses: actions/checkout@v4
+        with:
+          ref: f23eb97f49b8c85720e39b2717553236decf9fd7
+          path: baseline
       - uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: npm
-
-      - run: npm ci
-
-      # Правила игр обязаны быть зелёными до любого деплоя
-      - run: npm test
-
-      - run: npm run typecheck
-
-      - run: npm run build:all
-
-      - run: npm run build -w @studio/dachnye-tainy
-      - run: npm run build:dachnye-tainy:vk
-
-      - run: npm run build:pograniche:web
-      - run: npm run build:sudoku:web
-      - run: npm run build:sudoku:vk
-
-      - name: Собрать сайт из сборок игр
+          cache-dependency-path: |
+            baseline/package-lock.json
+            candidate/package-lock.json
+      - name: Reconstruct last successful published site
+        working-directory: baseline
         run: |
-          mkdir -p site/vk site/yandex site/dachnye-tainy site/dachnye-tainy/vk site/pograniche site/sudoku site/sudoku/vk
-          cp -r games/gomoku/dist/web/. site/
-          cp -r games/gomoku/dist/vk/. site/vk/
-          cp -r games/gomoku/dist/yandex/. site/yandex/
-          cp -r games/dachnye-tainy/dist/web/. site/dachnye-tainy/
-          cp -r games/dachnye-tainy/dist/vk/. site/dachnye-tainy/vk/
-          cp -r games/pograniche/dist/web/. site/pograniche/
-          cp -r games/sudoku/dist/web/. site/sudoku/
-          cp -r games/sudoku/dist/vk/. site/sudoku/vk/
-          # Правовые документы, иконки и скриншоты — площадки требуют
-          # постоянные адреса на них, поэтому едут вместе с игрой
-          cp -r static/. site/
-
+          npm ci
+          npm run build:all
+          npm run build -w @studio/dachnye-tainy
+          npm run build:dachnye-tainy:vk
+          npm run build:pograniche:web
+          npm run build:sudoku:web
+          npm run build:sudoku:vk
+      - name: Assemble unchanged baseline
+        run: |
+          mkdir -p site/vk site/yandex site/dachnye-tainy/vk site/pograniche site/sudoku/vk
+          cp -a baseline/games/gomoku/dist/web/. site/
+          cp -a baseline/games/gomoku/dist/vk/. site/vk/
+          cp -a baseline/games/gomoku/dist/yandex/. site/yandex/
+          cp -a baseline/games/dachnye-tainy/dist/web/. site/dachnye-tainy/
+          cp -a baseline/games/dachnye-tainy/dist/vk/. site/dachnye-tainy/vk/
+          cp -a baseline/games/pograniche/dist/web/. site/pograniche/
+          cp -a baseline/games/sudoku/dist/web/. site/sudoku/
+          cp -a baseline/games/sudoku/dist/vk/. site/sudoku/vk/
+          cp -a baseline/static/. site/
+      - name: Verify baseline against public production
+        run: node candidate/tools/verify-production-baseline.mjs site
+      - uses: actions/upload-artifact@v4
+        with:
+          name: previous-production-site
+          path: site
+          include-hidden-files: true
+          retention-days: 30
+      - name: Build and test release candidate
+        working-directory: candidate
+        run: |
+          npm ci
+          npm test
+          npm run typecheck
+          node node_modules/vitest/vitest.mjs run services/payments/test
+          node tools/build-ok-candidate.mjs
+          npx playwright install --with-deps chromium
+          node tools/playtest-ok-candidate.cjs
+      - name: Replace only Dachnye Tainy VK and OK client
+        run: |
+          cp -a candidate/games/dachnye-tainy/dist/ok-candidate/. site/dachnye-tainy/vk/
+          node candidate/tools/verify-production-baseline.mjs site --except=dachnye-tainy/vk/
       - uses: actions/configure-pages@v5
-
       - uses: actions/upload-pages-artifact@v3
         with:
           path: site
-
+          retention-days: 30
   deploy:
     needs: build
     runs-on: ubuntu-latest
