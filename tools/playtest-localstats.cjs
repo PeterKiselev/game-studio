@@ -330,6 +330,7 @@ const PIE = [['Ирина', 'грядка'], ['Михаил', 'беседка'],
     const page = await newPage(context, { at: msk('2026-10-14T10:00:00'), save: keyDone });
     await open(page, STATS);
     await page.getByRole('button', { name: /Свет над прудом/ }).click();
+    await skipIntro(page); // у дела 3 есть книжка вступления
     await page.waitForSelector('.case');
     for (const [a, b] of POND) await clickYes(page, a, b);
     await page.clock.runFor(1000);

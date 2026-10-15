@@ -103,6 +103,12 @@ const HOSE_DONE = {
 
 async function openKeyCase(page) {
   await page.getByRole('button', { name: KEY_TITLE }).click();
+  // У дела 2 есть книжка вступления — её проверяет сценарий 15.
+  try {
+    await page.locator('.story').getByRole('button', { name: 'Пропустить' }).click({ timeout: 1000 });
+  } catch {
+    /* книжку уже видели */
+  }
   await page.waitForSelector('.case');
 }
 
@@ -289,8 +295,9 @@ async function geometry(page, pairs) {
     await openChapterCase(page);
     await solve(page);
     await page.locator('.next-case').click();
+    await page.locator('.story').getByRole('button', { name: 'Пропустить' }).click();
     await page.waitForSelector('.case');
-    assert((await page.locator('.case .topbar .title').innerText()).includes('Чей ключ'), 'кнопка «Следующее дело» открывает дело 2');
+    assert((await page.locator('.case .topbar .title').innerText()).includes('Чей ключ'), 'кнопка «Следующее дело» открывает дело 2 (сначала книжка, после пропуска — дело)');
     assert((await page.locator('.case-intro').innerText()).includes('Кто был у склада в 20:00?'), 'вступление дела 2 с вопросом');
     assert((await page.locator('.clues .clue').count()) === 10, 'десять фактов');
     const facts = await page.locator('.clues').innerText();
@@ -641,15 +648,15 @@ async function geometry(page, pairs) {
     const { context, page } = await openWithSave(browser, old);
     const before = await saveOf(page);
     const cardOf = (re) => page.locator('.case-card', { hasText: re });
-    assert((await page.locator('.case-card .cover-image').count()) === 5, 'обложки у пяти дел с картинками');
+    assert((await page.locator('.case-card .cover-image').count()) === 9, 'обложки у всех девяти сюжетных дел');
     await page.waitForFunction(() => [...document.querySelectorAll('.cover-image')].every((i) => i.complete && i.naturalWidth > 0));
     const pie = cardOf(/Чей пирог/);
     assert((await pie.innerText()).includes('Раскрыто · ⭐⭐⭐') && (await pie.locator('.stamp.badge').innerText()).trim() === '✓', 'обучающее дело: статус, звёзды и печать ✓ на обложке');
     assert((await cardOf(/Чей велосипед/).innerText()).includes('Ждёт расследования'), 'начатое второе дело — прежний статус');
     assert((await cardOf(/Шланг у водокачки/).innerText()).includes('Раскрыто · ⭐⭐'), 'дело главы: статус и звёзды на месте');
-    assert((await cardOf(/Кто вернулся с рынка/).locator('.cover').count()) === 0 && (await cardOf(/Кто вернулся с рынка/).locator('.stamp').count()) === 1, 'дела без картинки — прежняя печать без обложки');
+    assert((await cardOf(/Кто вернулся с рынка/).locator('.cover').count()) === 1 && (await cardOf(/Кто вернулся с рынка/).locator('.stamp').count() <= 1), 'рынок: обложка, как у остальных сюжетных дел');
     const key = cardOf(/Глава 1\. Чей ключ/);
-    assert((await key.locator('.cover').count()) === 0 && (await key.locator('.stamp').innerText()).trim() === '?' && (await key.innerText()).includes('Ждёт расследования'), 'дело 2 главы (открыто после дела 1) — прежняя печать «?» и статус');
+    assert((await key.locator('.cover').count()) === 1 && (await key.innerText()).includes('Ждёт расследования'), 'дело 2 главы (открыто после дела 1): теперь с обложкой, статус прежний');
 
     // Второе дело: книжка из четырёх страниц, клавиатура заперта в окне, прогресс цел.
     await cardOf(/Чей велосипед/).click();
@@ -910,8 +917,9 @@ async function geometry(page, pairs) {
   {
     const { context, page } = await openWithSave(browser, KEY_DONE);
     await page.getByRole('button', { name: POND_TITLE }).click();
+    await page.locator('.story').getByRole('button', { name: 'Пропустить' }).click();
     await page.waitForSelector('.case');
-    assert((await page.locator('.story').count()) === 0, 'у дела 3 нет кадров вступления');
+    assert((await page.locator('.story').count()) === 0, 'после пропуска книжки дела 3 — экран дела (сама книжка — в сценарии 15)');
     const intro = await page.locator('.case-intro').innerText();
     assert(intro.includes('Кольцо с биркой «Правление»') && intro.includes('Кто был у водокачки в 1:00?'), 'условия связаны с находкой дела 2 и задают вопрос');
     assert((await page.locator('.clues .clue').count()) === 9, 'девять фактов');
@@ -985,6 +993,7 @@ async function geometry(page, pairs) {
     const size = `${viewport.width}×${viewport.height}`;
     const { context, page } = await openWithSave(browser, KEY_DONE, viewport);
     await page.getByRole('button', { name: POND_TITLE }).click();
+    await page.locator('.story').getByRole('button', { name: 'Пропустить' }).click();
     await page.waitForSelector('.case');
     const caseIssues = await geometry(page, [
       ['.case-intro', '.clues'],
@@ -1239,6 +1248,173 @@ async function geometry(page, pairs) {
       ]);
       assert(caseIssues.length === 0, `${size}: условия, факты и таблицы (${slug}) без наложений` + (caseIssues.length ? ': ' + caseIssues.join('; ') : ''));
       if (process.env.SHOT_DIR) await page.screenshot({ path: `${process.env.SHOT_DIR}/${slug}-case-${size}.png` });
+      assert(page.errors.length === 0, 'без ошибок: ' + page.errors.join('; '));
+      await context.close();
+    }
+  }
+
+  console.log('\n=== 15. Рынок, костёр, «Чей ключ» и «Свет над прудом»: книжки, обложки, клавиатура, телефон ===');
+  const BOOKS = [
+    {
+      slug: 'market',
+      title: /Кто вернулся с рынка/,
+      images: ['fifth-market-book-1', 'fifth-market-book-2', 'fifth-market-book-3'],
+      cover: 'cover-fifth-market',
+      firstCaption: 'Игорь, Рома, Зоя и Настя сходили на рынок',
+      lastCaption: 'Кто пришёл третьим?',
+      intro: ['Игорь, Рома, Зоя и Настя вернулись с рынка', 'числами 1–4', 'мёд, гвозди, творог или семена', 'Кто вернулся третьим?'],
+      leak: /Зоя.{0,15}семен|Игорь.{0,15}гвозд|Настя.{0,15}мёд|Рома.{0,15}творог/,
+      seenKey: 'fifth-1',
+    },
+    {
+      slug: 'campfire',
+      title: /Кто сидел на раскладушке/,
+      images: ['sixth-campfire-book-1', 'sixth-campfire-book-2', 'sixth-campfire-book-3'],
+      cover: 'cover-sixth-campfire',
+      firstCaption: 'Влад, Митя, Ксюша и Оля собрались у костра',
+      lastCaption: 'выясните, кто где сидел',
+      intro: ['Влад, Митя, Ксюша и Оля пришли к костру', 'числами 1–4', 'на камне, у бревна, на раскладушке или на траве', 'кто сидел на раскладушке'],
+      leak: /Ксюша.{0,15}бревн|Влад.{0,15}трав|Оля.{0,15}расклад|Митя.{0,15}камен/,
+      seenKey: 'sixth-1',
+    },
+    {
+      slug: 'key',
+      title: /Глава 1\. Чей ключ/,
+      images: ['ch1-key-book-1', 'ch1-key-book-2', 'ch1-key-book-3'],
+      cover: 'cover-ch1-key',
+      firstCaption: 'Шланг взяли со склада правления',
+      lastCaption: 'сверьте с ними слова соседей',
+      intro: ['сторож Игорь, Настя, председатель Геннадий Ильич и Рома', 'Кто был у склада в 20:00?'],
+      leak: /одного ключа для вывода/,
+      seenKey: 'ch1-key',
+    },
+    {
+      slug: 'pond',
+      title: /Глава 1\. Свет над прудом/,
+      images: ['ch1-pond-book-1', 'ch1-pond-book-2', 'ch1-pond-book-3'],
+      cover: 'cover-ch1-pond',
+      firstCaption: 'Кольцо с биркой привело Валентину Петровну',
+      lastCaption: 'Начните с фактов, а затем проверьте версии',
+      intro: ['Зоя, Геннадий Ильич, Игорь, Рома и Настя', 'Кто был у водокачки в 1:00?'],
+      leak: /300|1:50|мокрый след|рычаг|лодк/,
+      seenKey: 'ch1-pond',
+    },
+  ];
+  const ILLUSTRATED = JSON.parse(JSON.stringify(HOSE_DONE));
+  ILLUSTRATED.data.casesCompleted = ['tutorial-1', 'second-1', 'third-1', 'fourth-1', 'ch1-hose', 'ch1-key'];
+  ILLUSTRATED.data.stars = { 'tutorial-1': 3, 'second-1': 3, 'third-1': 3, 'fourth-1': 3, 'ch1-hose': 3, 'ch1-key': 2 };
+  ILLUSTRATED.data.storySeen = ['tutorial-1#3', 'second-1#2', 'third-1', 'fourth-1', 'ch1-hose'];
+  {
+    // Обложки: у всех девяти сюжетных дел, карточки целы, у дел дня обложек нет.
+    const { context, page } = await openWithSave(browser, JSON.parse(JSON.stringify(ILLUSTRATED)));
+    assert((await page.locator('.case-card .cover-image').count()) === 9, 'обложки у всех девяти сюжетных дел');
+    await page.waitForFunction(() => [...document.querySelectorAll('.cover-image')].every((i) => i.complete && i.naturalWidth > 0));
+    for (const b of BOOKS) {
+      const card = page.locator('.case-card', { hasText: b.title });
+      // Обложки меньше 8 КБ сборщик вшивает в код (data URI): имени файла в адресе тогда нет.
+      // Какой файл у какого дела, закрепляет story-assets.test.ts.
+      const src = await card.locator('.cover-image').getAttribute('src');
+      assert(src.includes(b.cover) || src.startsWith('data:image/webp'), `обложка «${b.slug}» на карточке`);
+      assert((await card.locator('.cover-image').evaluate((i) => i.naturalWidth)) === 192, `обложка «${b.slug}» — 192 px, как у остальных`);
+    }
+    assert((await page.locator('.daily-card .cover').count()) === 0, 'у карточек дел дня обложек нет');
+    assert(page.errors.length === 0, 'без ошибок: ' + page.errors.join('; '));
+    await context.close();
+  }
+  for (const b of BOOKS) {
+    // Клавиатура: карточка → книжка (Enter, стрелки) → «Пропустить» → условия и факты → повтор → Escape.
+    const seed = JSON.parse(JSON.stringify(ILLUSTRATED));
+    seed.data.progress = { 'fifth-1': { marks: { 'персонажи|Настя~покупки|мёд': 'no' }, hintsUsed: 0 } };
+    const { context, page } = await openWithSave(browser, seed);
+    const before = await saveOf(page);
+    const card = page.locator('.case-card', { hasText: b.title });
+    await card.focus();
+    await page.keyboard.press('Enter');
+    const story = page.locator('.story');
+    await story.waitFor();
+    assert(await page.evaluate(() => document.getElementById('app').inert === true), `${b.slug}: фон под книжкой заблокирован`);
+    const images = [];
+    const captions = [];
+    for (let i = 1; i <= 3; i += 1) {
+      assert((await story.locator('.story-counter').innerText()).trim() === `${i} / 3`, `${b.slug}: страница ${i} из 3`);
+      await page.waitForFunction(() => document.querySelector('.story-image')?.naturalWidth > 0);
+      images.push(await imageName(story));
+      captions.push(await story.locator('.story-caption').innerText());
+      assert((await story.locator('.story-image').getAttribute('alt')).length > 30, `${b.slug}: у страницы ${i} есть описание`);
+      if (i < 3) await page.keyboard.press('ArrowRight');
+    }
+    assert(JSON.stringify(images) === JSON.stringify(b.images), `${b.slug}: порядок страниц: ${images.join(', ')}`);
+    assert(captions[0].includes(b.firstCaption) && captions[2].includes(b.lastCaption), `${b.slug}: подписи первой и последней страниц`);
+    assert(!b.leak.test(captions.join(' ')), `${b.slug}: в подписях нет подсказки`);
+    await story.getByRole('button', { name: 'Пропустить' }).click();
+    await page.waitForSelector('.case');
+    const intro = (await page.locator('.case-intro').innerText()).replace(/\s+/g, ' ');
+    for (const part of b.intro) assert(intro.includes(part), `${b.slug}: условия на экране дела — «${part}»`);
+    assert((await page.locator('.clues .clue').count()) > 0 && (await page.locator('.grid-block').count()) >= 2, `${b.slug}: факты и таблицы на месте`);
+    let saved = await saveOf(page);
+    assert(saved.data.storySeen.includes(b.seenKey) && ['tutorial-1#3', 'second-1#2', 'third-1', 'fourth-1', 'ch1-hose'].every((k) => saved.data.storySeen.includes(k)), `${b.slug}: просмотр записан, прежние отметки целы`);
+    assert(JSON.stringify(saved.data.casesCompleted) === JSON.stringify(before.data.casesCompleted) && JSON.stringify(saved.data.stars) === JSON.stringify(before.data.stars), `${b.slug}: раскрытые дела и звёзды не изменились`);
+    assert(JSON.stringify(saved.data.progress['fifth-1']) === JSON.stringify(before.data.progress['fifth-1']), `${b.slug}: чужой незаконченный прогресс не тронут`);
+    const replay = page.locator('.case-intro').getByRole('button', { name: '📖 Вступление' });
+    await replay.focus();
+    await page.keyboard.press('Enter');
+    await story.waitFor();
+    assert((await story.locator('.story-counter').innerText()).trim() === '1 / 3', `${b.slug}: повтор — с первой страницы`);
+    for (let i = 0; i < 6; i += 1) {
+      await page.keyboard.press(i % 2 ? 'Shift+Tab' : 'Tab');
+      assert(await page.evaluate(() => !!document.activeElement?.closest('.story')), `${b.slug}: повтор, ${i % 2 ? 'Shift+Tab' : 'Tab'} — фокус внутри книжки`);
+    }
+    await page.keyboard.press('Escape');
+    assert((await story.count()) === 0 && (await replay.evaluate((n) => n === document.activeElement)), `${b.slug}: Escape закрыл повтор, фокус вернулся на кнопку`);
+    await page.locator('.case .topbar .btn').click();
+    await page.reload({ waitUntil: 'networkidle' });
+    await page.waitForSelector('.case-list');
+    await page.locator('.case-card', { hasText: b.title }).click();
+    await page.waitForSelector('.case');
+    assert((await story.count()) === 0, `${b.slug}: второй раз книжка сама не показывается`);
+    assert(page.errors.length === 0, 'без ошибок: ' + page.errors.join('; '));
+    await context.close();
+  }
+  for (const viewport of [
+    { width: 360, height: 640 },
+    { width: 390, height: 844 },
+    { width: 1000, height: 700 },
+  ]) {
+    const size = `${viewport.width}×${viewport.height}`;
+    for (const b of BOOKS) {
+      const { context, page } = await openWithSave(browser, JSON.parse(JSON.stringify(ILLUSTRATED)), viewport);
+      const listIssues = await geometry(page, []);
+      assert(listIssues.length === 0, `${size}: участок с девятью обложками без прокрутки вбок` + (listIssues.length ? ': ' + listIssues.join('; ') : ''));
+      await page.locator('.case-card', { hasText: b.title }).click();
+      const story = page.locator('.story');
+      await story.waitFor();
+      for (let i = 1; i <= 3; i += 1) {
+        await page.waitForFunction(() => document.querySelector('.story-image')?.naturalWidth > 0);
+        await page.evaluate(() => document.querySelector('.story-image').decode());
+        const whole = await page.evaluate(() => {
+          const img = document.querySelector('.story-image');
+          const box = img.getBoundingClientRect();
+          return getComputedStyle(img).objectFit === 'contain' && Math.abs(box.width / box.height - img.naturalWidth / img.naturalHeight) < 0.02;
+        });
+        assert(whole, `${size}, ${b.slug} ${i}/3: картинка целиком, без обрезки`);
+        const issues = await geometry(page, [
+          ['.story .topbar', '.story-frame'],
+          ['.story-frame', '.story-caption'],
+          ['.story-caption', '.story-controls'],
+        ]);
+        assert(issues.length === 0, `${size}, ${b.slug} ${i}/3: без наложений` + (issues.length ? ': ' + issues.join('; ') : ''));
+        const btn = await story.locator('.story-controls .btn').boundingBox();
+        assert(btn.y + btn.height <= viewport.height && btn.height >= 44, `${size}, ${b.slug} ${i}/3: кнопка видна без прокрутки`);
+        if (process.env.SHOT_DIR) await page.screenshot({ path: `${process.env.SHOT_DIR}/${b.slug}-book-${i}-${size}.png` });
+        await story.locator('.story-controls .btn').click();
+      }
+      await page.waitForSelector('.case');
+      const caseIssues = await geometry(page, [
+        ['.case-intro', '.clues'],
+        ['.clues', '.grids-stack'],
+      ]);
+      assert(caseIssues.length === 0, `${size}: условия, факты и таблицы (${b.slug}) без наложений` + (caseIssues.length ? ': ' + caseIssues.join('; ') : ''));
+      if (process.env.SHOT_DIR) await page.screenshot({ path: `${process.env.SHOT_DIR}/${b.slug}-case-${size}.png` });
       assert(page.errors.length === 0, 'без ошибок: ' + page.errors.join('; '));
       await context.close();
     }

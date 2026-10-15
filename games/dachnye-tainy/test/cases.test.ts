@@ -374,8 +374,8 @@ describe('иллюстрированное вступление дела 1', () 
     expect(source.intro).toMatch(/Кто принёс шланг\?/);
   });
 
-  it('кадры есть у первых четырёх дел и у дела 1 главы', () => {
-    expect(cases.filter((c) => c.story).map((c) => c.id)).toEqual(['tutorial-1', 'second-1', 'third-1', 'fourth-1', 'ch1-hose']);
+  it('кадры есть у всех шести дел участка и у всех трёх дел главы', () => {
+    expect(cases.filter((c) => c.story).map((c) => c.id)).toEqual(['tutorial-1', 'second-1', 'third-1', 'fourth-1', 'fifth-1', 'sixth-1', 'ch1-hose', 'ch1-key', 'ch1-pond']);
   });
 });
 

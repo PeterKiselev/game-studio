@@ -1,4 +1,6 @@
 import type { Case } from '@studio/rules';
+import { dailyApples, dailyPost, dailyRepair } from './second-batch';
+import { dailyConcert, dailyMushrooms, dailySeedlings, dailyTea } from './third-batch';
 import { dailyBath, dailyBeds, dailyFishing, dailyGlasses, dailyJam, dailyWatering, dailyWell } from './cases';
 
 /**
@@ -14,7 +16,7 @@ import { dailyBath, dailyBeds, dailyFishing, dailyGlasses, dailyJam, dailyWateri
  * дело другой даты раньше срока — для однопользовательской головоломки без
  * наград за серию это не ломает ничего, кроме его собственного сюрприза.
  *
- * Расписание — явный список «дата → дело», а не «день по кругу»: семь дел
+ * Расписание — явный список «дата → дело», а не «день по кругу»: старые дела
  * не выдаются заново как новые. Когда расписание кончается, игра честно
  * говорит, что новых дел пока нет. Пополнение — добавить записи с новыми
  * датами в конец (тест проверяет, что даты не повторяются и идут по порядку,
@@ -36,6 +38,13 @@ export const DAILY_SCHEDULE: readonly DailyEntry[] = [
   { date: '2026-10-18', case: dailyBath },
   { date: '2026-10-19', case: dailyJam },
   { date: '2026-10-20', case: dailyFishing },
+  { date: '2026-10-21', case: dailyPost },
+  { date: '2026-10-22', case: dailyApples },
+  { date: '2026-10-23', case: dailyRepair },
+  { date: '2026-10-24', case: dailySeedlings },
+  { date: '2026-10-25', case: dailyTea },
+  { date: '2026-10-26', case: dailyConcert },
+  { date: '2026-10-27', case: dailyMushrooms },
 ];
 
 /** Сегодняшняя дата по Москве, YYYY-MM-DD — не зависит от пояса устройства. */

@@ -194,14 +194,14 @@ const V3_OLD = {
     await context.close();
   }
   {
-    const { context, page } = await open(browser, { at: msk('2026-10-21T10:00:00') });
-    assert((await page.locator('.daily-empty').innerText()).includes('Новых дел дня пока нет'), '21 октября: «Новых дел дня пока нет»');
+    const { context, page } = await open(browser, { at: msk('2026-10-28T10:00:00') });
+    assert((await page.locator('.daily-empty').innerText()).includes('Новых дел дня пока нет'), '28 октября: «Новых дел дня пока нет»');
     assert((await page.locator('.daily-card:not(.past)').count()) === 0, 'старое дело не выдаётся как дело дня');
     assert((await page.locator('.daily-card.past').count()) === 2, 'видны два последних прошлых дня — список не уводит дела участка вниз');
-    await page.getByRole('button', { name: 'Ещё 5 прошлых' }).click();
+    await page.getByRole('button', { name: 'Ещё 12 прошлых' }).click();
     const past = await page.locator('.daily-card.past').allInnerTexts();
-    assert(past.length === 7 && past.every((t) => /\d+ октября · /.test(t)), 'по кнопке — все семь, с датами');
-    assert(past[0].includes('20 октября') && past[6].includes('14 октября'), 'от новых к старым');
+    assert(past.length === 14 && past.every((t) => /\d+ октября · /.test(t)), 'по кнопке — все четырнадцать, с датами');
+    assert(past[0].includes('27 октября') && past[13].includes('14 октября'), 'от новых к старым');
     await context.close();
   }
   {
@@ -246,6 +246,147 @@ const V3_OLD = {
     assert((await page.locator('.grid-block').count()) === 6, `${size}: 4 категории — 6 таблиц`);
     assert(page.errors.length === 0, 'без ошибок: ' + page.errors.join('; '));
     await context.close();
+  }
+
+  console.log('\n=== 8. Дела 24–27 октября: дело дня, раскрытие, звёзды, перезагрузка, архив ===');
+  // Часы подменяются только внутри изолированного контекста браузера: системные часы и сохранение
+  // владельца не затрагиваются (у каждого сценария свой контекст и своё чистое хранилище).
+  const NEW_DAYS = [
+    {
+      date: '2026-10-24', title: 'Ящики с рассадой', question: 'Кто выращивал баклажан?', clues: 6, grids: 6, hints: 0,
+      yes: [['Мила', 'синий'], ['Мила', 'перец'], ['Мила', 'дрожжи'], ['Степан', 'жёлтый'], ['Степан', 'баклажан'], ['Степан', 'зола'], ['Ульяна', 'зелёный'], ['Ульяна', 'томаты'], ['Ульяна', 'крапива']],
+      epilogue: 'Баклажан — у Степана.',
+    },
+    {
+      date: '2026-10-25', title: 'Чай на веранде', question: 'Кто пришёл в 17:00?', clues: 6, grids: 1, hints: 1,
+      yes: [['Тоня', '16:00'], ['Раиса', '16:30'], ['Мирон', '17:00'], ['Клава', '17:30'], ['Савва', '18:00']],
+      epilogue: 'Первой в 16:00 пришла Тоня',
+    },
+    {
+      date: '2026-10-26', title: 'Дачный концерт', question: 'Кто показал фокус?', clues: 7, grids: 3, hints: 0,
+      yes: [['Диана', '1'], ['Варя', '2'], ['Гордей', '3'], ['Алиса', '4'], ['Богдан', '5'], ['Диана', 'стихи'], ['Варя', 'песня'], ['Гордей', 'фокус'], ['Алиса', 'скрипка'], ['Богдан', 'танец']],
+      epilogue: 'Фокус показал Гордей.',
+    },
+    {
+      date: '2026-10-27', title: 'Грибной поход', question: 'Кто нашёл рыжики?', clues: 9, grids: 6, hints: 0,
+      yes: [['Фома', '5:00'], ['Полина', '6:00'], ['Арина', '7:00'], ['Демид', '8:00'], ['Фома', 'рыжики'], ['Полина', 'белые'], ['Арина', 'опята'], ['Демид', 'лисички'], ['Фома', 'ельник'], ['Полина', 'овраг'], ['Арина', 'роща'], ['Демид', 'болото']],
+      epilogue: 'Рыжики нашёл Фома.',
+    },
+  ];
+  const solveYes = async (page, pairs) => {
+    for (const [a, b] of pairs) await clickYes(page, a, b);
+    await page.clock.runFor(1000); // переход на развязку — по таймеру 500 мс
+    await page.waitForSelector('.reveal', { timeout: 5000 });
+  };
+  // Не раньше срока: накануне ни дела дня, ни названия в архиве.
+  {
+    const { context, page } = await open(browser, { at: msk('2026-10-23T12:00:00') });
+    const text = await page.locator('.daily-section').innerText();
+    assert(NEW_DAYS.every((d) => !text.includes(d.title)), '23 октября: ни одно из четырёх новых дел не видно');
+    assert((await page.locator('.daily-card:not(.past)').innerText()).includes('Ремонт беседки'), '23 октября дело дня — «Ремонт беседки»');
+    await context.close();
+  }
+  for (const day of NEW_DAYS) {
+    const stars = day.hints === 0 ? 3 : 2;
+    const { context, page } = await open(browser, { at: msk(`${day.date}T12:00:00`) });
+    const [, , d] = day.date.split('-').map(Number);
+    assert((await label(page)).includes(`${d} октября`), `${day.date}: «Дело дня · ${d} октября»`);
+    const card = page.locator('.daily-card:not(.past)');
+    assert((await card.count()) === 1 && (await card.innerText()).includes(day.title) && (await card.innerText()).includes('Ждёт расследования'), `${day.date}: дело дня — «${day.title}»`);
+    const sectionText = await page.locator('.daily-section').innerText();
+    assert(NEW_DAYS.filter((x) => x.date > day.date).every((x) => !sectionText.includes(x.title)), `${day.date}: следующие дни не видны`);
+    assert((await page.locator('.daily-card.past').count()) === 2, `${day.date}: в архиве два последних прошлых дня`);
+
+    // Начатое переживает перезагрузку.
+    await card.click();
+    await closeOnboarding(page);
+    await page.waitForSelector('.case');
+    assert((await page.locator('.case .topbar .title').innerText()).includes(day.title), `${day.date}: открыто «${day.title}»`);
+    assert((await page.locator('.case-intro').innerText()).includes(day.question), `${day.date}: условия с вопросом «${day.question}»`);
+    assert((await page.locator('.clues .clue').count()) === day.clues, `${day.date}: ${day.clues} фактов`);
+    assert((await page.locator('.grid-block').count()) === day.grids, `${day.date}: таблиц ${day.grids}`);
+    await clickYes(page, day.yes[0][0], day.yes[0][1]);
+    await page.locator('.case .topbar .btn').click();
+    await page.reload({ waitUntil: 'load' });
+    await page.waitForSelector('.case-list');
+    assert((await page.locator('.daily-card:not(.past)').innerText()).includes('Начато'), `${day.date}: после перезагрузки — «Начато»`);
+    await page.locator('.daily-card:not(.past)').click();
+    await page.waitForSelector('.case');
+    assert((await page.locator(`button[aria-label="${day.yes[0][0]} — ${day.yes[0][1]}"].yes, button[aria-label="${day.yes[0][1]} — ${day.yes[0][0]}"].yes`).count()) === 1, `${day.date}: отметка на месте`);
+
+    // Подсказка (если нужна) — и раскрытие.
+    for (let i = 0; i < day.hints; i += 1) await page.locator('.hint-btn').click();
+    await solveYes(page, day.yes);
+    assert((await page.locator('.reveal-text').innerText()).includes(day.epilogue), `${day.date}: развязка называет ответ`);
+    assert((await page.locator('.stars-reward').innerText()).includes(`${'⭐'.repeat(stars)} Дело дня раскрыто`), `${day.date}: ${stars} звезды${day.hints ? ' (одна подсказка)' : ' (без подсказок)'}`);
+    await page.getByRole('button', { name: 'Вернуться на участок' }).click();
+    assert((await page.locator('.daily-card:not(.past)').innerText()).includes(`Раскрыто · ${'⭐'.repeat(stars)}`), `${day.date}: карточка — «Раскрыто» со звёздами`);
+    let saved = await saveOf(page);
+    assert(saved.data.dailySolved?.[`daily-${{ 'Ящики с рассадой': 'seedlings', 'Чай на веранде': 'tea', 'Дачный концерт': 'concert', 'Грибной поход': 'mushrooms' }[day.title]}`]?.date === day.date, `${day.date}: раскрытие записано с датой расписания`);
+    assert(saved.data.casesCompleted.length === 0 && Object.keys(saved.data.stars).length === 0 && saved.data.achievements.length === 0, `${day.date}: дела участка, звёзды и достижения не тронуты`);
+    assert(!Object.keys(saved.data.progress).some((k) => k.startsWith('daily-')), `${day.date}: незаконченный прогресс удалён`);
+
+    // Восстановление результата: после перезагрузки дело по-прежнему раскрыто, звёзды те же.
+    await page.reload({ waitUntil: 'load' });
+    await page.waitForSelector('.case-list');
+    assert((await page.locator('.daily-card:not(.past)').innerText()).includes(`Раскрыто · ${'⭐'.repeat(stars)}`), `${day.date}: после перезагрузки результат на месте`);
+    saved = await saveOf(page);
+    assert(saved.data.dailySolved && Object.keys(saved.data.dailySolved).length === 1, `${day.date}: в сохранении одно раскрытое дело дня`);
+    assert(page.errors.length === 0, 'без ошибок: ' + page.errors.join('; '));
+    await context.close();
+  }
+  {
+    // 28 октября: расписание кончилось; архив полный, будущих нет; пропущенное дело раскрывается задним числом.
+    const { context, page } = await open(browser, { at: msk('2026-10-28T12:00:00') });
+    assert((await page.locator('.daily-empty').innerText()).includes('Новых дел дня пока нет'), '28 октября: «Новых дел дня пока нет»');
+    assert((await page.locator('.daily-card:not(.past)').count()) === 0, '28 октября: старое дело не выдаётся как дело дня');
+    let past = await page.locator('.daily-card.past').allInnerTexts();
+    assert(past.length === 2 && past[0].includes('27 октября · Грибной поход') && past[1].includes('26 октября · Дачный концерт'), 'видны два последних дня: 27 и 26 октября');
+    await page.getByRole('button', { name: 'Ещё 12 прошлых' }).click();
+    past = await page.locator('.daily-card.past').allInnerTexts();
+    assert(past.length === 14 && past[0].includes('27 октября') && past[13].includes('14 октября · Где очки?'), 'по кнопке — все четырнадцать, от новых к старым');
+    assert(!(await page.locator('.daily-section').innerText()).match(/пропущ|штраф|серия/i), 'никаких упрёков за пропуск');
+    await page.locator('.daily-card.past', { hasText: 'Ящики с рассадой' }).click();
+    await closeOnboarding(page);
+    await page.waitForSelector('.case');
+    await solveYes(page, NEW_DAYS[0].yes);
+    assert((await page.locator('.stars-reward').innerText()).includes('⭐⭐⭐ Дело дня раскрыто'), 'пропущенное дело 24 октября раскрыто задним числом');
+    await page.getByRole('button', { name: 'Вернуться на участок' }).click();
+    const saved = await saveOf(page);
+    assert(saved.data.dailySolved['daily-seedlings'].date === '2026-10-24' && saved.data.dailySolved['daily-seedlings'].stars === 3, 'запись с датой дела и тремя звёздами');
+    assert(saved.data.casesCompleted.length === 0 && Object.keys(saved.data.stars).length === 0, 'дела участка и звёзды участка не тронуты');
+    assert(page.errors.length === 0, 'без ошибок: ' + page.errors.join('; '));
+    await context.close();
+  }
+  for (const viewport of [
+    { width: 360, height: 640 },
+    { width: 390, height: 844 },
+    { width: 1000, height: 700 },
+  ]) {
+    const size = `${viewport.width}×${viewport.height}`;
+    for (const day of NEW_DAYS) {
+      const { context, page } = await open(browser, { at: msk(`${day.date}T12:00:00`), viewport });
+      await page.locator('.daily-card:not(.past)').click();
+      await closeOnboarding(page);
+      await page.waitForSelector('.case');
+      const fits = await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1
+        && [...document.querySelectorAll('.grid-block')].every((g) => g.getBoundingClientRect().right <= window.innerWidth + 1));
+      assert(fits, `${size}: «${day.title}» — таблицы и текст по ширине окна`);
+      const issues = await page.evaluate(() => {
+        const out = [];
+        const rect = (sel) => document.querySelector(sel)?.getBoundingClientRect() ?? null;
+        const intro = rect('.case-intro');
+        const clues = rect('.clues');
+        const grids = rect('.grids-stack');
+        if (intro && clues && intro.bottom > clues.top + 1) out.push('условия наезжают на факты');
+        if (clues && grids && clues.bottom > grids.top + 1) out.push('факты наезжают на таблицы');
+        return out;
+      });
+      assert(issues.length === 0, `${size}: «${day.title}» — условия, факты и таблицы без наложений` + (issues.length ? ': ' + issues.join('; ') : ''));
+      if (process.env.SHOT_DIR) await page.screenshot({ path: `${process.env.SHOT_DIR}/daily-${day.date}-${size}.png` });
+      assert(page.errors.length === 0, 'без ошибок: ' + page.errors.join('; '));
+      await context.close();
+    }
   }
 
   await browser.close();
