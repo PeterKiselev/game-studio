@@ -19,7 +19,7 @@ const files = (await walk(root)).filter(file => !except || !relative(root, file)
 if (!files.length) throw new Error('Empty baseline');
 const failures = [];
 let cursor = 0;
-const hash = bytes => createHash('sha256').update(bytes).digest('hex');
+const hash = bytes => createHash('sha256').update(Buffer.from(bytes)).digest('hex');
 await Promise.all(Array.from({ length: 4 }, async () => {
   while (cursor < files.length) {
     const file = files[cursor++];
