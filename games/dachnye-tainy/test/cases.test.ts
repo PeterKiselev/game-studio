@@ -660,11 +660,12 @@ describe('глава 1, дело 3 «Свет над прудом»', () => {
     });
   });
 
-  it('глава: дело 3 открывается после дела 2, стоит девятым и последнее в главе', () => {
+  it('глава: дело 3 открывается после дела 2, стоит девятым и последнее в главе 1; за ним — глава 2', () => {
     expect(cases[8].id).toBe('ch1-pond');
     expect(CASE_REQUIRES['ch1-pond']).toBe('ch1-key');
-    expect(nextChapterCase('ch1-pond')).toBeUndefined();
-    expect(cases.filter((c) => c.verdict).map((c) => c.id)).toEqual(['ch1-pond']);
+    // Находка «Пруда» (лодка у берега) продолжается делом «Чья лодка».
+    expect(nextChapterCase('ch1-pond')?.id).toBe('ch2-boat');
+    expect(cases.filter((c) => c.verdict).map((c) => c.id)).toEqual(['ch1-pond', 'ch2-cleanup']);
   });
 });
 

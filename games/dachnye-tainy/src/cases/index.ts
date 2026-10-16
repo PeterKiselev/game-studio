@@ -7,6 +7,9 @@ import { sixthCase } from './sixth';
 import { chapter1HoseCase } from './chapter1-hose';
 import { chapter1KeyCase } from './chapter1-key';
 import { chapter1PondCase } from './chapter1-pond';
+import { chapter2BoatCase } from './chapter2-boat';
+import { chapter2CartCase } from './chapter2-cart';
+import { chapter2CleanupCase } from './chapter2-cleanup';
 import type { Case } from '@studio/rules';
 import type { ValueRenames } from '../progress';
 
@@ -34,6 +37,9 @@ export const cases: Case[] = [
   chapter1HoseCase,
   chapter1KeyCase,
   chapter1PondCase,
+  chapter2BoatCase,
+  chapter2CartCase,
+  chapter2CleanupCase,
 ];
 
 /**
@@ -44,6 +50,10 @@ export const cases: Case[] = [
 export const CASE_REQUIRES: Readonly<Record<string, string>> = {
   'ch1-key': 'ch1-hose',
   'ch1-pond': 'ch1-key',
+  // Глава 2 «Чужая лодка» продолжает находку «Пруда»: лодку у берега.
+  'ch2-boat': 'ch1-pond',
+  'ch2-cart': 'ch2-boat',
+  'ch2-cleanup': 'ch2-cart',
 };
 
 /**
@@ -64,4 +74,17 @@ export function nextChapterCase(id: string): Case | undefined {
   return cases.find((c) => c.id === nextId);
 }
 
-export { tutorialCase, secondCase, thirdCase, fourthCase, fifthCase, sixthCase, chapter1HoseCase, chapter1KeyCase, chapter1PondCase };
+export {
+  tutorialCase,
+  secondCase,
+  thirdCase,
+  fourthCase,
+  fifthCase,
+  sixthCase,
+  chapter1HoseCase,
+  chapter1KeyCase,
+  chapter1PondCase,
+  chapter2BoatCase,
+  chapter2CartCase,
+  chapter2CleanupCase,
+};

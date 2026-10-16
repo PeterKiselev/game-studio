@@ -100,7 +100,7 @@ const V3_OLD = {
     assert((await card.count()) === 1 && (await card.innerText()).includes('Где очки?'), 'дело 14 октября — «Где очки?»');
     assert((await card.innerText()).includes('Ждёт расследования'), 'статус — ждёт расследования');
     assert((await page.locator('.daily-card.past').count()) === 0, 'прошлых дел дня ещё нет');
-    assert((await page.locator('.case-card').count()) === 9, 'дела участка и главы на месте: 9');
+    assert((await page.locator('.case-card').count()) === 12, 'дела участка и глав на месте: 12');
     const order = await page.evaluate(() => {
       const d = document.querySelector('.daily-section').getBoundingClientRect().top;
       const c = document.querySelector('.case-list').getBoundingClientRect().top;

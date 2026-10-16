@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { uniqueSolution } from '@studio/rules';
 import type { Case } from '@studio/rules';
 import { DAILY_SCHEDULE } from '../src/daily/schedule';
-import { nameRegExp, valueRegExp } from './helpers';
+import { clausesOf, nameRegExp, valueRegExp } from './helpers';
 
 /**
  * Решения дел дня закреплены явно: «имя → значения остальных категорий, в порядке категорий
@@ -71,21 +71,6 @@ const solutionOf = (c: Case): Record<string, string[]> => {
   const others = c.categories.filter((x) => x.id !== c.anchor);
   return Object.fromEntries(anchor.values.map((name, i) => [name, others.map((cat) => cat.values[solution[cat.id][i]])]));
 };
-
-/**
- * Предложения и части между запятыми; часть без имени («в 11:00», «и на болоте набрал лисичек»)
- * продолжает предыдущую, поэтому значение всегда читается рядом со своим человеком.
- */
-function clausesOf(text: string, names: string[]): { text: string; who: string[] }[] {
-  const raw = text.split(/[.!?;]\s*|,\s*/).filter((x) => x.trim());
-  const out: { text: string; who: string[] }[] = [];
-  for (const part of raw) {
-    const who = names.filter((n) => nameRegExp(n).test(part.toLowerCase()));
-    if (!who.length && out.length) out[out.length - 1].text += ', ' + part;
-    else out.push({ text: part, who });
-  }
-  return out;
-}
 
 const dailies = DAILY_SCHEDULE.map((e) => e.case);
 

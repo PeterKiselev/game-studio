@@ -329,7 +329,7 @@ const PIE = [['Ирина', 'грядка'], ['Михаил', 'беседка'],
     const context = await browser.newContext();
     const page = await newPage(context, { at: msk('2026-10-14T10:00:00'), save: keyDone });
     await open(page, STATS);
-    await page.getByRole('button', { name: /Свет над прудом/ }).click();
+    await page.getByRole('button', { name: /Глава 1. Свет над прудом/ }).click();
     await skipIntro(page); // у дела 3 есть книжка вступления
     await page.waitForSelector('.case');
     for (const [a, b] of POND) await clickYes(page, a, b);
@@ -339,7 +339,7 @@ const PIE = [['Ирина', 'грядка'], ['Михаил', 'беседка'],
     // Перезагрузка посреди шага: отброшенная версия сохранена.
     await page.reload({ waitUntil: 'load' });
     await page.waitForSelector('.case-list');
-    await page.getByRole('button', { name: /Свет над прудом/ }).click();
+    await page.getByRole('button', { name: /Глава 1. Свет над прудом/ }).click();
     await page.waitForSelector('.step');
     assert(await page.locator('.step-options.versions .btn', { hasText: 'Зоя' }).isDisabled(), 'после перезагрузки версия про Зою отброшена');
     await page.locator('.step-options.versions .btn', { hasText: 'Геннадий Ильич' }).click();

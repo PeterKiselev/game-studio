@@ -158,7 +158,7 @@ async function geometry(page, pairs) {
     };
     const { context, page } = await openWithSave(browser, v3);
     const cards = page.locator('.case-card');
-    assert((await cards.count()) === 9, 'на участке девять дел');
+    assert((await cards.count()) === 12, 'на участке двенадцать дел');
     for (let i = 0; i < 6; i += 1) {
       assert((await cards.nth(i).innerText()).includes('Раскрыто'), `прежнее дело ${i + 1} осталось раскрытым`);
     }
@@ -181,7 +181,7 @@ async function geometry(page, pairs) {
     };
     const { context, page } = await openWithSave(browser, v1);
     const cards = page.locator('.case-card');
-    assert((await cards.count()) === 9, 'девять дел после миграции v1');
+    assert((await cards.count()) === 12, 'двенадцать дел после миграции v1');
     assert((await cards.nth(1).innerText()).includes('Раскрыто'), 'раскрытые в v1 дела остались раскрытыми');
     assert(page.errors.length === 0, 'без ошибок: ' + page.errors.join('; '));
     await context.close();
@@ -902,7 +902,7 @@ async function geometry(page, pairs) {
     ['Геннадий Ильич', '1:00'], ['Зоя', '0:00'], ['Игорь', '2:00'], ['Настя', '23:00'], ['Рома', '3:00'],
     ['Геннадий Ильич', 'кадр Насти'], ['Зоя', 'лай собаки'], ['Игорь', 'свет фонарика'], ['Настя', 'скрип калитки'], ['Рома', 'следы сапог'],
   ];
-  const POND_TITLE = /Свет над прудом/;
+  const POND_TITLE = /Глава 1. Свет над прудом/;
   const KEY_DONE = JSON.parse(JSON.stringify(HOSE_DONE));
   KEY_DONE.data.casesCompleted = ['ch1-hose', 'ch1-key'];
   KEY_DONE.data.stars = { 'ch1-hose': 3, 'ch1-key': 2 };
@@ -976,8 +976,8 @@ async function geometry(page, pairs) {
     assert(reveal.startsWith('Доказано про прошлую ночь') && reveal.indexOf('доказательств нет') < reveal.indexOf('признаётся') && reveal.includes('позапрошлой ночью'), 'развязка: доказанное про прошлую ночь отдельно от признания о двух предыдущих');
     assert(reveal.includes('Зою больше никто не подозревает'), 'развязка снимает подозрения с Зои');
     const finding = await page.locator('.finding').innerText();
-    assert(finding.includes('лодку') && finding.includes('Продолжение следует'), 'крючок на следующую главу');
-    assert((await page.locator('.next-case').count()) === 0, 'дела после 3 нет — кнопки «Следующее дело» нет');
+    assert(finding.includes('лодку') && finding.includes('Дальше — дело «Чья лодка»'), 'находка ведёт в главу 2');
+    assert((await page.locator('.next-case').count()) === 1, 'после «Пруда» есть кнопка «Следующее дело» — «Чья лодка» (сценарий 16)');
     saved = await saveOf(page);
     assert(saved.data.casesCompleted.includes('ch1-pond') && !saved.data.progress['ch1-pond'], 'дело 3 раскрыто, незаконченный шаг удалён');
     assert(saved.data.stars['ch1-pond'] === 2, 'звёзды по подсказкам таблиц (одна подсказка → 2)');
@@ -1415,6 +1415,214 @@ async function geometry(page, pairs) {
       ]);
       assert(caseIssues.length === 0, `${size}: условия, факты и таблицы (${b.slug}) без наложений` + (caseIssues.length ? ': ' + caseIssues.join('; ') : ''));
       if (process.env.SHOT_DIR) await page.screenshot({ path: `${process.env.SHOT_DIR}/${b.slug}-case-${size}.png` });
+      assert(page.errors.length === 0, 'без ошибок: ' + page.errors.join('; '));
+      await context.close();
+    }
+  }
+
+  console.log('\n=== 16. Глава 2 «Чужая лодка»: замки, три дела подряд, версия, перезагрузки, чужие данные целы, телефон ===');
+  const BOAT_YES = [
+    ['Вера', 'зелёная'], ['Лида', 'синяя'], ['Игорь', 'красная'], ['Матвей', 'серая'],
+    ['Вера', 'белая заплата'], ['Лида', 'резная корма'], ['Игорь', 'вмятина на носу'], ['Матвей', 'ржавая уключина'],
+  ];
+  const CART_YES = [
+    ['Матвей', '5:00'], ['Игорь', '5:30'], ['Зоя', '6:00'], ['Рома', '6:30'],
+    ['Игорь', 'ручная тележка'], ['Зоя', 'садовая тачка'], ['Рома', 'велосипед'], ['Матвей', 'мотоблок'],
+  ];
+  const CLEAN_YES = [
+    ['Лида', 'уборка ряски'], ['Зоя', 'ремонт скамьи'], ['Рома', 'сбор веток'], ['Настя', 'покраска калитки'],
+    ['Лида', 'ромашка'], ['Зоя', 'ёлочка'], ['Рома', 'звезда'], ['Настя', 'солнце'],
+  ];
+  const T_BOAT = /Глава 2\. Чья лодка/;
+  const T_CART = /Глава 2\. По сухой дорожке/;
+  const T_CLEAN = /Глава 2\. Сюрприз для соседей/;
+  // Игрок, раскрывший первую главу: покупка, звёзды и чужой незаконченный прогресс — чтобы проверить, что они целы.
+  const chapterSave = (done) => {
+    const save = JSON.parse(JSON.stringify(HOSE_DONE));
+    save.data.casesCompleted = ['ch1-hose', 'ch1-key', 'ch1-pond', ...done];
+    save.data.stars = { 'ch1-hose': 3, 'ch1-key': 2, 'ch1-pond': 2, ...Object.fromEntries(done.map((id) => [id, 3])) };
+    save.data.storySeen = ['ch1-hose', 'ch1-key', 'ch1-pond'];
+    save.data.purchases = { noAds: true };
+    save.data.progress = { 'fifth-1': { marks: { 'персонажи|Настя~покупки|мёд': 'no' }, hintsUsed: 1 } };
+    return save;
+  };
+  {
+    // Замки: без раскрытого «Пруда» все три заперты и называют, что открыть сначала; с ним открыто только первое.
+    const keyDone = JSON.parse(JSON.stringify(HOSE_DONE));
+    keyDone.data.casesCompleted = ['ch1-hose', 'ch1-key'];
+    const { context, page } = await openWithSave(browser, keyDone);
+    assert((await page.locator('.case-card').count()) === 12, 'на участке двенадцать дел');
+    for (const [title, needs] of [[T_BOAT, 'Свет над прудом'], [T_CART, 'Чья лодка'], [T_CLEAN, 'По сухой дорожке']]) {
+      const card = page.getByRole('button', { name: title });
+      assert((await card.isDisabled()) && (await card.innerText()).includes(`Сначала раскройте «${needs}»`), `${title}: заперто до «${needs}»`);
+    }
+    await context.close();
+  }
+  {
+    const { context, page } = await openWithSave(browser, chapterSave([]));
+    assert(!(await page.getByRole('button', { name: T_BOAT }).isDisabled()), 'после «Пруда» «Чья лодка» открыто');
+    assert(await page.getByRole('button', { name: T_CART }).isDisabled() && await page.getByRole('button', { name: T_CLEAN }).isDisabled(), 'два следующих всё ещё заперты');
+    await context.close();
+  }
+  {
+    // Три дела подряд по кнопкам «Следующее дело».
+    const { context, page } = await openWithSave(browser, chapterSave([]));
+    const before = await saveOf(page);
+    await page.getByRole('button', { name: T_BOAT }).click();
+    await page.waitForSelector('.case');
+    assert((await page.locator('.story').count()) === 0, 'у дел главы 2 пока нет книжки вступления (иллюстрации — следующий этап)');
+    assert((await page.locator('.case .topbar .title').innerText()).includes('Чья лодка'), 'открыто «Чья лодка»');
+    const boatIntro = await page.locator('.case-intro').innerText();
+    assert(boatIntro.includes('лодку, которой вчера там не было') && boatIntro.includes('зелёную, с белой заплатой') && boatIntro.includes('Чья это лодка?'), 'условия: найденная лодка по признакам, вопрос — чья');
+    assert(!/Вера[^.]*зелён|зелён[^.]*Вера/.test(await page.locator('.clues').innerText()), 'ни одна улика не называет Веру владелицей прямо');
+    assert((await page.locator('.clues .clue').count()) === 7 && (await page.locator('.grid-block').count()) === 3, 'семь фактов и три таблицы');
+    await solve(page, BOAT_YES);
+    assert((await page.locator('.reveal-text').innerText()).startsWith('Вера узнаёт свою лодку'), 'развязка: Вера узнаёт свою лодку');
+    let finding = await page.locator('.finding').innerText();
+    assert(finding.includes('бирка № 3') && finding.includes('вместо неё значок') && !finding.includes('Лид'), 'находка: бирка тележки, значок вместо подписи, организатор не назван');
+    assert(finding.includes('Дальше — дело «По сухой дорожке»'), 'находка ведёт к делу 2');
+    await page.locator('.next-case').click();
+    await page.waitForSelector('.case');
+
+    assert((await page.locator('.case .topbar .title').innerText()).includes('По сухой дорожке'), 'кнопка открывает дело 2');
+    const cartIntro = await page.locator('.case-intro').innerText();
+    assert(cartIntro.includes('в 7:00 утра') && cartIntro.includes('не момент, когда лодку увидели') && cartIntro.includes('Кто ездил на ручной тележке?'), 'условия дела 2: время осмотра отдельно от начала поездок');
+    assert(!/лодк/i.test(await page.locator('.clues').innerText()), 'таблицы не утверждают, что на тележке везли лодку');
+    assert((await page.locator('.clues .clue').count()) === 8, 'восемь фактов');
+    // Незаконченное переживает уход и перезагрузку.
+    await clickYes(page, 'Матвей', '5:00');
+    await page.locator('.case .topbar .btn').click();
+    await page.reload({ waitUntil: 'networkidle' });
+    await page.waitForSelector('.case-list');
+    await page.getByRole('button', { name: T_CART }).click();
+    await page.waitForSelector('.case');
+    assert((await page.locator('button[aria-label="Матвей — 5:00"].yes, button[aria-label="5:00 — Матвей"].yes').count()) === 1, 'после перезагрузки отметка дела 2 на месте');
+    await solve(page, CART_YES);
+    finding = await page.locator('.finding').innerText();
+    assert(finding.includes('журнале выдачи') && finding.includes('выдана Игорю в 5:30') && finding.includes('значок-ромашка') && !finding.includes('Лид'), 'находка дела 2: журнал выдачи с тем же временем, значок-ромашка, просивший не назван');
+    assert((await page.locator('.reveal-text').innerText()).includes('но не что на ней везли'), 'развязка не приписывает таблицам груз');
+    assert(finding.includes('Дальше — дело «Сюрприз для соседей»'), 'находка ведёт к делу 3');
+    await page.locator('.next-case').click();
+    await page.waitForSelector('.case');
+
+    assert((await page.locator('.case .topbar .title').innerText()).includes('Сюрприз для соседей'), 'кнопка открывает дело 3');
+    const cleanIntro = await page.locator('.case-intro').innerText();
+    assert(cleanIntro.includes('значком-ромашкой вместо подписи') && cleanIntro.includes('Чей значок-ромашка?'), 'условия дела 3');
+    const clueTexts = await page.locator('.clues .clue').allInnerTexts();
+    assert(clueTexts.filter((t) => /ромашк/.test(t)).every((t) => / не /.test(t)), 'ни одна улика не называет владельца значка: ромашка встречается только с «не»');
+    assert((await page.locator('.clues .clue').count()) === 7, 'семь фактов');
+    await solve(page, CLEAN_YES, '.step');
+    assert((await page.locator('.reveal').count()) === 0, 'решённые таблицы ещё не раскрывают дело — впереди выбор версии');
+    assert((await page.locator('.step-question').innerText()).includes('Кто организовал перевозку лодки и зачем?'), 'вопрос шага');
+    const evidence = await page.locator('.evidence').innerText();
+    assert(evidence.includes('сачка для ряски') && evidence.includes('пруд председателя') && evidence.includes('не предупреждали') && !evidence.includes('Лид'), 'факты шага: заявка на сачки, место работ, председатель не знал; организатор не назван');
+    const summary = await page.locator('.step .case-file-row:not(.case-file-head)').allInnerTexts();
+    assert(summary.some((r) => /Лида[\s\S]*уборка ряски[\s\S]*ромашка/.test(r)), 'на шаге виден итог таблиц: ромашка у Лиды');
+    const versions = page.locator('.step-options.versions .btn');
+    assert((await versions.count()) === 3, 'три версии');
+
+    // Неверная версия с клавиатуры; перезагрузка посреди шага; снова неверная; верная.
+    await versions.filter({ hasText: 'Рома' }).focus();
+    await page.keyboard.press('Enter');
+    let fb = await page.locator('.step-feedback').innerText();
+    assert(fb.startsWith('Не сходится') && fb.includes('Рома — значок на листах: звезда') && fb.includes('сачки для ряски, а не удочки'), 'версия про Рому опровергнута значком и заявкой: ' + fb);
+    assert(await versions.filter({ hasText: 'Рома' }).isDisabled(), 'отброшенная версия погашена');
+    let saved = await saveOf(page);
+    assert(saved.data.progress['ch2-cleanup']?.gridSolved === true && JSON.stringify(saved.data.progress['ch2-cleanup'].wrongChoices) === '["Рома"]', 'в сохранении: таблицы решены, версия про Рому отброшена');
+    assert(!saved.data.casesCompleted.includes('ch2-cleanup'), 'дело ещё не раскрыто');
+    await page.locator('.step .topbar .btn').click();
+    await page.reload({ waitUntil: 'networkidle' });
+    await page.waitForSelector('.case-list');
+    assert((await page.getByRole('button', { name: T_CLEAN }).innerText()).includes('осталось выбрать версию'), 'карточка: осталось выбрать версию');
+    await page.getByRole('button', { name: T_CLEAN }).click();
+    await page.waitForSelector('.step');
+    assert((await page.locator('.grid-block').count()) === 0, 'возврат сразу на выбор версии, таблицы заново не нужны');
+    assert(await versions.filter({ hasText: 'Рома' }).isDisabled(), 'после перезагрузки версия про Рому всё ещё отброшена');
+    await versions.filter({ hasText: 'Настя' }).click();
+    fb = await page.locator('.step-feedback').innerText();
+    assert(fb.includes('Настя — значок на листах: солнце') && fb.includes('работа на воде, а не съёмка'), 'версия про Настю опровергнута: ' + fb);
+    await versions.filter({ hasText: 'Лида' }).click();
+    const ok = await page.locator('.step-feedback.correct').innerText();
+    assert(ok.startsWith('Верно') && ok.includes('значок Лиды') && ok.includes('уборку ряски'), 'верная версия: значок → человек → цель');
+    await page.getByRole('button', { name: 'К развязке' }).click();
+    await page.waitForSelector('.reveal');
+    const reveal = await page.locator('.reveal-text').innerText();
+    assert(reveal.includes('не разрешение хозяина пруда') && reveal.includes('Никто ничего не украл'), 'развязка: разрешения владельца пруда не было, это признано; не кража');
+    assert((await page.locator('.finding').count()) === 0, 'в финале главы нет новой находки и обещания продолжения');
+    assert((await page.locator('.next-case').count()) === 0, 'после дела 3 главы 2 кнопки «Следующее дело» нет');
+    saved = await saveOf(page);
+    assert(['ch2-boat', 'ch2-cart', 'ch2-cleanup'].every((id) => saved.data.casesCompleted.includes(id) && saved.data.stars[id] === 3 && !saved.data.progress[id]), 'три дела раскрыты, звёзды записаны, незаконченное удалено');
+    assert(JSON.stringify(saved.data.progress['fifth-1']) === JSON.stringify(before.data.progress['fifth-1']), 'чужой незаконченный прогресс не тронут');
+    assert(saved.data.purchases.noAds === true && ['ch1-hose', 'ch1-key', 'ch1-pond'].every((id) => saved.data.stars[id] === before.data.stars[id]), 'покупка и звёзды первой главы на месте');
+    assert(before.data.casesCompleted.every((id) => saved.data.casesCompleted.includes(id)), 'раскрытые прежде дела на месте');
+    assert(page.errors.length === 0, 'без ошибок: ' + page.errors.join('; '));
+    await context.close();
+  }
+  {
+    // Находка «Пруда» ведёт в главу 2 кнопкой на развязке; первое дело раскрыто и открывается как обычное дело повторно.
+    const keyDone = JSON.parse(JSON.stringify(HOSE_DONE));
+    keyDone.data.casesCompleted = ['ch1-hose', 'ch1-key'];
+    keyDone.data.stars = { 'ch1-hose': 3, 'ch1-key': 2 };
+    keyDone.data.storySeen = ['ch1-hose', 'ch1-key', 'ch1-pond'];
+    const { context, page } = await openWithSave(browser, keyDone);
+    await page.getByRole('button', { name: POND_TITLE }).click();
+    await page.waitForSelector('.case');
+    await solve(page, POND_YES, '.step');
+    await page.locator('.step-options.versions .btn').filter({ hasText: 'Геннадий Ильич' }).click();
+    await page.getByRole('button', { name: 'К развязке' }).click();
+    await page.waitForSelector('.reveal');
+    const finding = await page.locator('.finding').innerText();
+    assert(finding.includes('лодку') && finding.includes('Дальше — дело «Чья лодка»') && !finding.includes('Продолжение следует'), 'находка «Пруда» ведёт к «Чья лодка»');
+    await page.locator('.next-case').click();
+    await page.waitForSelector('.case');
+    assert((await page.locator('.case .topbar .title').innerText()).includes('Чья лодка'), 'кнопка на развязке «Пруда» открывает «Чья лодка»');
+    assert(page.errors.length === 0, 'без ошибок: ' + page.errors.join('; '));
+    await context.close();
+  }
+  for (const viewport of [
+    { width: 360, height: 640 },
+    { width: 390, height: 844 },
+    { width: 1000, height: 700 },
+  ]) {
+    const size = `${viewport.width}×${viewport.height}`;
+    for (const [slug, title, done, yes] of [
+      ['boat', T_BOAT, [], BOAT_YES],
+      ['cart', T_CART, ['ch2-boat'], CART_YES],
+      ['cleanup', T_CLEAN, ['ch2-boat', 'ch2-cart'], CLEAN_YES],
+    ]) {
+      const { context, page } = await openWithSave(browser, chapterSave(done), viewport);
+      const listIssues = await geometry(page, []);
+      assert(listIssues.length === 0, `${size}: участок с двенадцатью делами без прокрутки вбок`);
+      const cardsBad = await page.evaluate(() => [...document.querySelectorAll('.case-card')].filter((c) => c.getBoundingClientRect().height < 44 || c.getBoundingClientRect().right > window.innerWidth + 1).length);
+      assert(cardsBad === 0, `${size}: карточки ниже 44px и шире окна — ${cardsBad}`);
+      await page.getByRole('button', { name: title }).click();
+      await page.waitForSelector('.case');
+      const caseIssues = await geometry(page, [
+        ['.case-intro', '.clues'],
+        ['.clues', '.grids-stack'],
+      ]);
+      assert(caseIssues.length === 0, `${size}: «${slug}» — условия, факты и таблицы без наложений` + (caseIssues.length ? ': ' + caseIssues.join('; ') : ''));
+      const fits = await page.evaluate(() => [...document.querySelectorAll('.grid-block')].every((g) => g.getBoundingClientRect().right <= window.innerWidth + 1));
+      assert(fits, `${size}: «${slug}» — таблицы по ширине окна`);
+      if (process.env.SHOT_DIR) await page.screenshot({ path: `${process.env.SHOT_DIR}/ch2-${slug}-case-${size}.png` });
+      if (slug === 'cleanup') {
+        await solve(page, yes, '.step');
+        await page.locator('.step-options.versions .btn').filter({ hasText: 'Рома' }).click();
+        const stepIssues = await geometry(page, [
+          ['.step .case-file', '.evidence'],
+          ['.evidence', '.step-question'],
+          ['.step-options', '.step-feedback'],
+        ]);
+        assert(stepIssues.length === 0, `${size}: выбор версии без наложений` + (stepIssues.length ? ': ' + stepIssues.join('; ') : ''));
+        const heights = await page.locator('.step-options.versions .btn').evaluateAll((ns) => ns.map((n) => n.getBoundingClientRect().height));
+        assert(heights.every((h) => h >= 44), `${size}: версии не ниже 44px`);
+        if (process.env.SHOT_DIR) await page.screenshot({ path: `${process.env.SHOT_DIR}/ch2-cleanup-step-${size}.png`, fullPage: true });
+      } else {
+        await solve(page, yes);
+        const revealIssues = await geometry(page, [['.reveal-text', '.finding']]);
+        assert(revealIssues.length === 0, `${size}: «${slug}» — развязка и находка без наложений` + (revealIssues.length ? ': ' + revealIssues.join('; ') : ''));
+        if (process.env.SHOT_DIR) await page.screenshot({ path: `${process.env.SHOT_DIR}/ch2-${slug}-reveal-${size}.png`, fullPage: true });
+      }
       assert(page.errors.length === 0, 'без ошибок: ' + page.errors.join('; '));
       await context.close();
     }
