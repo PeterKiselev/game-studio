@@ -1,89 +1,48 @@
-name: Deploy to GitHub Pages
-
-# Один сайт отдаёт сборки нескольких игр сразу:
-#   /                     — гомоку, веб-версия (для itch.io и прямых ссылок)
-#   /vk/                  — гомоку под VK Mini Apps
-#   /yandex/              — гомоку под Яндекс Игры
-#   /dachnye-tainy/       — «Дачные тайны», веб-версия для плейтеста
-#   /dachnye-tainy/vk/    — «Дачные тайны» под VK Mini Apps (тот же адрес
-#                           вписывается в форму «Размещение» в dev.vk.ru)
-#   /pograniche/           — «Пограничье», веб-версия вертикального среза
-#   /sudoku/               — «Академия Sudoku», веб-версия для плейтеста
-#   /sudoku/vk/            — «Академия Sudoku» под VK Mini Apps
-# Гомоку занимает корень, потому что его адрес уже вписан в формы VK
-# и Яндекса — переносить рискованно без пользы. Следующие игры получают
-# свой путь по имени, а не делят корень с первой.
-# Адрес постоянный, менять его в консолях площадок больше не придётся.
-
+name: Isolated Dachnye content release October 16
 on:
-  push:
-    branches: [master, main]
   workflow_dispatch:
-
 permissions:
   contents: read
+  actions: read
   pages: write
   id-token: write
-
 concurrency:
   group: pages
-  cancel-in-progress: true
-
+  cancel-in-progress: false
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
-          cache: npm
-
-      - run: npm ci
-
-      # Правила игр обязаны быть зелёными до любого деплоя
-      - run: npm test
-
-      - run: npm run typecheck
-
-      - run: npm run build:all
-
-      - run: npm run build -w @studio/dachnye-tainy
-      - name: Build Dachnye Tainy VK and OK client
-        run: npm run build:dachnye-tainy:vk
-        env:
-          VITE_OK_PAYMENTS: '1'
-          VITE_OK_PAYMENTS_URL: https://dachnye-tainy-payments-ok.kiselevpetr3.workers.dev
-          VITE_TEST_MARKER: ''
-          VITE_RESTORE_DIAG: '0'
-          VITE_LOCAL_STATS: '0'
-
-      - run: npm run build:pograniche:web
-      - run: npm run build:sudoku:web
-      - run: npm run build:sudoku:vk
-
-      - name: Собрать сайт из сборок игр
+          node-version: 22
+      - uses: actions/download-artifact@v4
+        with:
+          name: github-pages
+          run-id: 38728184051
+          github-token: ${{ github.token }}
+          path: previous-artifact
+      - name: Restore exact currently published site
         run: |
-          mkdir -p site/vk site/yandex site/dachnye-tainy site/dachnye-tainy/vk site/pograniche site/sudoku site/sudoku/vk
-          cp -r games/gomoku/dist/web/. site/
-          cp -r games/gomoku/dist/vk/. site/vk/
-          cp -r games/gomoku/dist/yandex/. site/yandex/
-          cp -r games/dachnye-tainy/dist/web/. site/dachnye-tainy/
-          cp -r games/dachnye-tainy/dist/vk/. site/dachnye-tainy/vk/
-          cp -r games/pograniche/dist/web/. site/pograniche/
-          cp -r games/sudoku/dist/web/. site/sudoku/
-          cp -r games/sudoku/dist/vk/. site/sudoku/vk/
-          # Правовые документы, иконки и скриншоты — площадки требуют
-          # постоянные адреса на них, поэтому едут вместе с игрой
-          cp -r static/. site/
-
+          mkdir site
+          tar -xf previous-artifact/artifact.tar -C site
+          node tools/verify-production-baseline.mjs site
+      - uses: actions/upload-artifact@v4
+        with:
+          name: previous-production-site
+          path: site
+          include-hidden-files: true
+          retention-days: 30
+      - name: Overlay only shared VK and OK game client
+        run: |
+          cp -a release-candidate/. site/dachnye-tainy/vk/
+          node tools/verify-production-baseline.mjs site --except=dachnye-tainy/vk/
       - uses: actions/configure-pages@v5
-
       - uses: actions/upload-pages-artifact@v3
         with:
           path: site
-
+          retention-days: 30
   deploy:
     needs: build
     runs-on: ubuntu-latest
