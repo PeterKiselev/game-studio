@@ -648,7 +648,7 @@ async function geometry(page, pairs) {
     const { context, page } = await openWithSave(browser, old);
     const before = await saveOf(page);
     const cardOf = (re) => page.locator('.case-card', { hasText: re });
-    assert((await page.locator('.case-card .cover-image').count()) === 9, 'обложки у всех девяти сюжетных дел');
+    assert((await page.locator('.case-card .cover-image').count()) === 12, 'обложки у всех двенадцати сюжетных дел');
     await page.waitForFunction(() => [...document.querySelectorAll('.cover-image')].every((i) => i.complete && i.naturalWidth > 0));
     const pie = cardOf(/Чей пирог/);
     assert((await pie.innerText()).includes('Раскрыто · ⭐⭐⭐') && (await pie.locator('.stamp.badge').innerText()).trim() === '✓', 'обучающее дело: статус, звёзды и печать ✓ на обложке');
@@ -1305,9 +1305,9 @@ async function geometry(page, pairs) {
   ILLUSTRATED.data.stars = { 'tutorial-1': 3, 'second-1': 3, 'third-1': 3, 'fourth-1': 3, 'ch1-hose': 3, 'ch1-key': 2 };
   ILLUSTRATED.data.storySeen = ['tutorial-1#3', 'second-1#2', 'third-1', 'fourth-1', 'ch1-hose'];
   {
-    // Обложки: у всех девяти сюжетных дел, карточки целы, у дел дня обложек нет.
+    // Обложки: у всех двенадцати сюжетных дел, карточки целы, у дел дня обложек нет.
     const { context, page } = await openWithSave(browser, JSON.parse(JSON.stringify(ILLUSTRATED)));
-    assert((await page.locator('.case-card .cover-image').count()) === 9, 'обложки у всех девяти сюжетных дел');
+    assert((await page.locator('.case-card .cover-image').count()) === 12, 'обложки у всех двенадцати сюжетных дел');
     await page.waitForFunction(() => [...document.querySelectorAll('.cover-image')].every((i) => i.complete && i.naturalWidth > 0));
     for (const b of BOOKS) {
       const card = page.locator('.case-card', { hasText: b.title });
@@ -1441,7 +1441,8 @@ async function geometry(page, pairs) {
     const save = JSON.parse(JSON.stringify(HOSE_DONE));
     save.data.casesCompleted = ['ch1-hose', 'ch1-key', 'ch1-pond', ...done];
     save.data.stars = { 'ch1-hose': 3, 'ch1-key': 2, 'ch1-pond': 2, ...Object.fromEntries(done.map((id) => [id, 3])) };
-    save.data.storySeen = ['ch1-hose', 'ch1-key', 'ch1-pond'];
+    // Книжки главы 2 проверяет отдельный playtest-chapter2-art; здесь — цепочка задач.
+    save.data.storySeen = ['ch1-hose', 'ch1-key', 'ch1-pond', 'ch2-boat', 'ch2-cart', 'ch2-cleanup'];
     save.data.purchases = { noAds: true };
     save.data.progress = { 'fifth-1': { marks: { 'персонажи|Настя~покупки|мёд': 'no' }, hintsUsed: 1 } };
     return save;
@@ -1563,7 +1564,7 @@ async function geometry(page, pairs) {
     const keyDone = JSON.parse(JSON.stringify(HOSE_DONE));
     keyDone.data.casesCompleted = ['ch1-hose', 'ch1-key'];
     keyDone.data.stars = { 'ch1-hose': 3, 'ch1-key': 2 };
-    keyDone.data.storySeen = ['ch1-hose', 'ch1-key', 'ch1-pond'];
+    keyDone.data.storySeen = ['ch1-hose', 'ch1-key', 'ch1-pond', 'ch2-boat'];
     const { context, page } = await openWithSave(browser, keyDone);
     await page.getByRole('button', { name: POND_TITLE }).click();
     await page.waitForSelector('.case');

@@ -8,6 +8,9 @@ import { cases } from '../src/cases';
  * сотни килобайт, а страницы разного размера по-разному выглядят в рамке).
  */
 const EXPECTED: Record<string, { pages: string[]; cover: string }> = {
+  'ch2-boat': { pages: ['ch2-boat-book-1', 'ch2-boat-book-2'], cover: 'cover-ch2-boat' },
+  'ch2-cart': { pages: ['ch2-cart-book-1', 'ch2-cart-book-2'], cover: 'cover-ch2-cart' },
+  'ch2-cleanup': { pages: ['ch2-cleanup-book-1', 'ch2-cleanup-book-2'], cover: 'cover-ch2-cleanup' },
   'tutorial-1': { pages: ['tutorial-pie-book-1', 'tutorial-pie-book-2-garden', 'tutorial-pie-book-umbrella', 'tutorial-pie-1'], cover: 'cover-tutorial-pie' },
   'second-1': { pages: ['second-bike-book-1', 'second-bike-book-2', 'second-bike-book-3', 'second-bike-1'], cover: 'cover-second-bike' },
   'third-1': { pages: ['third-greenhouse-book-1', 'third-greenhouse-book-2', 'third-greenhouse-book-3'], cover: 'cover-third-greenhouse' },
@@ -38,7 +41,7 @@ function webpSize(name: string): { width: number; height: number } {
 const nameOf = (href: string) => decodeURIComponent(href.split('/').pop()!.replace(/\.webp.*$/, ''));
 
 describe('картинки книжек: свои страницы, своя обложка, один стандарт', () => {
-  it('иллюстрированы ровно девять сюжетных дел', () => {
+  it('иллюстрированы все двенадцать сюжетных дел', () => {
     expect(cases.filter((c) => c.story).map((c) => c.id).sort()).toEqual(Object.keys(EXPECTED).sort());
   });
 
