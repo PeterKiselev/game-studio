@@ -1,4 +1,4 @@
-name: Isolated Dachnye diagonal hotfix October 16
+name: Isolated Sudoku hint CSS hotfix October 19
 on:
   workflow_dispatch:
 permissions:
@@ -20,7 +20,7 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: github-pages
-          run-id: 38879893208
+          run-id: 38884463083
           github-token: ${{ github.token }}
           path: previous-artifact
       - name: Restore exact currently published site
@@ -34,10 +34,10 @@ jobs:
           path: site
           include-hidden-files: true
           retention-days: 30
-      - name: Overlay only shared VK and OK game client
+      - name: Update only Sudoku stylesheet and its two HTML references
         run: |
-          cp -a release-candidate/. site/dachnye-tainy/vk/
-          node tools/verify-production-baseline.mjs site --except=dachnye-tainy/vk/
+          node tools/overlay-sudoku-css.mjs site
+          node tools/verify-production-baseline.mjs site --except=sudoku-css
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

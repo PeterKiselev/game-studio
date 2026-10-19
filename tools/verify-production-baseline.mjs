@@ -4,7 +4,9 @@ import { resolve, join, relative } from 'node:path';
 import { createHash } from 'node:crypto';
 const root = resolve(process.argv[2] || 'site');
 const except = (process.argv.find(a => a.startsWith('--except=')) || '').slice('--except='.length);
-if (except && except !== 'dachnye-tainy/vk/') throw new Error('Unexpected replacement scope');
+if (except && except !== 'sudoku-css') throw new Error('Unexpected replacement scope');
+const changed = new Set(['sudoku/index.html', 'sudoku/vk/index.html',
+  'sudoku/assets/style.Cl5ZLtEP.css', 'sudoku/vk/assets/style.Cl5ZLtEP.css']);
 async function walk(dir) {
   const result = [];
   for (const entry of await readdir(dir, { withFileTypes: true })) {
@@ -15,7 +17,7 @@ async function walk(dir) {
   }
   return result;
 }
-const files = (await walk(root)).filter(file => !except || !relative(root, file).replaceAll('\\', '/').startsWith(except));
+const files = (await walk(root)).filter(file => !except || !changed.has(relative(root, file).replaceAll('\\', '/')));
 if (!files.length) throw new Error('Empty baseline');
 const failures = [];
 let cursor = 0;
