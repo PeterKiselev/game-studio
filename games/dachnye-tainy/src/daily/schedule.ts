@@ -1,6 +1,7 @@
 import type { Case } from '@studio/rules';
 import { dailyApples, dailyPost, dailyRepair } from './second-batch';
 import { dailyConcert, dailyMushrooms, dailySeedlings, dailyTea } from './third-batch';
+import { dailyBonfire, dailyDigging, dailyFair, dailyLeaves, dailyPickles, dailyTrain, dailyWinter } from './fourth-batch';
 import { dailyBath, dailyBeds, dailyFishing, dailyGlasses, dailyJam, dailyWatering, dailyWell } from './cases';
 
 /**
@@ -45,6 +46,13 @@ export const DAILY_SCHEDULE: readonly DailyEntry[] = [
   { date: '2026-10-25', case: dailyTea },
   { date: '2026-10-26', case: dailyConcert },
   { date: '2026-10-27', case: dailyMushrooms },
+  { date: '2026-10-28', case: dailyFair },
+  { date: '2026-10-29', case: dailyWinter },
+  { date: '2026-10-30', case: dailyBonfire },
+  { date: '2026-10-31', case: dailyPickles },
+  { date: '2026-11-01', case: dailyTrain },
+  { date: '2026-11-02', case: dailyDigging },
+  { date: '2026-11-03', case: dailyLeaves },
 ];
 
 /** Сегодняшняя дата по Москве, YYYY-MM-DD — не зависит от пояса устройства. */

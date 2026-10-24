@@ -194,14 +194,14 @@ const V3_OLD = {
     await context.close();
   }
   {
-    const { context, page } = await open(browser, { at: msk('2026-10-28T10:00:00') });
-    assert((await page.locator('.daily-empty').innerText()).includes('Новых дел дня пока нет'), '28 октября: «Новых дел дня пока нет»');
+    const { context, page } = await open(browser, { at: msk('2026-11-04T10:00:00') });
+    assert((await page.locator('.daily-empty').innerText()).includes('Новых дел дня пока нет'), '4 ноября: «Новых дел дня пока нет»');
     assert((await page.locator('.daily-card:not(.past)').count()) === 0, 'старое дело не выдаётся как дело дня');
     assert((await page.locator('.daily-card.past').count()) === 2, 'видны два последних прошлых дня — список не уводит дела участка вниз');
-    await page.getByRole('button', { name: 'Ещё 12 прошлых' }).click();
+    await page.getByRole('button', { name: 'Ещё 19 прошлых' }).click();
     const past = await page.locator('.daily-card.past').allInnerTexts();
-    assert(past.length === 14 && past.every((t) => /\d+ октября · /.test(t)), 'по кнопке — все четырнадцать, с датами');
-    assert(past[0].includes('27 октября') && past[13].includes('14 октября'), 'от новых к старым');
+    assert(past.length === 21 && past.every((t) => /\d+ (октября|ноября) · /.test(t)), 'по кнопке — все двадцать одно, с датами');
+    assert(past[0].includes('3 ноября') && past[20].includes('14 октября'), 'от новых к старым');
     await context.close();
   }
   {
@@ -336,15 +336,15 @@ const V3_OLD = {
     await context.close();
   }
   {
-    // 28 октября: расписание кончилось; архив полный, будущих нет; пропущенное дело раскрывается задним числом.
-    const { context, page } = await open(browser, { at: msk('2026-10-28T12:00:00') });
-    assert((await page.locator('.daily-empty').innerText()).includes('Новых дел дня пока нет'), '28 октября: «Новых дел дня пока нет»');
-    assert((await page.locator('.daily-card:not(.past)').count()) === 0, '28 октября: старое дело не выдаётся как дело дня');
+    // 4 ноября: расписание кончилось; архив полный, будущих нет; пропущенное дело раскрывается задним числом.
+    const { context, page } = await open(browser, { at: msk('2026-11-04T12:00:00') });
+    assert((await page.locator('.daily-empty').innerText()).includes('Новых дел дня пока нет'), '4 ноября: «Новых дел дня пока нет»');
+    assert((await page.locator('.daily-card:not(.past)').count()) === 0, '4 ноября: старое дело не выдаётся как дело дня');
     let past = await page.locator('.daily-card.past').allInnerTexts();
-    assert(past.length === 2 && past[0].includes('27 октября · Грибной поход') && past[1].includes('26 октября · Дачный концерт'), 'видны два последних дня: 27 и 26 октября');
-    await page.getByRole('button', { name: 'Ещё 12 прошлых' }).click();
+    assert(past.length === 2 && past[0].includes('3 ноября · Листопад') && past[1].includes('2 ноября · Перекопка огорода'), 'видны два последних дня: 3 и 2 ноября');
+    await page.getByRole('button', { name: 'Ещё 19 прошлых' }).click();
     past = await page.locator('.daily-card.past').allInnerTexts();
-    assert(past.length === 14 && past[0].includes('27 октября') && past[13].includes('14 октября · Где очки?'), 'по кнопке — все четырнадцать, от новых к старым');
+    assert(past.length === 21 && past[0].includes('3 ноября') && past[20].includes('14 октября · Где очки?'), 'по кнопке — все двадцать одно, от новых к старым');
     assert(!(await page.locator('.daily-section').innerText()).match(/пропущ|штраф|серия/i), 'никаких упрёков за пропуск');
     await page.locator('.daily-card.past', { hasText: 'Ящики с рассадой' }).click();
     await closeOnboarding(page);
