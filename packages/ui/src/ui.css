@@ -160,10 +160,24 @@ body {
   box-shadow: var(--shadow);
   padding: var(--gap-4);
   width: min(420px, 100%);
+  /*
+   * Диалог не выше окна и прокручивается сам. Без этого на коротком экране
+   * (ОК в iframe, телефон боком) виден только заголовок, а товары и кнопки
+   * ниже недостижимы — замечание модератора ОК «Дачным тайнам» 26.10.2026:
+   * «Игра не скроллится ниже заголовка магазина».
+   */
+  max-height: calc(100vh - 2 * var(--gap-4));
+  max-height: calc(100dvh - 2 * var(--gap-4));
+  overflow-y: auto;
+  overscroll-behavior: contain;
   display: flex;
   flex-direction: column;
   gap: var(--gap-3);
   animation: pop 0.22s var(--ease);
+}
+
+.dialog > * {
+  flex-shrink: 0;
 }
 
 .dialog h2 {
