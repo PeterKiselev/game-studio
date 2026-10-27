@@ -1,0 +1,4 @@
+const fs=require('node:fs');const path=require('node:path');const assert=require('node:assert/strict');
+const assets='games/dachnye-tainy/dist/web/assets';const name=fs.readdirSync(assets).find(f=>f.endsWith('.css'));const css=fs.readFileSync(path.join(assets,name),'utf8');
+const patch='html,body{overscroll-behavior-y:auto}.plot>*{flex-shrink:0}';assert.ok(css.includes(patch),'compiled fix missing');
+for(const dir of ['release-web','release-candidate']){const index=path.join(dir,'index.html');const html=fs.readFileSync(index,'utf8');const old=html.match(/assets\/(style\.[^" ]+\.css)/)[1];assert.equal(css.replace(patch,''),fs.readFileSync(path.join(dir,'assets',old),'utf8'),'only plot scroll rules may change');fs.copyFileSync(path.join(assets,name),path.join(dir,'assets',name));fs.writeFileSync(index,html.replace(old,name));console.log('Prepared CSS only',dir,name);}
