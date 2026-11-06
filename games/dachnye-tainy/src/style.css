@@ -175,8 +175,24 @@ body {
   font-weight: 600;
 }
 
+.plot-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--gap-2);
+}
+
 .shop-btn {
-  align-self: flex-start;
+  flex: none;
+  min-height: 44px;
+}
+
+/* Окно магазина — у верхнего края, а не по центру. iframe ОК на вебе бывает
+ * выше видимой части страницы: по центру такого iframe виден только заголовок
+ * магазина, а товары и «Закрыть» оказываются ниже окна (отказ ОК 27.10 и 3.11.2026).
+ * Верх iframe виден всегда — там и начинается магазин. */
+.shop-overlay {
+  place-items: start center;
 }
 
 /* --- магазин --- */

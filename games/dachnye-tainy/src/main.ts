@@ -314,9 +314,21 @@ function showPlot(): void {
     );
   }
 
+  // Кнопка магазина — в шапке, рядом с названием, и только если площадка
+  // реально умеет платежи (правило 2 из CLAUDE.md: скрываем, а не показываем
+  // мёртвую кнопку). Раньше она стояла в самом низу участка, и модератор ОК
+  // 3.11.2026 её не нашёл: «На мобильных клиентах вовсе не видим „Магазин“»,
+  // а на вебе высокий iframe ОК не даёт докрутить до низа. Первый экран виден всегда.
+  const head = el('div', { class: 'plot-head' }, el('h1', {}, 'Дачные тайны'));
+  if (app.platform.caps.payments) {
+    const shopBtn = el('button', { class: 'btn ghost shop-btn', type: 'button' }, '🛍️ Магазин') as HTMLButtonElement;
+    shopBtn.addEventListener('click', () => void showShop());
+    head.append(shopBtn);
+  }
+
   plotDay = moscowDate();
   const screenChildren: HTMLElement[] = [
-    el('h1', {}, 'Дачные тайны'),
+    head,
     dailySection(s, plotDay),
     el('div', { class: 'plot-label' }, 'Дела участка'),
     cardsBox,
@@ -325,16 +337,6 @@ function showPlot(): void {
     el('div', { class: 'plot-label' }, 'Достижения'),
     achievementsBox,
   ];
-
-  // Кнопка магазина — только если площадка реально умеет платежи (правило 2
-  // из CLAUDE.md: скрываем, а не показываем мёртвую кнопку). На web/непроверенном
-  // VK её никто не увидит, и это правильно — рано или поздно caps.payments
-  // станет true, и кнопка появится сама, без правки экрана.
-  if (app.platform.caps.payments) {
-    const shopBtn = el('button', { class: 'btn ghost shop-btn', type: 'button' }, '🛍️ Магазин') as HTMLButtonElement;
-    shopBtn.addEventListener('click', () => void showShop());
-    screenChildren.push(shopBtn);
-  }
 
   const screen = el('div', { class: 'screen plot' }, ...screenChildren);
   root.replaceChildren(screen);
@@ -1379,7 +1381,7 @@ async function showShop(): Promise<void> {
   const closeBtn = el('button', { class: 'btn ghost', type: 'button' }, 'Закрыть') as HTMLButtonElement;
   box.append(el('div', { class: 'actions' }, closeBtn));
 
-  const overlay = el('div', { class: 'overlay' }, box);
+  const overlay = el('div', { class: 'overlay shop-overlay' }, box);
   closeBtn.addEventListener('click', () => {
     overlay.remove();
     showPlot(); // обновить подписи/участок, если что-то куплено
