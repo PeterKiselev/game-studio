@@ -2,6 +2,10 @@ import type { Case } from '@studio/rules';
 import { dailyApples, dailyPost, dailyRepair } from './second-batch';
 import { dailyConcert, dailyMushrooms, dailySeedlings, dailyTea } from './third-batch';
 import { dailyBonfire, dailyDigging, dailyFair, dailyLeaves, dailyPickles, dailyTrain, dailyWinter } from './fourth-batch';
+import {
+  dailyBarrels, dailyBullfinches, dailyCabbage, dailyFeeders, dailyFirewood, dailyKeys, dailyMeeting,
+  dailyMittens, dailyRoses, dailySeeds, dailySnow, dailyStove, dailyTree, dailyWatchman,
+} from './fifth-batch';
 import { dailyBath, dailyBeds, dailyFishing, dailyGlasses, dailyJam, dailyWatering, dailyWell } from './cases';
 
 /**
@@ -53,6 +57,21 @@ export const DAILY_SCHEDULE: readonly DailyEntry[] = [
   { date: '2026-11-01', case: dailyTrain },
   { date: '2026-11-02', case: dailyDigging },
   { date: '2026-11-03', case: dailyLeaves },
+  // 4–16 ноября — пауза: расписание кончилось, игра честно говорила «новых дел пока нет».
+  { date: '2026-11-17', case: dailySnow },
+  { date: '2026-11-18', case: dailyFeeders },
+  { date: '2026-11-19', case: dailyRoses },
+  { date: '2026-11-20', case: dailyFirewood },
+  { date: '2026-11-21', case: dailyBarrels },
+  { date: '2026-11-22', case: dailyStove },
+  { date: '2026-11-23', case: dailyKeys },
+  { date: '2026-11-24', case: dailyCabbage },
+  { date: '2026-11-25', case: dailyWatchman },
+  { date: '2026-11-26', case: dailyBullfinches },
+  { date: '2026-11-27', case: dailyMittens },
+  { date: '2026-11-28', case: dailySeeds },
+  { date: '2026-11-29', case: dailyTree },
+  { date: '2026-11-30', case: dailyMeeting },
 ];
 
 /** Сегодняшняя дата по Москве, YYYY-MM-DD — не зависит от пояса устройства. */
