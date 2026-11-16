@@ -34,13 +34,16 @@ jobs:
           path: site
           include-hidden-files: true
           retention-days: 30
-      - name: Overlay only Dachnye web and shared VK OK client
+      - name: Overlay explicit game release folders
         run: |
           cp -a release-web/. site/dachnye-tainy/
           cp -a release-candidate/. site/dachnye-tainy/vk/
           mkdir -p site/durak
           cp -a release-durak/. site/durak/
-          node tools/verify-production-baseline.mjs site --except=dachnye-tainy/,durak/
+          mkdir -p site/checkers site/2048
+          cp -a release-checkers/. site/checkers/
+          cp -a release-2048/. site/2048/
+          node tools/verify-production-baseline.mjs site --except=dachnye-tainy/,durak/,checkers/,2048/
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

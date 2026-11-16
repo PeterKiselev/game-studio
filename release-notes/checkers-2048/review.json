@@ -1,0 +1,105 @@
+{
+  "cases": [
+    "checkers web 1100x700 iframe 1600",
+    "checkers web 390x640 iframe 640",
+    "checkers web 360x600 iframe 600",
+    "checkers vk 1100x700 iframe 1600",
+    "checkers vk 390x640 iframe 640",
+    "checkers vk 360x600 iframe 600",
+    "2048 web 1100x700 iframe 1600",
+    "2048 web 390x640 iframe 640",
+    "2048 web 360x600 iframe 600",
+    "2048 vk 1100x700 iframe 1600",
+    "2048 vk 390x640 iframe 640",
+    "2048 vk 360x600 iframe 600"
+  ],
+  "negativeAds": "2 games x refusal/no inventory passed",
+  "dimensions": [
+    {
+      "game": "checkers",
+      "file": "icons/icon-576.png",
+      "width": 576,
+      "height": 576
+    },
+    {
+      "game": "checkers",
+      "file": "icons/icon-278.png",
+      "width": 278,
+      "height": 278
+    },
+    {
+      "game": "checkers",
+      "file": "icons/icon-150.png",
+      "width": 150,
+      "height": 150
+    },
+    {
+      "game": "checkers",
+      "file": "promo/snippet-1120x630.png",
+      "width": 1120,
+      "height": 630
+    },
+    {
+      "game": "checkers",
+      "file": "shots/01-game-1200x600.png",
+      "width": 1200,
+      "height": 600
+    },
+    {
+      "game": "checkers",
+      "file": "shots/02-play-1200x600.png",
+      "width": 1200,
+      "height": 600
+    },
+    {
+      "game": "checkers",
+      "file": "shots/03-collection-1200x600.png",
+      "width": 1200,
+      "height": 600
+    },
+    {
+      "game": "2048",
+      "file": "icons/icon-576.png",
+      "width": 576,
+      "height": 576
+    },
+    {
+      "game": "2048",
+      "file": "icons/icon-278.png",
+      "width": 278,
+      "height": 278
+    },
+    {
+      "game": "2048",
+      "file": "icons/icon-150.png",
+      "width": 150,
+      "height": 150
+    },
+    {
+      "game": "2048",
+      "file": "promo/snippet-1120x630.png",
+      "width": 1120,
+      "height": 630
+    },
+    {
+      "game": "2048",
+      "file": "shots/01-game-1200x600.png",
+      "width": 1200,
+      "height": 600
+    },
+    {
+      "game": "2048",
+      "file": "shots/02-play-1200x600.png",
+      "width": 1200,
+      "height": 600
+    },
+    {
+      "game": "2048",
+      "file": "shots/03-collection-1200x600.png",
+      "width": 1200,
+      "height": 600
+    }
+  ],
+  "pageErrors": [],
+  "httpErrors": []
+}

@@ -1,0 +1,18 @@
+diff --git a/games/2048/src/style.css b/games/2048/src/style.css
+index 5aba360..9161682 100644
+--- a/games/2048/src/style.css
++++ b/games/2048/src/style.css
+@@ -1,0 +2,4 @@
++/* VK can embed a tall iframe in a shorter, non-scrolling host window. */
++.overlay:has(.meta-panel){align-items:start}
++.meta-panel{max-height:min(560px,calc(100dvh - 2 * var(--gap-4)))}
++.meta-panel>.btn.primary{order:-1;position:sticky;top:0;align-self:flex-end}
+diff --git a/games/checkers/src/style.css b/games/checkers/src/style.css
+index df96b5a..49d161c 100644
+--- a/games/checkers/src/style.css
++++ b/games/checkers/src/style.css
+@@ -1,0 +2,4 @@
++/* VK can embed a tall iframe in a shorter, non-scrolling host window. */
++.overlay:has(.meta-panel){align-items:start}
++.meta-panel{max-height:min(560px,calc(100dvh - 2 * var(--gap-4)))}
++.meta-panel>.btn.primary{order:-1;position:sticky;top:0;align-self:flex-end}
