@@ -20,7 +20,7 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: github-pages
-          run-id: 43861257350
+          run-id: 43919498160
           github-token: ${{ github.token }}
           path: previous-artifact
       - name: Restore exact currently published site
@@ -38,7 +38,9 @@ jobs:
         run: |
           cp -a release-web/. site/dachnye-tainy/
           cp -a release-candidate/. site/dachnye-tainy/vk/
-          node tools/verify-production-baseline.mjs site --except=dachnye-tainy/
+          mkdir -p site/durak
+          cp -a release-durak/. site/durak/
+          node tools/verify-production-baseline.mjs site --except=dachnye-tainy/,durak/
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

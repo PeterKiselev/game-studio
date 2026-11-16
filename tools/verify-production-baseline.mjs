@@ -4,7 +4,9 @@ import { resolve, join, relative } from 'node:path';
 import { createHash } from 'node:crypto';
 const root = resolve(process.argv[2] || 'site');
 const except = (process.argv.find(a => a.startsWith('--except=')) || '').slice('--except='.length);
-if (except && except !== 'dachnye-tainy/') throw new Error('Unexpected replacement scope');
+// Replaced folders are listed explicitly: Dachnye Tainy and Durak (since 2026-11-16). Anything else fails.
+const scopes = except ? except.split(',') : [];
+if (scopes.some(s => !['dachnye-tainy/', 'durak/'].includes(s))) throw new Error('Unexpected replacement scope');
 async function walk(dir) {
   const result = [];
   for (const entry of await readdir(dir, { withFileTypes: true })) {
@@ -15,7 +17,7 @@ async function walk(dir) {
   }
   return result;
 }
-const files = (await walk(root)).filter(file => !except || !relative(root, file).replaceAll('\\', '/').startsWith(except));
+const files = (await walk(root)).filter(file => !scopes.some(s => relative(root, file).replaceAll('\\', '/').startsWith(s)));
 if (!files.length) throw new Error('Empty baseline');
 const failures = [];
 let cursor = 0;
