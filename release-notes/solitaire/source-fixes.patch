@@ -1,0 +1,17 @@
+diff --git a/games/solitaire/src/style.css b/games/solitaire/src/style.css
+index 8c812a5..fe3a0c2 100644
+--- a/games/solitaire/src/style.css
++++ b/games/solitaire/src/style.css
+@@ -42 +42,5 @@ h1 {
+-  min-height: 62dvh;
++  /* VK may put a 1600px iframe inside a 700px host window. Keep actions
++     in its visible upper part; long tableau columns scroll inside the table. */
++  height: min(62dvh, 380px);
++  min-height: 0;
++  overflow-y: auto;
+@@ -151,0 +156,5 @@ h1 {
++
++/* The iframe's centre can be below the host's visible viewport. */
++.overlay { align-items: start; }
++.dialog { max-height: min(560px, calc(100dvh - 2 * var(--gap-4))); }
++.meta-panel > .btn.primary { order: -1; position: sticky; top: 0; align-self: flex-end; }

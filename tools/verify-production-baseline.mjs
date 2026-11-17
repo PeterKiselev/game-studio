@@ -6,7 +6,7 @@ const root = resolve(process.argv[2] || 'site');
 const except = (process.argv.find(a => a.startsWith('--except=')) || '').slice('--except='.length);
 // Replaced folders are listed explicitly; every other production path stays protected.
 const scopes = except ? except.split(',') : [];
-if (scopes.some(s => !['dachnye-tainy/', 'durak/', 'checkers/', '2048/'].includes(s))) throw new Error('Unexpected replacement scope');
+if (scopes.some(s => !['dachnye-tainy/', 'durak/', 'checkers/', '2048/', 'solitaire/'].includes(s))) throw new Error('Unexpected replacement scope');
 async function walk(dir) {
   const result = [];
   for (const entry of await readdir(dir, { withFileTypes: true })) {

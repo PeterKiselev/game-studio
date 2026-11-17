@@ -1,0 +1,11 @@
+{
+  "cases": [
+    "web 390x640, iframe 640",
+    "web 1100x700, iframe 1600",
+    "vk 390x640, iframe 640",
+    "vk 1100x700, iframe 1600"
+  ],
+  "pageErrors": [],
+  "httpErrors": [],
+  "screenshots": "1200x600, actual release, UI clicks only, no state/DOM/style substitution"
+}

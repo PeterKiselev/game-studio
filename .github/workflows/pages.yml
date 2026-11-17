@@ -43,7 +43,9 @@ jobs:
           mkdir -p site/checkers site/2048
           cp -a release-checkers/. site/checkers/
           cp -a release-2048/. site/2048/
-          node tools/verify-production-baseline.mjs site --except=dachnye-tainy/,durak/,checkers/,2048/
+          mkdir -p site/solitaire
+          cp -a release-solitaire/. site/solitaire/
+          node tools/verify-production-baseline.mjs site --except=dachnye-tainy/,durak/,checkers/,2048/,solitaire/
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

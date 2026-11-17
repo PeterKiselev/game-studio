@@ -1,0 +1,21 @@
+{
+  "tool": "built-in image_gen",
+  "date": "2026-11-17",
+  "references": [
+    "packages/ui/src/cards-art/court-hearts-Q.webp",
+    "packages/ui/src/cards-art/table-oilcloth.webp"
+  ],
+  "outputs": [
+    {
+      "file": "icons/icon-master.png",
+      "source": "C:/Users/Legion/.codex/generated_images/01a1e9fe-682d-7222-abcc-6e90f0426dda/exec-537c9573-0ae7-4ebf-a957-9e3811daceef.png",
+      "prompt": "Use case: ads-marketing. Asset type: square game app icon, full bleed, 1024x1024. Primary request: Cozy Russian dacha solitaire on a veranda, warm hand painted gouache matching reference card artwork. Reference image 1 is the style and actual Queen of Hearts resident of the game, reference image 2 is its floral tablecloth. Show three very large overlapping playing cards on a sunlit wooden veranda table with that floral cream oilcloth: ace of spades, queen of hearts with the kindly elderly woman in a red headscarf from reference, king of clubs with an elderly gardener. Huge clear corner indices A Q K and suit shapes, crisp ivory cards, deep moss green foliage beyond veranda, tiny warm tea cup in far corner. Cards take 80 percent of frame, strong simple silhouette legible at 150px. Thick painterly texture, honey light, cream, forest green and muted cherry. No words, title, logos, buttons or watermark. All corners full bleed."
+    },
+    {
+      "file": "promo/artwork-master.png",
+      "source": "C:/Users/Legion/.codex/generated_images/01a1e9fe-682d-7222-abcc-6e90f0426dda/exec-fc036eaa-bd3c-43b0-aecf-d2cb84968134.png",
+      "prompt": "Use case: ads-marketing. Asset type: landscape illustration for a 1120x630 game store snippet, compose in 16:9. Primary request: 'Solitaire on the veranda', warm hand-painted gouache illustration in exact cream floral dacha style of references. Reference image 1 is the actual Queen of Hearts card, reference image 2 the floral tablecloth. A sunlit veranda table with a recognizable Klondike solitaire spread of ivory cards, red and black suits and illustrated cards featuring kindly elderly summer cottage residents. Main cards and spread arranged in the RIGHT 60% of frame, large beautiful Queen of Hearts from reference and ace of spades prominent, tea cup and cherry bowl at far right, soft garden and wooden veranda rail beyond. LEFT 42% should be dark muted moss green softly painted shaded foliage with very little detail, generous uncluttered negative space for title to be typeset later. Honey afternoon light, tactile brush strokes, floral cream oilcloth, warm peaceful welcoming mood. Cards are subject, garden is background. No words, lettering, logo, watermark, buttons, UI, or text. Edge-to-edge art."
+    }
+  ],
+  "processing": "tools/make-solitaire-store.cjs: high quality resize, snippet title typeset on canvas. No game screenshot edits. Masters local only; release contains seven final PNGs."
+}

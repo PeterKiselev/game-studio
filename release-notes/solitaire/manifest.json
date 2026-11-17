@@ -1,0 +1,710 @@
+{
+  "releaseBase": "3386337525a48e12317c023547559f523845b1b6",
+  "sourceHead": "2b766eec53c72f02c271f1ef136e2fb36990b7ff",
+  "sourceFiles": [
+    {
+      "path": "games/solitaire/src/env.d.ts",
+      "sha256": "65996936fbb042915f7b74a200fcdde7e410f32a669b1ab9597cfaa4b0faddb5"
+    },
+    {
+      "path": "games/solitaire/src/main.ts",
+      "sha256": "a8fea8fb9b384cd8a3cea207afd866e1ebbf33d7a153e4b83e86db4b2a2fc490"
+    },
+    {
+      "path": "games/solitaire/src/meta-config.ts",
+      "sha256": "1316a945d8c6f8b7d319378103fff747c34b1c5df038260981a4bfc20288ddc8"
+    },
+    {
+      "path": "games/solitaire/src/style.css",
+      "sha256": "7100ac0ecef4c34101ce7a613bd4b041d7b057a24b90c6623886aedb3d9cf1e8"
+    },
+    {
+      "path": "games/solitaire/src/theme.css",
+      "sha256": "4b7ac0f9898e21a74d04920222e42d61250915ca074391ea45280b51dc6b7c40"
+    },
+    {
+      "path": "packages/rules/src/cards/index.ts",
+      "sha256": "3dbcd2b9fb327e5468e80ec6d3ab158c797a18aef3b7e239e5f20baf3d4d5d1a"
+    },
+    {
+      "path": "packages/rules/src/deduction/board.ts",
+      "sha256": "e7085f9fed6aca7e192efd84363820f591fd55363f6de0eb183933969063dbb3"
+    },
+    {
+      "path": "packages/rules/src/deduction/index.ts",
+      "sha256": "e65df113568ccfef02968b0a6303eac96bd405c7ddc5c159b49ba5c1016f9788"
+    },
+    {
+      "path": "packages/rules/src/deduction/model.ts",
+      "sha256": "b19a044ab2beb025a88c59c7397d31226c4c2484b1905d9b89676084e4c412b8"
+    },
+    {
+      "path": "packages/rules/src/deduction/solve.ts",
+      "sha256": "7b0eef67df63ff491ed89c1c2c5b2cd49269108475d8c75e6b27718a6ea5634d"
+    },
+    {
+      "path": "packages/rules/src/deduction/types.ts",
+      "sha256": "a057cd14f29a350bf9b6300a79039b6db487757eecbf66cff7dc382bd3a02c19"
+    },
+    {
+      "path": "packages/rules/src/deduction/validate.ts",
+      "sha256": "3fad7254b047eb0ece6872aa7bf92844334e94824d3c122bb18bcf19fb8f17ab"
+    },
+    {
+      "path": "packages/rules/src/durak/bot.ts",
+      "sha256": "83534d3a186ec8793db4f1188ea6c7ae480a3d9522e9569651dedeefbd57fbba"
+    },
+    {
+      "path": "packages/rules/src/durak/index.ts",
+      "sha256": "4ed5f89c7ed4185704f322eca28aee6eb0671ca15a7f489acc15fc764f15753e"
+    },
+    {
+      "path": "packages/rules/src/durak/rules.ts",
+      "sha256": "60c84f774c4b65ca1ad2022c5ce17ed64682bde4b8585537f192e8569409b76e"
+    },
+    {
+      "path": "packages/rules/src/gomoku.ai.ts",
+      "sha256": "87efff6cb108d0a164ca7da4a30bca2bc01ef0ce79ecf4ef6cce7c4be5096e2b"
+    },
+    {
+      "path": "packages/rules/src/gomoku.ts",
+      "sha256": "c178a075d47b545c4edef92e3e40a41b1019610036814de762fe388dec0d3bc3"
+    },
+    {
+      "path": "packages/rules/src/index.ts",
+      "sha256": "c90489b52968616983c879c5f4b2f404ab3335b9d9dd8db6a2898f155b828013"
+    },
+    {
+      "path": "packages/rules/src/klondike/index.ts",
+      "sha256": "7e5774f4a85b00f3645a8e0a213384c1518d442fc8749c33cb1de46e7350b50e"
+    },
+    {
+      "path": "packages/rules/src/klondike/rules.ts",
+      "sha256": "72813af8063be924b2565b379c025a89eb35b29aef33fdcdfc24b2616ca25e3c"
+    },
+    {
+      "path": "packages/rules/src/klondike/serialize.ts",
+      "sha256": "434ca796503723147c7c3be199db4b3ec37007067a2e8a82789b96abe8ef3d73"
+    },
+    {
+      "path": "packages/rules/src/pograniche-hero.ts",
+      "sha256": "8bbd3dd402d01010772818ccb49ca37aaf66bc9a2045a00b59f294db09e83405"
+    },
+    {
+      "path": "packages/rules/src/pograniche.ts",
+      "sha256": "e80e9808285deb2acb67cf44d8cc429213568b0c44941cf95ec825db9008ec1e"
+    },
+    {
+      "path": "packages/rules/src/random.ts",
+      "sha256": "0d136cd8e7e60d97820bf2eee041515c431f65daac06b79d7fbf9dbaa6155bc7"
+    },
+    {
+      "path": "packages/rules/src/sudoku/conflicts.ts",
+      "sha256": "8ee3379fc7452810343db5b43e23f040c7bab67dff219f290e5281edc548d4e4"
+    },
+    {
+      "path": "packages/rules/src/sudoku/daily.ts",
+      "sha256": "ba3f3036c8ab50f5b0604b70df9441da54f77103dec8120a954d299d74d8333d"
+    },
+    {
+      "path": "packages/rules/src/sudoku/generator.ts",
+      "sha256": "5912eaf8bfef090dff9ce0986578e3a0e3fc524f8a65268801654164bcf0b249"
+    },
+    {
+      "path": "packages/rules/src/sudoku/hints.ts",
+      "sha256": "0e0e8b513e1d3a6bfc8bfb7c76b41c0c2161d7489873d15ffb66e8cb2a986bf6"
+    },
+    {
+      "path": "packages/rules/src/sudoku/index.ts",
+      "sha256": "e617102a069a457d31f84eca19b4ee49beef4e35010af3040b8f3124946dd90a"
+    },
+    {
+      "path": "packages/rules/src/sudoku/rng.ts",
+      "sha256": "aed6e9a0197a74b28b32b42b2b72950184078cc68acc0596fb049820c6cbe379"
+    },
+    {
+      "path": "packages/rules/src/sudoku/solver.ts",
+      "sha256": "8320b16008651129ecce6e430bdbe1b881948a171a8f23bfcbda2656185e43ea"
+    },
+    {
+      "path": "packages/rules/src/sudoku/types.ts",
+      "sha256": "577d981cafc4e4133d4c6b62507c41f86e059d6ec86748dd65e51827f292b738"
+    },
+    {
+      "path": "packages/rules/src/sudoku/units.ts",
+      "sha256": "93b9ea63158639aef21c85bb96db98ec25cae5a496a53615cd3f06a1107bb55f"
+    },
+    {
+      "path": "packages/rules/src/sudoku/validate.ts",
+      "sha256": "2af813d4f0051a11cf689901c20cd393cd82197131aea217b597924f0e91d74b"
+    },
+    {
+      "path": "packages/ui/src/cards-art/ace-clubs.webp",
+      "sha256": "f5bca4a14c77fb4803c4a81764bdaa8331f3c3e00819ed145f6887c3bad6ac0c"
+    },
+    {
+      "path": "packages/ui/src/cards-art/ace-diamonds.webp",
+      "sha256": "9dff9e5d957cce75be44789367b879f9c6256cd3eac01a69a46ff901f7c924a1"
+    },
+    {
+      "path": "packages/ui/src/cards-art/ace-hearts.webp",
+      "sha256": "c3c30f028617abd9663ccf593b6fc7bc4fb1f6573fd8e739cfc515c9a0d57ac2"
+    },
+    {
+      "path": "packages/ui/src/cards-art/ace-spades.webp",
+      "sha256": "d9e19fbbc0c484decb8dc22958c2f58c6b3834f37f028af3d181942e6c6d360c"
+    },
+    {
+      "path": "packages/ui/src/cards-art/back-cherry.webp",
+      "sha256": "5c6a373da84e8522faf2183b33d04d210fa565b874d5e4b9da3ce8a46816a3b0"
+    },
+    {
+      "path": "packages/ui/src/cards-art/back-classic.webp",
+      "sha256": "624cbf9ba3a31fa2c248dde047801c228b1c86e3e11040efffbc0e82854627ba"
+    },
+    {
+      "path": "packages/ui/src/cards-art/back-sunflower.webp",
+      "sha256": "83a20143faf1fc3c903722e3de4518ac10781ff158d0276bdb354d9a41e01a5f"
+    },
+    {
+      "path": "packages/ui/src/cards-art/card-paper.webp",
+      "sha256": "96cebe66f45c5a72f640615a191b0b08a667849f36287d3dff581d2cfd26a9be"
+    },
+    {
+      "path": "packages/ui/src/cards-art/court-clubs-J.webp",
+      "sha256": "0ce02dc3b19ba85f4317bbc945751b1b9cfae70803909972a5a5fb164b139075"
+    },
+    {
+      "path": "packages/ui/src/cards-art/court-clubs-K.webp",
+      "sha256": "4e6f93ae21163b16ceab4fad0ac786586bf308daa59aa9921c772df344c460a2"
+    },
+    {
+      "path": "packages/ui/src/cards-art/court-clubs-Q.webp",
+      "sha256": "6f7ce093cab6a1f982e06ae4a0717702b6577c7823bfd4c8c10b59d99aa8d116"
+    },
+    {
+      "path": "packages/ui/src/cards-art/court-diamonds-J.webp",
+      "sha256": "335ab38d7375d96e9704f58d4ac847208b95eb4dfacd554977b13044445e76ee"
+    },
+    {
+      "path": "packages/ui/src/cards-art/court-diamonds-K.webp",
+      "sha256": "5c8e498eb1397ef2854a3e1d36ee1a25695e580748b788eed34e11d1b373eb78"
+    },
+    {
+      "path": "packages/ui/src/cards-art/court-diamonds-Q.webp",
+      "sha256": "f0dc56cf64f29e81a9914a0d3f3d7ffc0ad28e44b4d39426d6968b1d68c0e2cd"
+    },
+    {
+      "path": "packages/ui/src/cards-art/court-hearts-J.webp",
+      "sha256": "591f7f4c91a3bc780328ba9ef32526fde7fe6a3e440e634a81c9d0851da35979"
+    },
+    {
+      "path": "packages/ui/src/cards-art/court-hearts-K.webp",
+      "sha256": "88f330cbdaa8b91929cff3b7da9847b59e90ead335116b9b001579edd2668aca"
+    },
+    {
+      "path": "packages/ui/src/cards-art/court-hearts-Q.webp",
+      "sha256": "2676425b9ad940dc5dd797d4b5b6b6e936bd099cd7985c14788797415b9a0c9b"
+    },
+    {
+      "path": "packages/ui/src/cards-art/court-spades-J.webp",
+      "sha256": "6477c3d3dc31dc8e45a77e6744f6654cbef85e6c41974a64659b073836c9c0d8"
+    },
+    {
+      "path": "packages/ui/src/cards-art/court-spades-K.webp",
+      "sha256": "f7d4d884a3b38bec3a46249390d2914f386a9f6f4592403f61fe27e61c7dd692"
+    },
+    {
+      "path": "packages/ui/src/cards-art/court-spades-Q.webp",
+      "sha256": "e07ac84970a315b57afdda44bab9a2ca4a0f6203e29bb04e6a56141b054a6e87"
+    },
+    {
+      "path": "packages/ui/src/cards-art/suit-clubs.webp",
+      "sha256": "3f97177b8bc774b12ab016de2f778707fd1613627505237c1bca15402bd74cee"
+    },
+    {
+      "path": "packages/ui/src/cards-art/suit-diamonds.webp",
+      "sha256": "1326935cd4834e03d61bb22d6bef41e283667382b9f8dd8ad11848dac01a6dad"
+    },
+    {
+      "path": "packages/ui/src/cards-art/suit-hearts.webp",
+      "sha256": "95d3deed7472753f2489afeac052d5bfd6ebed0b4d89b2b31f9775331694406b"
+    },
+    {
+      "path": "packages/ui/src/cards-art/suit-spades.webp",
+      "sha256": "46a9036fb645aa7425d5242fd089059684e22143d7d9cbf5d221950f55d64b12"
+    },
+    {
+      "path": "packages/ui/src/cards-art/table-evening.webp",
+      "sha256": "a80b1197a89ab099713e8671416d3590a6274b7e09f51aa42cbb61845825b063"
+    },
+    {
+      "path": "packages/ui/src/cards-art/table-felt.webp",
+      "sha256": "9d09d7dc1b8dec116f87f9b125c17750fba8bce97ff1706c6a7d5c85dde5bd5a"
+    },
+    {
+      "path": "packages/ui/src/cards-art/table-oilcloth.webp",
+      "sha256": "762101455814db1b38bedb90e0a896a37d5fe6b1fc5004112326892f49ee1e02"
+    },
+    {
+      "path": "packages/ui/src/cards.css",
+      "sha256": "2602509200305da64b01fca74aa531c2248a84f6bd135d45583849c565668891"
+    },
+    {
+      "path": "packages/ui/src/cards.ts",
+      "sha256": "844e4a9e215a161412f3745a6572fde048af69f0a4e12a99280fb9d7295d3100"
+    },
+    {
+      "path": "packages/ui/src/env.d.ts",
+      "sha256": "65996936fbb042915f7b74a200fcdde7e410f32a669b1ab9597cfaa4b0faddb5"
+    },
+    {
+      "path": "packages/ui/src/index.ts",
+      "sha256": "ecf35722e33ea079f9303a0590a6cba6b8eb8ff27d6875d8486d8da027f67cac"
+    },
+    {
+      "path": "packages/ui/src/tokens.css",
+      "sha256": "238284b567ceb79d9fb07d9b3c12d5dfb75fed094ba25d154ef55cf340c1f471"
+    },
+    {
+      "path": "packages/ui/src/ui.css",
+      "sha256": "7cc13af4db56632f27d6f1068667e631bc0e1d233c8c1dc735c00562c79758b3"
+    },
+    {
+      "path": "packages/platform/src/adapters/vk.ts",
+      "sha256": "3606451b8069928e8ac8351e9a20a9f54498f68a5b8e509343e08961321413cd"
+    },
+    {
+      "path": "packages/platform/src/adapters/web.ts",
+      "sha256": "5e5bb1456bb36d0c2848de9e96864e73cc90fadc41b00bedea780b9de3e56441"
+    },
+    {
+      "path": "packages/platform/src/adapters/yandex.ts",
+      "sha256": "eefeb3113bb586435ee8c273a54217197b037e5bc6f47904ff86b95289230259"
+    },
+    {
+      "path": "packages/platform/src/ads-policy.ts",
+      "sha256": "afe2e09cb6caf7c071ce2b5132a08074b7733f41a8f57e970be3e16240beb7d0"
+    },
+    {
+      "path": "packages/platform/src/base.ts",
+      "sha256": "80c02ee9c486d857d5bc882afcfe81f357b9881a0611780fdb9ce2b6c8a5e1de"
+    },
+    {
+      "path": "packages/platform/src/index.ts",
+      "sha256": "ac2e7d6250b8431d2e806773ef0da0da676f1d48edb4e3faef5d3ed665ca851a"
+    },
+    {
+      "path": "packages/platform/src/storage.ts",
+      "sha256": "ebd1bb21129e0310646d3c9757c1d54e25badc1945ceef1e87a8061ecba6f5f4"
+    },
+    {
+      "path": "packages/platform/src/types.ts",
+      "sha256": "c00edeef68bf793fc5ada50e407f01af1e903117a3fd7ff8c38e80d6fd83a078"
+    },
+    {
+      "path": "packages/game-kit/src/analytics.ts",
+      "sha256": "17152fcc3c4b96ff6453c0ed1cf39c5c0caea59544ae1920ed90ddbe02836554"
+    },
+    {
+      "path": "packages/game-kit/src/collector.ts",
+      "sha256": "21c224602b5d9ea1ec3c328a52a21aedb9fc1bb7570640a697fe5fa3a6baee70"
+    },
+    {
+      "path": "packages/game-kit/src/index.ts",
+      "sha256": "dcf619e408c9d397a0aa158da78e65e836f13e815f28ec1d8d07228482586d42"
+    },
+    {
+      "path": "packages/game-kit/src/meta-game.ts",
+      "sha256": "f7c09019865c5622c450f7d8523221ef5b41dabeef7dd26d51250c5d2a7256a5"
+    },
+    {
+      "path": "packages/game-kit/src/meta.css",
+      "sha256": "4ca8870680b742ae480b960876182cd665d09d5d208dcb3b3972beea1f1578bc"
+    },
+    {
+      "path": "packages/game-kit/src/meta.ts",
+      "sha256": "8d90a5eb8ae75af3e805d29ed95fbc341d987c66180e43fbd3d80f8af6a2819e"
+    },
+    {
+      "path": "packages/game-kit/src/shop-game.ts",
+      "sha256": "65c3fd35da9635c0ca993f744ba33c54b4b260f923781ea070bc4d466d651108"
+    },
+    {
+      "path": "packages/game-kit/src/shop.css",
+      "sha256": "de2d05dafe437283177df9781f9badde6d39f20752f6f0873d88d7cef1671fe6"
+    },
+    {
+      "path": "packages/game-kit/src/shop.ts",
+      "sha256": "63b202ab477a0064a6777bab91f508096017f636d1c4972adfde92654a526e5c"
+    }
+  ],
+  "sourceUnchangedDuringBuild": true,
+  "sourcePatch": "source-fixes.patch",
+  "sourcePatchSha256": "0c5ae927b93419264c85a50e99b9d1f2039ec0bb0d5304870ec4df5e4abd5bdc",
+  "release": [
+    {
+      "path": "assets/ace-clubs-Cdgs36_J.webp",
+      "bytes": 20490,
+      "sha256": "f5bca4a14c77fb4803c4a81764bdaa8331f3c3e00819ed145f6887c3bad6ac0c"
+    },
+    {
+      "path": "assets/ace-diamonds-N_PJE3W8.webp",
+      "bytes": 21894,
+      "sha256": "9dff9e5d957cce75be44789367b879f9c6256cd3eac01a69a46ff901f7c924a1"
+    },
+    {
+      "path": "assets/ace-hearts-CZFDLYul.webp",
+      "bytes": 23162,
+      "sha256": "c3c30f028617abd9663ccf593b6fc7bc4fb1f6573fd8e739cfc515c9a0d57ac2"
+    },
+    {
+      "path": "assets/ace-spades-DH2pX7Yn.webp",
+      "bytes": 22630,
+      "sha256": "d9e19fbbc0c484decb8dc22958c2f58c6b3834f37f028af3d181942e6c6d360c"
+    },
+    {
+      "path": "assets/back-cherry-DEPwOCrm.webp",
+      "bytes": 29104,
+      "sha256": "5c6a373da84e8522faf2183b33d04d210fa565b874d5e4b9da3ce8a46816a3b0"
+    },
+    {
+      "path": "assets/back-classic-BhXfI1HA.webp",
+      "bytes": 29854,
+      "sha256": "624cbf9ba3a31fa2c248dde047801c228b1c86e3e11040efffbc0e82854627ba"
+    },
+    {
+      "path": "assets/back-sunflower-BnNH8_8H.webp",
+      "bytes": 25928,
+      "sha256": "83a20143faf1fc3c903722e3de4518ac10781ff158d0276bdb354d9a41e01a5f"
+    },
+    {
+      "path": "assets/court-clubs-J-BAMT--w5.webp",
+      "bytes": 26332,
+      "sha256": "0ce02dc3b19ba85f4317bbc945751b1b9cfae70803909972a5a5fb164b139075"
+    },
+    {
+      "path": "assets/court-clubs-K-BtlZbVtY.webp",
+      "bytes": 27634,
+      "sha256": "4e6f93ae21163b16ceab4fad0ac786586bf308daa59aa9921c772df344c460a2"
+    },
+    {
+      "path": "assets/court-clubs-Q-BuzqWilT.webp",
+      "bytes": 25250,
+      "sha256": "6f7ce093cab6a1f982e06ae4a0717702b6577c7823bfd4c8c10b59d99aa8d116"
+    },
+    {
+      "path": "assets/court-diamonds-J-1rfyXypB.webp",
+      "bytes": 26728,
+      "sha256": "335ab38d7375d96e9704f58d4ac847208b95eb4dfacd554977b13044445e76ee"
+    },
+    {
+      "path": "assets/court-diamonds-K-w43jkJVI.webp",
+      "bytes": 27562,
+      "sha256": "5c8e498eb1397ef2854a3e1d36ee1a25695e580748b788eed34e11d1b373eb78"
+    },
+    {
+      "path": "assets/court-diamonds-Q-DrTojwDR.webp",
+      "bytes": 26020,
+      "sha256": "f0dc56cf64f29e81a9914a0d3f3d7ffc0ad28e44b4d39426d6968b1d68c0e2cd"
+    },
+    {
+      "path": "assets/court-hearts-J-D0jZ7izs.webp",
+      "bytes": 25204,
+      "sha256": "591f7f4c91a3bc780328ba9ef32526fde7fe6a3e440e634a81c9d0851da35979"
+    },
+    {
+      "path": "assets/court-hearts-K-DLr0MZRU.webp",
+      "bytes": 27986,
+      "sha256": "88f330cbdaa8b91929cff3b7da9847b59e90ead335116b9b001579edd2668aca"
+    },
+    {
+      "path": "assets/court-hearts-Q-DY1UCvmX.webp",
+      "bytes": 29546,
+      "sha256": "2676425b9ad940dc5dd797d4b5b6b6e936bd099cd7985c14788797415b9a0c9b"
+    },
+    {
+      "path": "assets/court-spades-J-3zoj22g0.webp",
+      "bytes": 28192,
+      "sha256": "6477c3d3dc31dc8e45a77e6744f6654cbef85e6c41974a64659b073836c9c0d8"
+    },
+    {
+      "path": "assets/court-spades-K-Dnm7t-lu.webp",
+      "bytes": 25168,
+      "sha256": "f7d4d884a3b38bec3a46249390d2914f386a9f6f4592403f61fe27e61c7dd692"
+    },
+    {
+      "path": "assets/court-spades-Q-CyyB101B.webp",
+      "bytes": 25896,
+      "sha256": "e07ac84970a315b57afdda44bab9a2ca4a0f6203e29bb04e6a56141b054a6e87"
+    },
+    {
+      "path": "assets/index-Br5k9EUq.js",
+      "bytes": 77492,
+      "sha256": "b845c82434470369b11b8c6526bfcdd67b2adf22996945d0a84785324f19ec35"
+    },
+    {
+      "path": "assets/index-DSXWGHO6.css",
+      "bytes": 11326,
+      "sha256": "677899f2b5d1f49d9b5610c0ea72ed624e88a334cf61dd0970ab654fb50c6825"
+    },
+    {
+      "path": "assets/index.es-Bi_qiyHE.js",
+      "bytes": 10096,
+      "sha256": "0787b0971fb9b370cd93f835ccc85ceca40e9b0b42aa17dd66388bcbff4422e7"
+    },
+    {
+      "path": "assets/table-evening-CMMFsIBB.webp",
+      "bytes": 130672,
+      "sha256": "a80b1197a89ab099713e8671416d3590a6274b7e09f51aa42cbb61845825b063"
+    },
+    {
+      "path": "assets/table-felt-DqLHlJMT.webp",
+      "bytes": 123042,
+      "sha256": "9d09d7dc1b8dec116f87f9b125c17750fba8bce97ff1706c6a7d5c85dde5bd5a"
+    },
+    {
+      "path": "assets/table-oilcloth-CGCv4P1n.webp",
+      "bytes": 133954,
+      "sha256": "762101455814db1b38bedb90e0a896a37d5fe6b1fc5004112326892f49ee1e02"
+    },
+    {
+      "path": "assets/vk-DyvGnlRz.js",
+      "bytes": 2443,
+      "sha256": "120d79b291e596e314ce69b3c1edde7fce4832ac560e041db1edf2be76fb219d"
+    },
+    {
+      "path": "assets/web-MPQuwp0o.js",
+      "bytes": 365,
+      "sha256": "a38f064ca131af68501a3c06252715f359480b22d0bfa2d9e2e19857212df978"
+    },
+    {
+      "path": "assets/yandex-CjlMXB2_.js",
+      "bytes": 2078,
+      "sha256": "5e076b0878c25fb1a20a9a30a6f52675eeb3aca6aa8bfe806cd160c6b5bb1361"
+    },
+    {
+      "path": "index.html",
+      "bytes": 458,
+      "sha256": "918d8bab37588eb9775c96e2249e93d1088e0221df65e08786a7e96734f06cc6"
+    },
+    {
+      "path": "vk/assets/ace-clubs-Cdgs36_J.webp",
+      "bytes": 20490,
+      "sha256": "f5bca4a14c77fb4803c4a81764bdaa8331f3c3e00819ed145f6887c3bad6ac0c"
+    },
+    {
+      "path": "vk/assets/ace-diamonds-N_PJE3W8.webp",
+      "bytes": 21894,
+      "sha256": "9dff9e5d957cce75be44789367b879f9c6256cd3eac01a69a46ff901f7c924a1"
+    },
+    {
+      "path": "vk/assets/ace-hearts-CZFDLYul.webp",
+      "bytes": 23162,
+      "sha256": "c3c30f028617abd9663ccf593b6fc7bc4fb1f6573fd8e739cfc515c9a0d57ac2"
+    },
+    {
+      "path": "vk/assets/ace-spades-DH2pX7Yn.webp",
+      "bytes": 22630,
+      "sha256": "d9e19fbbc0c484decb8dc22958c2f58c6b3834f37f028af3d181942e6c6d360c"
+    },
+    {
+      "path": "vk/assets/back-cherry-DEPwOCrm.webp",
+      "bytes": 29104,
+      "sha256": "5c6a373da84e8522faf2183b33d04d210fa565b874d5e4b9da3ce8a46816a3b0"
+    },
+    {
+      "path": "vk/assets/back-classic-BhXfI1HA.webp",
+      "bytes": 29854,
+      "sha256": "624cbf9ba3a31fa2c248dde047801c228b1c86e3e11040efffbc0e82854627ba"
+    },
+    {
+      "path": "vk/assets/back-sunflower-BnNH8_8H.webp",
+      "bytes": 25928,
+      "sha256": "83a20143faf1fc3c903722e3de4518ac10781ff158d0276bdb354d9a41e01a5f"
+    },
+    {
+      "path": "vk/assets/court-clubs-J-BAMT--w5.webp",
+      "bytes": 26332,
+      "sha256": "0ce02dc3b19ba85f4317bbc945751b1b9cfae70803909972a5a5fb164b139075"
+    },
+    {
+      "path": "vk/assets/court-clubs-K-BtlZbVtY.webp",
+      "bytes": 27634,
+      "sha256": "4e6f93ae21163b16ceab4fad0ac786586bf308daa59aa9921c772df344c460a2"
+    },
+    {
+      "path": "vk/assets/court-clubs-Q-BuzqWilT.webp",
+      "bytes": 25250,
+      "sha256": "6f7ce093cab6a1f982e06ae4a0717702b6577c7823bfd4c8c10b59d99aa8d116"
+    },
+    {
+      "path": "vk/assets/court-diamonds-J-1rfyXypB.webp",
+      "bytes": 26728,
+      "sha256": "335ab38d7375d96e9704f58d4ac847208b95eb4dfacd554977b13044445e76ee"
+    },
+    {
+      "path": "vk/assets/court-diamonds-K-w43jkJVI.webp",
+      "bytes": 27562,
+      "sha256": "5c8e498eb1397ef2854a3e1d36ee1a25695e580748b788eed34e11d1b373eb78"
+    },
+    {
+      "path": "vk/assets/court-diamonds-Q-DrTojwDR.webp",
+      "bytes": 26020,
+      "sha256": "f0dc56cf64f29e81a9914a0d3f3d7ffc0ad28e44b4d39426d6968b1d68c0e2cd"
+    },
+    {
+      "path": "vk/assets/court-hearts-J-D0jZ7izs.webp",
+      "bytes": 25204,
+      "sha256": "591f7f4c91a3bc780328ba9ef32526fde7fe6a3e440e634a81c9d0851da35979"
+    },
+    {
+      "path": "vk/assets/court-hearts-K-DLr0MZRU.webp",
+      "bytes": 27986,
+      "sha256": "88f330cbdaa8b91929cff3b7da9847b59e90ead335116b9b001579edd2668aca"
+    },
+    {
+      "path": "vk/assets/court-hearts-Q-DY1UCvmX.webp",
+      "bytes": 29546,
+      "sha256": "2676425b9ad940dc5dd797d4b5b6b6e936bd099cd7985c14788797415b9a0c9b"
+    },
+    {
+      "path": "vk/assets/court-spades-J-3zoj22g0.webp",
+      "bytes": 28192,
+      "sha256": "6477c3d3dc31dc8e45a77e6744f6654cbef85e6c41974a64659b073836c9c0d8"
+    },
+    {
+      "path": "vk/assets/court-spades-K-Dnm7t-lu.webp",
+      "bytes": 25168,
+      "sha256": "f7d4d884a3b38bec3a46249390d2914f386a9f6f4592403f61fe27e61c7dd692"
+    },
+    {
+      "path": "vk/assets/court-spades-Q-CyyB101B.webp",
+      "bytes": 25896,
+      "sha256": "e07ac84970a315b57afdda44bab9a2ca4a0f6203e29bb04e6a56141b054a6e87"
+    },
+    {
+      "path": "vk/assets/index-CSOYWyqk.js",
+      "bytes": 77491,
+      "sha256": "ace1016ee234391f408ebfd5c2624080e112aba50c06f51017ed25848c599edf"
+    },
+    {
+      "path": "vk/assets/index-DSXWGHO6.css",
+      "bytes": 11326,
+      "sha256": "677899f2b5d1f49d9b5610c0ea72ed624e88a334cf61dd0970ab654fb50c6825"
+    },
+    {
+      "path": "vk/assets/index.es-Bi_qiyHE.js",
+      "bytes": 10096,
+      "sha256": "0787b0971fb9b370cd93f835ccc85ceca40e9b0b42aa17dd66388bcbff4422e7"
+    },
+    {
+      "path": "vk/assets/table-evening-CMMFsIBB.webp",
+      "bytes": 130672,
+      "sha256": "a80b1197a89ab099713e8671416d3590a6274b7e09f51aa42cbb61845825b063"
+    },
+    {
+      "path": "vk/assets/table-felt-DqLHlJMT.webp",
+      "bytes": 123042,
+      "sha256": "9d09d7dc1b8dec116f87f9b125c17750fba8bce97ff1706c6a7d5c85dde5bd5a"
+    },
+    {
+      "path": "vk/assets/table-oilcloth-CGCv4P1n.webp",
+      "bytes": 133954,
+      "sha256": "762101455814db1b38bedb90e0a896a37d5fe6b1fc5004112326892f49ee1e02"
+    },
+    {
+      "path": "vk/assets/vk-COhv2upN.js",
+      "bytes": 2443,
+      "sha256": "9c054a0fb17d845ed2897d0962870d934673e873db2d3f9aba3f3d0fd7a12ea5"
+    },
+    {
+      "path": "vk/assets/web-w3RKHDUt.js",
+      "bytes": 365,
+      "sha256": "459eb79de86b7083792e140e6289f86fd92afaa21070fd2a8c1481186f3f7efe"
+    },
+    {
+      "path": "vk/assets/yandex-Bd469Gkf.js",
+      "bytes": 2078,
+      "sha256": "1dbc33e4c67629428261eba4b7bde2dd220afa3e160b000cfd3c6a5d4d13f657"
+    },
+    {
+      "path": "vk/index.html",
+      "bytes": 458,
+      "sha256": "768fd014bc736afe3a5b061695955e8d1a6442a016361775a1f3bde8671cfccf"
+    }
+  ],
+  "store": [
+    {
+      "file": "icons/icon-576.png",
+      "width": 576,
+      "height": 576,
+      "bytes": 888000,
+      "sha256": "2d373d594573f028f4a528edea508a2452ff49c376b6a193b30c8c52a68882bb"
+    },
+    {
+      "file": "icons/icon-278.png",
+      "width": 278,
+      "height": 278,
+      "bytes": 219915,
+      "sha256": "7195791c11896e6934c600d0aec17bf5f2766b447447a4c9b8542abcc756f635"
+    },
+    {
+      "file": "icons/icon-150.png",
+      "width": 150,
+      "height": 150,
+      "bytes": 66234,
+      "sha256": "3245f096df98a993a0c42311f4c5dca6e6388533ce5cd8759eaefeecf91eb3f8"
+    },
+    {
+      "file": "promo/snippet-1120x630.png",
+      "width": 1120,
+      "height": 630,
+      "bytes": 1727671,
+      "sha256": "64d6a80db62fad00f8a49d72d0ad2c8f1a4e828ed110b5f258c8e9901e9547e4"
+    },
+    {
+      "file": "shots/01-klondike-1200x600.png",
+      "width": 1200,
+      "height": 600,
+      "bytes": 360011,
+      "sha256": "ced2d20e244da410779a9e7ec1a2df282718c6784962f07f974a5ace2990dfce"
+    },
+    {
+      "file": "shots/02-draw-three-1200x600.png",
+      "width": 1200,
+      "height": 600,
+      "bytes": 343794,
+      "sha256": "4083285e8a48ae7ba12f1488e0017fcaf844a6b00b175867bfb857a600988006"
+    },
+    {
+      "file": "shots/03-collection-1200x600.png",
+      "width": 1200,
+      "height": 600,
+      "bytes": 145062,
+      "sha256": "fb553338dee17844b7b1f2fafff7a9bedc038d2dac15f58201a4da7a06f28a7b"
+    }
+  ],
+  "listing": {
+    "Название": {
+      "length": 19,
+      "max": 48
+    },
+    "Краткое описание": {
+      "length": 90,
+      "max": 108
+    },
+    "Слоган": {
+      "length": 23,
+      "max": 32
+    },
+    "Описание": {
+      "length": 1073,
+      "max": 2000
+    }
+  },
+  "baseline": {
+    "runId": "43948567654",
+    "verification": "Inherited from release base; gh query blocked by sandbox network. Must confirm latest successful run before publishing."
+  }
+}
