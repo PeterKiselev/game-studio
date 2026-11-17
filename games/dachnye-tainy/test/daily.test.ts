@@ -62,9 +62,23 @@ describe('расписание: одно дело на дату, без повт
     ['2026-11-28', 'daily-seeds'],
     ['2026-11-29', 'daily-tree'],
     ['2026-11-30', 'daily-meeting'],
+    ['2026-12-01', 'daily-roof'],
+    ['2026-12-02', 'daily-titmice'],
+    ['2026-12-03', 'daily-snowmen'],
+    ['2026-12-04', 'daily-mail'],
+    ['2026-12-05', 'daily-ski'],
+    ['2026-12-06', 'daily-garland'],
+    ['2026-12-07', 'daily-sledges'],
+    ['2026-12-08', 'daily-fishing-ice'],
+    ['2026-12-09', 'daily-gingerbread'],
+    ['2026-12-10', 'daily-greenhouse'],
+    ['2026-12-11', 'daily-tangerines'],
+    ['2026-12-12', 'daily-cards'],
+    ['2026-12-13', 'daily-boots'],
+    ['2026-12-14', 'daily-tea-frost'],
   ];
 
-  it('тридцать пять дел: 14 октября — 3 ноября и 17–30 ноября, прежние на своих датах, единственная пауза 4–16 ноября', () => {
+  it('сорок девять дел: 14 октября — 3 ноября и 17 ноября — 14 декабря, прежние на своих датах, единственная пауза 4–16 ноября', () => {
     expect(DAILY_SCHEDULE.map((e) => [e.date, e.case.id])).toEqual(EXPECTED_DAYS);
     // Подряд, без дыр, кроме одной известной паузы: расписание кончилось 3 ноября, пятая партия
     // начинается 17-го. Прошлые даты задним числом не заполняются.
@@ -77,7 +91,7 @@ describe('расписание: одно дело на дату, без повт
   });
 
   it('даты по порядку без повторов, дела не повторяются', () => {
-    expect(DAILY_SCHEDULE).toHaveLength(35);
+    expect(DAILY_SCHEDULE).toHaveLength(49);
     const dates = DAILY_SCHEDULE.map((e) => e.date);
     expect(new Set(dates).size).toBe(dates.length);
     expect([...dates].sort()).toEqual(dates);
@@ -109,12 +123,13 @@ describe('расписание: одно дело на дату, без повт
     expect(dailyState('2026-11-04')).toMatchObject({ kind: 'gap', next: { date: '2026-11-17' } });
     expect(dailyState('2026-11-17')).toMatchObject({ kind: 'today', entry: { case: { id: 'daily-snow' } } });
     expect(dailyState('2026-11-30')).toMatchObject({ kind: 'today', entry: { case: { id: 'daily-meeting' } } });
-    expect(dailyState('2026-12-01')).toEqual({ kind: 'exhausted' });
+    expect(dailyState('2026-12-01')).toMatchObject({ kind: 'today', entry: { case: { id: 'daily-roof' } } });
+    expect(dailyState('2026-12-15')).toEqual({ kind: 'exhausted' });
     expect(dailyState('2027-03-01')).toEqual({ kind: 'exhausted' });
   });
 
   it('после конца расписания старые дела не выдаются как новые', () => {
-    const later = ['2026-12-01', '2026-12-02', '2027-01-01'];
+    const later = ['2026-12-15', '2026-12-16', '2027-01-01'];
     for (const date of later) expect(dailyState(date).kind).toBe('exhausted');
   });
 
@@ -124,9 +139,9 @@ describe('расписание: одно дело на дату, без повт
   });
 
   it('пополнение: новые записи продолжают расписание, прошлые остаются доступны', () => {
-    const extended: DailyEntry[] = [...DAILY_SCHEDULE, { date: '2026-12-02', case: { ...dailies[0], id: 'daily-next' } }];
-    expect(dailyState('2026-12-02', extended)).toMatchObject({ kind: 'today', entry: { case: { id: 'daily-next' } } });
-    expect(dailyState('2026-12-01', extended)).toMatchObject({ kind: 'gap', next: { date: '2026-12-02' } });
+    const extended: DailyEntry[] = [...DAILY_SCHEDULE, { date: '2026-12-16', case: { ...dailies[0], id: 'daily-next' } }];
+    expect(dailyState('2026-12-16', extended)).toMatchObject({ kind: 'today', entry: { case: { id: 'daily-next' } } });
+    expect(dailyState('2026-12-15', extended)).toMatchObject({ kind: 'gap', next: { date: '2026-12-16' } });
   });
 
   it('прошлые дела — только прошедших дат, от новых к старым; будущих нет', () => {
@@ -147,9 +162,9 @@ describe('расписание: одно дело на дату, без повт
     expect(pastDailies('2026-10-27').map((e) => e.case.id)).not.toContain('daily-mushrooms');
     // 4 ноября в архиве первые 21 дело, пятая партия скрыта до своих дат.
     expect(pastDailies('2026-11-04').map((e) => e.date)).toEqual(EXPECTED_DAYS.slice(0, 21).map(([date]) => date).reverse());
-    // 1 декабря архив полный, а дела дня нет.
-    expect(pastDailies('2026-12-01').map((e) => e.date)).toEqual(EXPECTED_DAYS.map(([date]) => date).reverse());
-    expect(dailyState('2026-12-01')).toEqual({ kind: 'exhausted' });
+    // 15 декабря архив полный, а дела дня нет.
+    expect(pastDailies('2026-12-15').map((e) => e.date)).toEqual(EXPECTED_DAYS.map(([date]) => date).reverse());
+    expect(dailyState('2026-12-15')).toEqual({ kind: 'exhausted' });
   });
 });
 

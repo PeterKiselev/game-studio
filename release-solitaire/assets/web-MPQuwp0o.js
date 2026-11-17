@@ -1,1 +1,0 @@
-var i=Object.defineProperty;var l=(e,a,s)=>a in e?i(e,a,{enumerable:!0,configurable:!0,writable:!0,value:s}):e[a]=s;var t=(e,a,s)=>l(e,typeof a!="symbol"?a+"":a,s);import{B as o}from"./index-Br5k9EUq.js";class c extends o{constructor(){super(...arguments);t(this,"id","web")}async init(){this.locale=(navigator.language||"ru").slice(0,2)}}export{c as WebPlatform};

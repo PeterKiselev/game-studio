@@ -6,6 +6,22 @@ import {
   dailyBarrels, dailyBullfinches, dailyCabbage, dailyFeeders, dailyFirewood, dailyKeys, dailyMeeting,
   dailyMittens, dailyRoses, dailySeeds, dailySnow, dailyStove, dailyTree, dailyWatchman,
 } from './fifth-batch';
+import {
+  dailyRoof,
+  dailyTitmice,
+  dailySnowmen,
+  dailyMail,
+  dailySki,
+  dailyGarland,
+  dailySledges,
+  dailyIceFishing,
+  dailyGingerbread,
+  dailyGreenhouse,
+  dailyTangerines,
+  dailyCards,
+  dailyBoots,
+  dailyFrostTea,
+} from './sixth-batch';
 import { dailyBath, dailyBeds, dailyFishing, dailyGlasses, dailyJam, dailyWatering, dailyWell } from './cases';
 
 /**
@@ -72,6 +88,20 @@ export const DAILY_SCHEDULE: readonly DailyEntry[] = [
   { date: '2026-11-28', case: dailySeeds },
   { date: '2026-11-29', case: dailyTree },
   { date: '2026-11-30', case: dailyMeeting },
+  { date: '2026-12-01', case: dailyRoof },
+  { date: '2026-12-02', case: dailyTitmice },
+  { date: '2026-12-03', case: dailySnowmen },
+  { date: '2026-12-04', case: dailyMail },
+  { date: '2026-12-05', case: dailySki },
+  { date: '2026-12-06', case: dailyGarland },
+  { date: '2026-12-07', case: dailySledges },
+  { date: '2026-12-08', case: dailyIceFishing },
+  { date: '2026-12-09', case: dailyGingerbread },
+  { date: '2026-12-10', case: dailyGreenhouse },
+  { date: '2026-12-11', case: dailyTangerines },
+  { date: '2026-12-12', case: dailyCards },
+  { date: '2026-12-13', case: dailyBoots },
+  { date: '2026-12-14', case: dailyFrostTea },
 ];
 
 /** Сегодняшняя дата по Москве, YYYY-MM-DD — не зависит от пояса устройства. */
