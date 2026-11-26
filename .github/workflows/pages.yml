@@ -20,7 +20,7 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: github-pages
-          run-id: 45449076805
+          run-id: 45640497936
           github-token: ${{ github.token }}
           path: previous-artifact
       - name: Restore exact currently published site
@@ -45,11 +45,11 @@ jobs:
           cp -a release-2048/. site/2048/
           mkdir -p site/solitaire
           cp -a release-solitaire/. site/solitaire/
-          for game in sudoku thousand hearts domino backgammon mahjong battleship minesweeper; do
+          for game in sudoku thousand hearts domino backgammon mahjong battleship minesweeper jam; do
             mkdir -p "site/$game"
             cp -a "release-$game/." "site/$game/"
           done
-          node tools/verify-production-baseline.mjs site --except=dachnye-tainy/,durak/,checkers/,2048/,solitaire/,sudoku/,thousand/,hearts/,domino/,backgammon/,mahjong/,battleship/,minesweeper/
+          node tools/verify-production-baseline.mjs site --except=dachnye-tainy/,durak/,checkers/,2048/,solitaire/,sudoku/,thousand/,hearts/,domino/,backgammon/,mahjong/,battleship/,minesweeper/,jam/
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
